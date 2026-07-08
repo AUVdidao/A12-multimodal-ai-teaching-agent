@@ -1,0 +1,10 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: a12-teaching-agent-backend
+
+logging:
+  level:
+    root: INFO

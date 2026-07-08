@@ -28,7 +28,7 @@
 
 ## 本地启动方式
 
-当前仓库处于初始化阶段，前后端工程目录将在后续任务中创建。计划目录结构如下：
+当前仓库采用 monorepo 结构，后端工程位于 `backend/`。计划目录结构如下：
 
 ```text
 backend/
@@ -38,12 +38,33 @@ docs/
 scripts/
 ```
 
-后续本地启动命令预留如下：
+### 后端启动方式
+
+进入后端目录：
 
 ```bash
 cd backend
+```
+
+执行测试：
+
+```bash
+mvn test
+```
+
+启动后端服务：
+
+```bash
 mvn spring-boot:run
 ```
+
+健康检查地址：
+
+```text
+http://localhost:8080/api/health
+```
+
+### 前端启动方式预留
 
 ```bash
 cd frontend
