@@ -7,7 +7,7 @@
 ## 技术栈
 
 - 后端：Java 17+、Spring Boot、Maven
-- 前端：Vue 3 + Vite 或 React + Vite
+- 前端：Vue 3 + Vite + TypeScript + Element Plus
 - AI 工作流：Dify 云端工作流，保留 Mock 模式兜底
 - 数据库：云数据库或本地开发数据库
 - 文件与产物：对象存储，支持 PPTX、DOCX 和 HTML 互动内容导出
@@ -64,13 +64,45 @@ mvn spring-boot:run
 http://localhost:8080/api/health
 ```
 
-### 前端启动方式预留
+### 前端启动方式
+
+进入前端目录：
 
 ```bash
 cd frontend
+```
+
+安装依赖：
+
+```bash
 npm install
+```
+
+启动前端开发服务：
+
+```bash
 npm run dev
 ```
+
+执行生产构建：
+
+```bash
+npm run build
+```
+
+默认访问地址通常为：
+
+```text
+http://localhost:5173
+```
+
+### 前后端联调说明
+
+- 后端默认运行在 `http://localhost:8080`
+- 前端通过 `VITE_API_BASE_URL` 调用后端接口
+- 前端开发服务已配置 `/api` 代理，便于本地调试时访问后端健康检查
+- 可复制 `frontend/.env.example` 创建本地 `.env`
+- 首页可点击“检查后端状态”验证 `GET /api/health` 联通
 
 ## Docker 部署预留说明
 
