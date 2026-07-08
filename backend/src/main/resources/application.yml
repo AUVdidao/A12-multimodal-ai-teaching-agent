@@ -25,3 +25,12 @@ spring:
 logging:
   level:
     root: INFO
+
+a12:
+  ai:
+    provider: MOCK
+    fallback-to-mock: true
+    dify:
+      base-url: https://api.dify.ai/v1
+      workflow-id:
+      api-key:

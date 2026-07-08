@@ -1,5 +1,6 @@
 package com.auvdidao.a12teachingagent.common.exception;
 
+import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.failure(HttpStatus.BAD_REQUEST.value(), message));
+    }
+
+    @ExceptionHandler(AiWorkflowUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAiWorkflowUnavailable(AiWorkflowUnavailableException exception) {
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.failure(HttpStatus.SERVICE_UNAVAILABLE.value(), exception.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
