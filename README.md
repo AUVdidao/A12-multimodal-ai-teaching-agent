@@ -104,6 +104,18 @@ http://localhost:5173
 - 可复制 `frontend/.env.example` 创建本地 `.env`
 - 首页可点击“检查后端状态”验证 `GET /api/health` 联通
 
+### 后端数据库说明
+
+开发阶段后端使用 H2 文件数据库，便于本地快速启动和验证 JPA 实体映射。
+
+- H2 控制台地址：`http://localhost:8080/h2-console`
+- JDBC URL：`jdbc:h2:file:./data/a12-teaching-agent`
+- 用户名：`sa`
+- 密码：空
+- 数据库文件位置：`backend/data/`
+- 数据库文件不会提交到 Git，`.gitignore` 已忽略 `backend/data/`、`data/`、`*.db`、`*.mv.db`、`*.trace.db`
+- 后续部署阶段预留 PostgreSQL 或云数据库配置
+
 ## Docker 部署预留说明
 
 后续会在 `deploy/` 目录中补充：

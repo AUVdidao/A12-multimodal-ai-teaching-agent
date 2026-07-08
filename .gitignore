@@ -19,3 +19,9 @@ logs/
 uploads/
 generated/
 tmp/
+
+data/
+backend/data/
+*.db
+*.mv.db
+*.trace.db
