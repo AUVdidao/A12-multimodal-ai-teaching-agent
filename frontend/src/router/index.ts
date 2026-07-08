@@ -20,6 +20,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '新建课件项目' },
   },
   {
+    path: '/projects/:projectId/mode',
+    name: 'project-mode',
+    component: () => import('@/views/ProjectModeView.vue'),
+    meta: { title: '生成模式选择' },
+  },
+  {
     path: '/requirements',
     name: 'requirements',
     component: () => import('@/views/RequirementInputView.vue'),

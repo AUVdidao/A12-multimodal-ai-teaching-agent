@@ -256,6 +256,7 @@ public class MockAIWorkflowGateway {
             return "标准教学媒体风格";
         }
         return switch (generationMode) {
+            case QUALITY -> "高质量图文讲解风格";
             case HIGH_QUALITY -> "高质量图文讲解风格";
             case ECONOMY -> "简洁省时风格";
             case MOCK -> "Mock AI 演示风格";

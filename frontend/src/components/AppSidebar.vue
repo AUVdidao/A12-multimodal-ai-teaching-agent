@@ -55,5 +55,10 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 const route = useRoute();
-const activePath = computed(() => route.path);
+const activePath = computed(() => {
+  if (route.path.startsWith('/projects')) {
+    return '/projects';
+  }
+  return route.path;
+});
 </script>

@@ -17,6 +17,7 @@ public class Project extends BaseAuditableEntity {
     private String chapterTopic;
     private String targetAudience;
     private Integer lessonDurationMinutes;
+    private String projectDescription;
 
     @Enumerated(EnumType.STRING)
     private GenerationMode generationMode;
@@ -62,6 +63,14 @@ public class Project extends BaseAuditableEntity {
 
     public void setLessonDurationMinutes(Integer lessonDurationMinutes) {
         this.lessonDurationMinutes = lessonDurationMinutes;
+    }
+
+    public String getProjectDescription() {
+        return projectDescription;
+    }
+
+    public void setProjectDescription(String projectDescription) {
+        this.projectDescription = projectDescription;
     }
 
     public GenerationMode getGenerationMode() {
