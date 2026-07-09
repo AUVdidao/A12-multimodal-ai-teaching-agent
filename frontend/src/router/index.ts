@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '教学需求输入' },
   },
   {
+    path: '/projects/:projectId/requirements',
+    name: 'project-requirements',
+    component: () => import('@/views/RequirementInputView.vue'),
+    meta: { title: '教学需求输入' },
+  },
+  {
     path: '/dialog',
     name: 'dialog',
     component: () => import('@/views/DialogClarificationView.vue'),

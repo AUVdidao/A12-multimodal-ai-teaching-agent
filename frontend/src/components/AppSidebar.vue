@@ -56,6 +56,9 @@ import { useRoute } from 'vue-router';
 
 const route = useRoute();
 const activePath = computed(() => {
+  if (route.path.includes('/requirements')) {
+    return '/requirements';
+  }
   if (route.path.startsWith('/projects')) {
     return '/projects';
   }
