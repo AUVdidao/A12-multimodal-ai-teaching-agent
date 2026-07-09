@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SERVER_PORT: 8080
+      A12_AI_PROVIDER: ${AI_PROVIDER:-mock}
+      A12_AI_FALLBACK_TO_MOCK: "true"
+      A12_AI_DIFY_BASE_URL: ${DIFY_BASE_URL:-https://api.dify.ai/v1}
+      A12_AI_DIFY_API_KEY: ${DIFY_API_KEY:-}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - backend-data:/app/data
+    networks:
+      - a12-local
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+    networks:
+      - a12-local
+
+networks:
+  a12-local:
+    driver: bridge
+
+volumes:
+  backend-data:
