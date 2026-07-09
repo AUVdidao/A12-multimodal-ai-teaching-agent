@@ -7,5 +7,7 @@ import java.util.List;
 
 public interface DialogMessageRepository extends JpaRepository<DialogMessage, Long> {
 
-    List<DialogMessage> findByProjectIdOrderByCreatedAtAsc(Long projectId);
+    List<DialogMessage> findByProjectIdOrderByCreatedAtAscIdAsc(Long projectId);
+
+    List<DialogMessage> findBySessionIdOrderByCreatedAtAscIdAsc(String sessionId);
 }

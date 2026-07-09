@@ -14,6 +14,7 @@ import jakarta.persistence.Table;
 public class DialogMessage extends BaseCreatedEntity {
 
     private Long projectId;
+    private String sessionId;
 
     @Enumerated(EnumType.STRING)
     private DialogRole role;
@@ -21,6 +22,7 @@ public class DialogMessage extends BaseCreatedEntity {
     @Lob
     @Column(columnDefinition = "TEXT")
     private String content;
+    private Integer roundNo;
 
     public Long getProjectId() {
         return projectId;
@@ -28,6 +30,14 @@ public class DialogMessage extends BaseCreatedEntity {
 
     public void setProjectId(Long projectId) {
         this.projectId = projectId;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
     }
 
     public DialogRole getRole() {
@@ -44,5 +54,13 @@ public class DialogMessage extends BaseCreatedEntity {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public Integer getRoundNo() {
+        return roundNo;
+    }
+
+    public void setRoundNo(Integer roundNo) {
+        this.roundNo = roundNo;
     }
 }

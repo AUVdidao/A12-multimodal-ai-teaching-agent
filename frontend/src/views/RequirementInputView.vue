@@ -13,7 +13,7 @@
     />
 
     <div class="page__actions">
-      <el-button type="primary" @click="router.push('/dialog')">
+      <el-button type="primary" @click="router.push(dialogRoute)">
         下一步：智能澄清对话
       </el-button>
       <el-button @click="router.push('/projects')">返回项目列表</el-button>
@@ -36,5 +36,16 @@ const stageDescription = computed(() => {
     return `项目 ${projectId} 已完成生成模式保存，可继续接入 TA-005 Mock AI Workflow 进行需求澄清。`;
   }
   return '当前仅保留流程入口，真实表单提交与草稿保存由后续任务实现。';
+});
+
+const dialogRoute = computed(() => {
+  const projectId = route.query.projectId;
+  if (!projectId) {
+    return { path: '/dialog' };
+  }
+  return {
+    path: '/dialog',
+    query: { projectId },
+  };
 });
 </script>
