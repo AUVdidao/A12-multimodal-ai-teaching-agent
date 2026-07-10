@@ -17,6 +17,7 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
+import com.auvdidao.a12teachingagent.clarification.ClarificationField;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +33,23 @@ public class MockAIWorkflowGateway {
     private static final String WORKFLOW = "mock-ai-workflow";
 
     public ClarificationResponse clarifyRequirement(ClarificationRequest request) {
+        if (!request.requestedMissingFields().isEmpty()) {
+            List<String> missingFields = request.requestedMissingFields().stream()
+                    .filter(field -> ClarificationField.fromCode(field).isPresent())
+                    .distinct()
+                    .toList();
+            List<String> questions = missingFields.stream()
+                    .map(field -> ClarificationField.fromCode(field).orElseThrow().defaultQuestion())
+                    .toList();
+            return new ClarificationResponse(
+                    WORKFLOW,
+                    missingFields,
+                    questions,
+                    Map.of(),
+                    "请先补充缺失字段，再生成需求摘要。"
+            );
+        }
+
         String rawRequirement = defaultString(request.rawRequirement());
         List<String> missingFields = new ArrayList<>();
         Map<String, String> suggestedFields = new LinkedHashMap<>();

@@ -2,12 +2,15 @@ package com.auvdidao.a12teachingagent.common.exception;
 
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -29,6 +32,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.failure(HttpStatus.BAD_REQUEST.value(), message));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadableMessage(HttpMessageNotReadableException exception) {
+        return badRequest("Request body is missing, malformed, or contains an invalid field type");
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        return badRequest(exception.getName() + " has an invalid value");
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException exception) {
+        String message = exception.getConstraintViolations().stream()
+                .map(violation -> violation.getMessage())
+                .distinct()
+                .collect(Collectors.joining("; "));
+        return badRequest(message.isBlank() ? "Validation failed" : message);
     }
 
     @ExceptionHandler(AiWorkflowUnavailableException.class)
@@ -64,5 +86,11 @@ public class GlobalExceptionHandler {
 
     private String formatFieldError(FieldError fieldError) {
         return fieldError.getField() + ": " + fieldError.getDefaultMessage();
+    }
+
+    private ResponseEntity<ApiResponse<Void>> badRequest(String message) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.failure(HttpStatus.BAD_REQUEST.value(), message));
     }
 }
