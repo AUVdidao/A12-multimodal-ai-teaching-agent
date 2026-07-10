@@ -1,0 +1,111 @@
+package com.auvdidao.a12teachingagent.requirement;
+
+import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
+import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
+import com.auvdidao.a12teachingagent.domain.common.InputType;
+import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
+import com.auvdidao.a12teachingagent.domain.requirement.RequirementInput;
+import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementInputRepository;
+import com.auvdidao.a12teachingagent.requirement.dto.RequirementInputDtos.RequirementInputRequest;
+import com.auvdidao.a12teachingagent.requirement.dto.RequirementInputDtos.RequirementInputResponse;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.LinkedHashSet;
+import java.util.List;
+
+@Service
+public class RequirementInputService {
+
+    private final ProjectRepository projectRepository;
+    private final RequirementInputRepository requirementInputRepository;
+
+    public RequirementInputService(
+            ProjectRepository projectRepository,
+            RequirementInputRepository requirementInputRepository
+    ) {
+        this.projectRepository = projectRepository;
+        this.requirementInputRepository = requirementInputRepository;
+    }
+
+    @Transactional
+    public RequirementInputResponse save(Long projectId, RequirementInputRequest request) {
+        requireProject(projectId);
+        if (request == null) {
+            throw new BadRequestException("Request body is required");
+        }
+
+        RequirementInput requirement = new RequirementInput();
+        requirement.setProjectId(projectId);
+        requirement.setGradeLevel(trimToNull(request.gradeLevel()));
+        requirement.setSubject(trimToNull(request.subject()));
+        requirement.setTopic(trimToNull(request.topic()));
+        requirement.setLessonDuration(trimToNull(request.lessonDuration()));
+        requirement.setTeachingGoals(trimToNull(request.teachingGoals()));
+        requirement.setKeyPoints(trimToNull(request.keyPoints()));
+        requirement.setDifficultPoints(trimToNull(request.difficultPoints()));
+        requirement.setOutputTypes(normalizeOutputTypes(request.outputTypes()));
+        requirement.setRawRequirementText(trimToNull(request.rawRequirementText()));
+        requirement.setContent(requirement.getRawRequirementText());
+        requirement.setInputType(InputType.TEXT);
+
+        return toResponse(requirementInputRepository.save(requirement));
+    }
+
+    @Transactional(readOnly = true)
+    public RequirementInputResponse latest(Long projectId) {
+        requireProject(projectId);
+        return requirementInputRepository.findFirstByProjectIdOrderByCreatedAtDescIdDesc(projectId)
+                .map(this::toResponse)
+                .orElse(null);
+    }
+
+    private void requireProject(Long projectId) {
+        if (projectId == null || projectId <= 0) {
+            throw new BadRequestException("projectId must be greater than 0");
+        }
+        if (!projectRepository.existsById(projectId)) {
+            throw new ResourceNotFoundException("Project not found: " + projectId);
+        }
+    }
+
+    private RequirementInputResponse toResponse(RequirementInput requirement) {
+        return new RequirementInputResponse(
+                requirement.getId(),
+                requirement.getProjectId(),
+                requirement.getGradeLevel(),
+                requirement.getSubject(),
+                requirement.getTopic(),
+                requirement.getLessonDuration(),
+                requirement.getTeachingGoals(),
+                requirement.getKeyPoints(),
+                requirement.getDifficultPoints(),
+                requirement.getOutputTypes(),
+                requirement.getRawRequirementText(),
+                requirement.getCreatedAt(),
+                requirement.getUpdatedAt()
+        );
+    }
+
+    private static List<String> normalizeOutputTypes(List<String> outputTypes) {
+        if (outputTypes == null) {
+            return List.of();
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String outputType : outputTypes) {
+            String value = trimToNull(outputType);
+            if (value != null) {
+                normalized.add(value);
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+}

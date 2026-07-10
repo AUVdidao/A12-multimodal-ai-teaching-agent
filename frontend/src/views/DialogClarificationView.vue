@@ -26,9 +26,9 @@
         </el-form-item>
         <el-form-item label="发送方">
           <el-radio-group v-model="form.sender">
-            <el-radio-button label="TEACHER">教师</el-radio-button>
-            <el-radio-button label="AI">AI</el-radio-button>
-            <el-radio-button label="SYSTEM">系统</el-radio-button>
+            <el-radio-button value="TEACHER">教师</el-radio-button>
+            <el-radio-button value="AI">AI</el-radio-button>
+            <el-radio-button value="SYSTEM">系统</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="轮次">
@@ -131,8 +131,8 @@ const requirementsRoute = computed(() => {
     return { path: '/requirements' };
   }
   return {
-    path: '/requirements',
-    query: { projectId: currentProjectId.value },
+    name: 'project-requirements',
+    params: { projectId: currentProjectId.value },
   };
 });
 
@@ -141,8 +141,8 @@ const summaryRoute = computed(() => {
     return { path: '/summary' };
   }
   return {
-    path: '/summary',
-    query: { projectId: currentProjectId.value },
+    name: 'project-requirement-summary',
+    params: { projectId: currentProjectId.value },
   };
 });
 

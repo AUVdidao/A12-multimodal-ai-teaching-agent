@@ -26,6 +26,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '生成模式选择' },
   },
   {
+    path: '/projects/:projectId/requirements',
+    name: 'project-requirements',
+    component: () => import('@/views/RequirementInputView.vue'),
+    meta: { title: '教学需求输入' },
+  },
+  {
     path: '/requirements',
     name: 'requirements',
     component: () => import('@/views/RequirementInputView.vue'),
@@ -36,6 +42,12 @@ const routes: RouteRecordRaw[] = [
     name: 'dialog',
     component: () => import('@/views/DialogClarificationView.vue'),
     meta: { title: '智能澄清对话' },
+  },
+  {
+    path: '/projects/:projectId/requirement-summary',
+    name: 'project-requirement-summary',
+    component: () => import('@/views/RequirementSummaryView.vue'),
+    meta: { title: '需求摘要确认' },
   },
   {
     path: '/summary',

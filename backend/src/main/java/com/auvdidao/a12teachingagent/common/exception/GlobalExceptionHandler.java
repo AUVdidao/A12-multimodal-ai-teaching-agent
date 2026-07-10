@@ -74,6 +74,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.failure(HttpStatus.BAD_REQUEST.value(), exception.getMessage()));
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException exception) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.failure(HttpStatus.CONFLICT.value(), exception.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
         return ResponseEntity
