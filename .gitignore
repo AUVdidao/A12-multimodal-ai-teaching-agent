@@ -19,6 +19,7 @@ logs/
 uploads/
 generated/
 tmp/
+.playwright-cli/
 
 data/
 backend/data/

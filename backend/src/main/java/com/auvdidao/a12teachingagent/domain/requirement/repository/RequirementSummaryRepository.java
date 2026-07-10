@@ -8,4 +8,6 @@ import java.util.Optional;
 public interface RequirementSummaryRepository extends JpaRepository<RequirementSummary, Long> {
 
     Optional<RequirementSummary> findFirstByProjectIdOrderByCreatedAtDesc(Long projectId);
+
+    Optional<RequirementSummary> findFirstByProjectIdOrderByCreatedAtDescIdDesc(Long projectId);
 }

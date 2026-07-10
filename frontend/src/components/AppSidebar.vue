@@ -8,9 +8,13 @@
       <el-icon><Folder /></el-icon>
       <span>项目管理</span>
     </el-menu-item>
-    <el-menu-item index="/requirements">
+    <el-menu-item :index="requirementsPath">
       <el-icon><EditPen /></el-icon>
       <span>需求输入</span>
+    </el-menu-item>
+    <el-menu-item :index="summaryPath">
+      <el-icon><DocumentChecked /></el-icon>
+      <span>需求摘要</span>
     </el-menu-item>
     <el-menu-item index="/dialog">
       <el-icon><ChatDotRound /></el-icon>
@@ -44,6 +48,7 @@ import {
   Aim,
   ChatDotRound,
   Download,
+  DocumentChecked,
   EditPen,
   Folder,
   House,
@@ -55,7 +60,23 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 const route = useRoute();
+const projectId = computed(() => {
+  const value = route.params.projectId || route.query.projectId;
+  return Array.isArray(value) ? value[0] : value;
+});
+const requirementsPath = computed(() =>
+  projectId.value ? `/projects/${projectId.value}/requirements` : '/requirements',
+);
+const summaryPath = computed(() =>
+  projectId.value ? `/projects/${projectId.value}/requirement-summary` : '/summary',
+);
 const activePath = computed(() => {
+  if (route.path.includes('/requirement-summary') || route.path === '/summary') {
+    return summaryPath.value;
+  }
+  if (route.path.includes('/requirements') || route.path === '/requirements') {
+    return requirementsPath.value;
+  }
   if (route.path.startsWith('/projects')) {
     return '/projects';
   }

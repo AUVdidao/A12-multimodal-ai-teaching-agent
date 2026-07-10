@@ -1,20 +1,33 @@
 package com.auvdidao.a12teachingagent.domain.requirement;
 
 import com.auvdidao.a12teachingagent.domain.common.BaseAuditableEntity;
+import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "requirement_summaries")
 public class RequirementSummary extends BaseAuditableEntity {
 
     private Long projectId;
-    private String courseName;
-    private String chapterTopic;
-    private String targetAudience;
-    private Integer lessonDurationMinutes;
+    private Long sourceRequirementId;
+    private String gradeLevel;
+    private String subject;
+    private String topic;
+    private String lessonDuration;
 
     @Lob
     @Column(columnDefinition = "TEXT")
@@ -22,16 +35,30 @@ public class RequirementSummary extends BaseAuditableEntity {
 
     @Lob
     @Column(columnDefinition = "TEXT")
-    private String knowledgePoints;
+    private String keyPoints;
 
     @Lob
     @Column(columnDefinition = "TEXT")
-    private String keyDifficulties;
+    private String difficultPoints;
 
-    private String coursewareStyle;
-    private String interactionType;
-    private String outputTypes;
-    private Boolean confirmed;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "requirement_summary_output_types",
+            joinColumns = @JoinColumn(name = "summary_id")
+    )
+    @OrderColumn(name = "sort_order")
+    @Column(name = "output_type")
+    private List<String> outputTypes = new ArrayList<>();
+
+    private String stylePreference;
+
+    @Enumerated(EnumType.STRING)
+    private GenerationMode generationMode;
+
+    @Enumerated(EnumType.STRING)
+    private RequirementSummaryStatus status;
+
+    private LocalDateTime confirmedAt;
 
     public Long getProjectId() {
         return projectId;
@@ -41,36 +68,44 @@ public class RequirementSummary extends BaseAuditableEntity {
         this.projectId = projectId;
     }
 
-    public String getCourseName() {
-        return courseName;
+    public Long getSourceRequirementId() {
+        return sourceRequirementId;
     }
 
-    public void setCourseName(String courseName) {
-        this.courseName = courseName;
+    public void setSourceRequirementId(Long sourceRequirementId) {
+        this.sourceRequirementId = sourceRequirementId;
     }
 
-    public String getChapterTopic() {
-        return chapterTopic;
+    public String getGradeLevel() {
+        return gradeLevel;
     }
 
-    public void setChapterTopic(String chapterTopic) {
-        this.chapterTopic = chapterTopic;
+    public void setGradeLevel(String gradeLevel) {
+        this.gradeLevel = gradeLevel;
     }
 
-    public String getTargetAudience() {
-        return targetAudience;
+    public String getSubject() {
+        return subject;
     }
 
-    public void setTargetAudience(String targetAudience) {
-        this.targetAudience = targetAudience;
+    public void setSubject(String subject) {
+        this.subject = subject;
     }
 
-    public Integer getLessonDurationMinutes() {
-        return lessonDurationMinutes;
+    public String getTopic() {
+        return topic;
     }
 
-    public void setLessonDurationMinutes(Integer lessonDurationMinutes) {
-        this.lessonDurationMinutes = lessonDurationMinutes;
+    public void setTopic(String topic) {
+        this.topic = topic;
+    }
+
+    public String getLessonDuration() {
+        return lessonDuration;
+    }
+
+    public void setLessonDuration(String lessonDuration) {
+        this.lessonDuration = lessonDuration;
     }
 
     public String getTeachingGoals() {
@@ -81,51 +116,59 @@ public class RequirementSummary extends BaseAuditableEntity {
         this.teachingGoals = teachingGoals;
     }
 
-    public String getKnowledgePoints() {
-        return knowledgePoints;
+    public String getKeyPoints() {
+        return keyPoints;
     }
 
-    public void setKnowledgePoints(String knowledgePoints) {
-        this.knowledgePoints = knowledgePoints;
+    public void setKeyPoints(String keyPoints) {
+        this.keyPoints = keyPoints;
     }
 
-    public String getKeyDifficulties() {
-        return keyDifficulties;
+    public String getDifficultPoints() {
+        return difficultPoints;
     }
 
-    public void setKeyDifficulties(String keyDifficulties) {
-        this.keyDifficulties = keyDifficulties;
+    public void setDifficultPoints(String difficultPoints) {
+        this.difficultPoints = difficultPoints;
     }
 
-    public String getCoursewareStyle() {
-        return coursewareStyle;
+    public List<String> getOutputTypes() {
+        return List.copyOf(outputTypes);
     }
 
-    public void setCoursewareStyle(String coursewareStyle) {
-        this.coursewareStyle = coursewareStyle;
+    public void setOutputTypes(List<String> outputTypes) {
+        this.outputTypes = outputTypes == null ? new ArrayList<>() : new ArrayList<>(outputTypes);
     }
 
-    public String getInteractionType() {
-        return interactionType;
+    public String getStylePreference() {
+        return stylePreference;
     }
 
-    public void setInteractionType(String interactionType) {
-        this.interactionType = interactionType;
+    public void setStylePreference(String stylePreference) {
+        this.stylePreference = stylePreference;
     }
 
-    public String getOutputTypes() {
-        return outputTypes;
+    public GenerationMode getGenerationMode() {
+        return generationMode;
     }
 
-    public void setOutputTypes(String outputTypes) {
-        this.outputTypes = outputTypes;
+    public void setGenerationMode(GenerationMode generationMode) {
+        this.generationMode = generationMode;
     }
 
-    public Boolean getConfirmed() {
-        return confirmed;
+    public RequirementSummaryStatus getStatus() {
+        return status;
     }
 
-    public void setConfirmed(Boolean confirmed) {
-        this.confirmed = confirmed;
+    public void setStatus(RequirementSummaryStatus status) {
+        this.status = status;
+    }
+
+    public LocalDateTime getConfirmedAt() {
+        return confirmedAt;
+    }
+
+    public void setConfirmedAt(LocalDateTime confirmedAt) {
+        this.confirmedAt = confirmedAt;
     }
 }

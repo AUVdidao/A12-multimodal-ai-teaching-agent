@@ -32,7 +32,7 @@
         <el-radio-button
           v-for="mode in modes"
           :key="mode.code"
-          :label="mode.code"
+          :value="mode.code"
           class="mode-option"
         >
           <strong>{{ mode.name }}</strong>
@@ -109,7 +109,7 @@ async function handleSaveMode() {
   try {
     await saveProjectModelMode(projectId, selectedMode.value);
     ElMessage.success('生成模式已保存');
-    router.push({ path: '/requirements', query: { projectId } });
+    router.push({ name: 'project-requirements', params: { projectId } });
   } catch (error) {
     errorMessage.value = '生成模式保存失败，请稍后重试。';
   } finally {
