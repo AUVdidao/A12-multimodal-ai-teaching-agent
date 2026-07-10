@@ -60,8 +60,25 @@ public final class AiWorkflowDtos {
             @NotNull Long projectId,
             @NotBlank String rawRequirement,
             List<String> knownFields,
-            GenerationMode generationMode
+            GenerationMode generationMode,
+            List<String> requestedMissingFields
     ) {
+
+        public ClarificationRequest(
+                Long projectId,
+                String rawRequirement,
+                List<String> knownFields,
+                GenerationMode generationMode
+        ) {
+            this(projectId, rawRequirement, knownFields, generationMode, List.of());
+        }
+
+        public ClarificationRequest {
+            knownFields = knownFields == null ? List.of() : List.copyOf(knownFields);
+            requestedMissingFields = requestedMissingFields == null
+                    ? List.of()
+                    : List.copyOf(requestedMissingFields);
+        }
     }
 
     public record ClarificationResponse(
