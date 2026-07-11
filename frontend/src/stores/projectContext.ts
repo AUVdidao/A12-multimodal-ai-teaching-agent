@@ -9,30 +9,42 @@ export const useProjectContextStore = defineStore('project-context', {
     error: '',
     loadedAt: null as number | null,
     requestId: 0,
+    pendingProjectId: null as number | null,
+    pendingRequest: null as Promise<TeachingProject | null> | null,
   }),
   actions: {
     async load(projectId: number, force = false) {
       if (!force && this.projectId === projectId && this.project) return this.project;
+      if (!force && this.pendingProjectId === projectId && this.pendingRequest) return this.pendingRequest;
       const requestId = ++this.requestId;
       this.projectId = projectId;
       this.project = null;
       this.loading = true;
       this.error = '';
-      try {
-        const project = await getProject(projectId);
-        if (requestId !== this.requestId || this.projectId !== projectId) return null;
-        this.project = project;
-        this.loadedAt = Date.now();
-        return this.project;
-      } catch {
-        if (requestId === this.requestId) {
-          this.project = null;
-          this.error = '暂时无法读取项目上下文。';
+      const request = (async () => {
+        try {
+          const project = await getProject(projectId);
+          if (requestId !== this.requestId || this.projectId !== projectId) return null;
+          this.project = project;
+          this.loadedAt = Date.now();
+          return this.project;
+        } catch {
+          if (requestId === this.requestId) {
+            this.project = null;
+            this.error = '暂时无法读取项目上下文。';
+          }
+          return null;
+        } finally {
+          if (requestId === this.requestId) {
+            this.loading = false;
+            this.pendingProjectId = null;
+            this.pendingRequest = null;
+          }
         }
-        return null;
-      } finally {
-        this.loading = false;
-      }
+      })();
+      this.pendingProjectId = projectId;
+      this.pendingRequest = request;
+      return request;
     },
     clear() {
       this.requestId += 1;
@@ -40,6 +52,8 @@ export const useProjectContextStore = defineStore('project-context', {
       this.project = null;
       this.error = '';
       this.loadedAt = null;
+      this.pendingProjectId = null;
+      this.pendingRequest = null;
     },
   },
 });

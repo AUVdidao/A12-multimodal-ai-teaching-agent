@@ -34,7 +34,7 @@ const router = useRouter();
 const context = useProjectContextStore();
 const projectId = computed(() => Number(route.params.projectId));
 const projectMeta = computed(() => [context.project?.targetStudents, context.project?.courseName, context.project?.chapterTitle].filter(Boolean).join(' · '));
-const primaryLabel = computed(() => route.name === 'project-overview' ? '进入教学需求' : '查看项目概览');
+const primaryLabel = computed(() => '继续项目');
 
 watch(projectId, (value) => {
   if (Number.isInteger(value) && value > 0) context.load(value);
@@ -42,9 +42,7 @@ watch(projectId, (value) => {
 
 function goPrimary() {
   if (!projectId.value) return;
-  router.push(route.name === 'project-overview'
-    ? `/projects/${projectId.value}/requirements`
-    : `/projects/${projectId.value}/overview`);
+  router.push(`/projects/${projectId.value}/overview`);
 }
 
 function formatDate(value: string) {
