@@ -26,10 +26,20 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '生成模式选择' },
   },
   {
+    path: '/projects/:projectId/overview',
+    name: 'project-overview',
+    component: () => import('@/views/ProjectOverviewView.vue'),
+    meta: { title: '项目概览', layout: 'wide' },
+  },
+  {
     path: '/projects/:projectId/requirements',
     name: 'project-requirements',
     component: () => import('@/views/RequirementInputView.vue'),
     meta: { title: '教学需求输入' },
+  },
+  {
+    path: '/projects/:projectId/clarification',
+    redirect: (to) => ({ path: `/projects/${to.params.projectId}/requirements`, hash: '#clarification' }),
   },
   {
     path: '/requirements',
@@ -48,6 +58,10 @@ const routes: RouteRecordRaw[] = [
     name: 'project-requirement-summary',
     component: () => import('@/views/RequirementSummaryView.vue'),
     meta: { title: '需求摘要确认' },
+  },
+  {
+    path: '/projects/:projectId/summary',
+    redirect: (to) => `/projects/${to.params.projectId}/requirement-summary`,
   },
   {
     path: '/summary',

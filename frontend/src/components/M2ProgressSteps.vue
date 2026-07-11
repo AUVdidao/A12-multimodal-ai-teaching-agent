@@ -40,19 +40,19 @@ function openStep(index: number) {
 </script>
 
 <style scoped>
-.m2-progress { margin-bottom: 22px; padding: 8px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.m2-progress { margin-bottom: 14px; padding: 4px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: none; }
 ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 0; padding: 0; list-style: none; }
 li { position: relative; min-width: 0; }
 li:not(:last-child)::after { position: absolute; top: 20px; right: -4px; width: 8px; height: 1px; background: var(--color-border-strong); content: ''; }
-button { display: flex; align-items: center; width: 100%; min-height: 48px; gap: 9px; padding: 7px 9px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); cursor: pointer; text-align: left; }
+button { display: flex; align-items: center; width: 100%; min-height: 38px; gap: 8px; padding: 6px 8px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); cursor: pointer; text-align: left; }
 button:not(:disabled):hover, .is-current button { background: var(--color-primary-soft); color: var(--color-primary); }
 button:disabled { color: #9aa4b2; cursor: not-allowed; }
 .is-completed button { color: var(--color-success); }
-.m2-progress__marker { display: grid; flex: 0 0 26px; width: 26px; height: 26px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 12px; font-weight: 700; }
+.m2-progress__marker { display: grid; flex: 0 0 22px; width: 22px; height: 22px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; font-weight: 700; }
 .m2-progress__text { min-width: 0; }
 .m2-progress__text strong, .m2-progress__text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m2-progress__text strong { font-size: 13px; }
-.m2-progress__text small { margin-top: 2px; color: var(--color-text-muted); font-size: 10px; }
+.m2-progress__text small { display: none; }
 @media (max-width: 760px) { .m2-progress__text small { display: none; } button { justify-content: center; padding: 7px 4px; } .m2-progress__text strong { font-size: 11px; text-align: center; white-space: normal; } }
 @media (max-width: 480px) { button { min-height: 64px; flex-direction: column; gap: 4px; } .m2-progress__marker { flex-basis: 23px; width: 23px; height: 23px; } .m2-progress__text strong { font-size: 9px; line-height: 1.25; } }
 </style>

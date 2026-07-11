@@ -24,7 +24,13 @@
   --radius-lg: 8px;
   --shadow-card: 0 8px 24px rgba(31, 46, 79, 0.06);
   --shadow-float: 0 14px 36px rgba(31, 46, 79, 0.12);
-  --page-max-width: 1180px;
+  --page-max-width: 1440px;
+  --sidebar-width: 224px;
+  --header-height: 56px;
+  --workspace-max-width: 1440px;
+  --content-padding: 28px;
+  --section-gap: 24px;
+  --row-height: 52px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

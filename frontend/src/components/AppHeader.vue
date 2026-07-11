@@ -9,27 +9,29 @@
         title="打开导航"
         @click="emit('toggle-navigation')"
       />
-      <div class="app-header__mark" aria-hidden="true">
-        <el-icon><Reading /></el-icon>
-      </div>
       <div class="app-header__identity">
-        <strong>A12 多模态 AI 教学智能体</strong>
-        <span>教师备课与需求共创工作台</span>
+        <strong>{{ pageTitle }}</strong>
+        <span>{{ pageHint }}</span>
       </div>
     </div>
     <div class="app-header__status">
       <span class="app-header__status-dot" aria-hidden="true" />
-      <span>{{ app.mode }}</span>
+      <span>{{ app.systemStatus }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Menu, Reading } from '@element-plus/icons-vue';
+import { Menu } from '@element-plus/icons-vue';
 import { useAppStore } from '@/stores/app';
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 
 const emit = defineEmits<{ 'toggle-navigation': [] }>();
 const app = useAppStore();
+const route = useRoute();
+const pageTitle = computed(() => typeof route.meta.title === 'string' ? route.meta.title : '教师工作台');
+const pageHint = computed(() => route.path.startsWith('/projects/') ? '项目工作区' : '教师备课工作台');
 </script>
 
 <style scoped>
@@ -46,18 +48,6 @@ const app = useAppStore();
   align-items: center;
   min-width: 0;
   gap: 11px;
-}
-
-.app-header__mark {
-  display: grid;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: #ffffff;
-  font-size: 20px;
 }
 
 .app-header__identity {
@@ -117,10 +107,6 @@ const app = useAppStore();
 }
 
 @media (max-width: 600px) {
-  .app-header__mark {
-    display: none;
-  }
-
   .app-header__identity strong {
     max-width: 210px;
     font-size: 14px;

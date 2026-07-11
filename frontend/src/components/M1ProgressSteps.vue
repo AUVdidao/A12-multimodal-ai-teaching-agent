@@ -66,12 +66,12 @@ function openStep(index: number) {
 
 <style scoped>
 .m1-progress {
-  margin-bottom: 22px;
-  padding: 8px;
+  margin-bottom: 14px;
+  padding: 4px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 ol {
@@ -103,7 +103,7 @@ button {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 48px;
+  min-height: 38px;
   gap: 9px;
   padding: 7px 9px;
   border: 0;
@@ -136,9 +136,9 @@ button:disabled {
 
 .m1-progress__marker {
   display: grid;
-  flex: 0 0 26px;
-  width: 26px;
-  height: 26px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   place-items: center;
   border: 1px solid currentColor;
   border-radius: 50%;
@@ -163,11 +163,7 @@ button:disabled {
   font-size: 13px;
 }
 
-.m1-progress__text small {
-  margin-top: 2px;
-  color: var(--color-text-muted);
-  font-size: 10px;
-}
+.m1-progress__text small { display: none; }
 
 @media (max-width: 760px) {
   .m1-progress__text small {
