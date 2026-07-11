@@ -1,126 +1,8 @@
-* {
-  box-sizing: border-box;
-}
+@import './tokens.css';
+@import './base.css';
+@import './components.css';
 
-html,
-body,
-#app {
-  min-height: 100%;
-  margin: 0;
-}
-
-body {
-  background: #f5f7fb;
-  color: #1f2937;
-  font-family:
-    Inter,
-    "PingFang SC",
-    "Microsoft YaHei",
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-}
-
-.app-shell {
-  min-height: 100vh;
-}
-
-.app-shell__header {
-  height: 72px;
-  padding: 0 28px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.app-shell__body {
-  min-height: calc(100vh - 72px);
-}
-
-.app-shell__aside {
-  background: #ffffff;
-  border-right: 1px solid #e5e7eb;
-}
-
-.app-shell__main {
-  padding: 28px;
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 100%;
-  gap: 24px;
-}
-
-.app-header h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.app-header p {
-  margin: 6px 0 0;
-  color: #667085;
-  font-size: 13px;
-}
-
-.app-sidebar {
-  min-height: 100%;
-  border-right: 0;
-}
-
-.page {
-  max-width: 1040px;
-}
-
-.page__header {
-  margin-bottom: 18px;
-}
-
-.page__header--with-action {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.page__title {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 700;
-}
-
-.page__description {
-  max-width: 760px;
-  margin: 10px 0 0;
-  color: #667085;
-  line-height: 1.7;
-}
-
-.page__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.page-card {
-  border-radius: 8px;
-}
-
-.form-card {
-  max-width: 760px;
-}
-
-.form-hint {
-  margin-left: 10px;
-  color: #667085;
-}
-
-.inline-alert {
+.health-result {
   margin-top: 16px;
 }
 
@@ -128,14 +10,15 @@ body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
-.project-summary div {
-  padding: 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f9fafb;
+.project-summary > div {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
 }
 
 .project-summary span,
@@ -144,118 +27,19 @@ body {
 }
 
 .project-summary span {
-  margin-bottom: 6px;
-  color: #667085;
-  font-size: 13px;
+  margin-bottom: 5px;
+  color: var(--color-text-muted);
+  font-size: 12px;
 }
 
 .project-summary strong {
-  color: #1f2937;
+  color: var(--color-text);
   font-size: 15px;
-  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.mode-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  width: 100%;
-}
-
-.mode-grid .el-radio-button__inner {
-  width: 100%;
-  min-height: 112px;
-  padding: 16px;
-  border: 1px solid #dcdfe6;
-  border-radius: 8px !important;
-  text-align: left;
-  white-space: normal;
-}
-
-.mode-grid .el-radio-button:first-child .el-radio-button__inner,
-.mode-grid .el-radio-button:last-child .el-radio-button__inner {
-  border-radius: 8px !important;
-}
-
-.mode-option strong,
-.mode-option span {
-  display: block;
-}
-
-.mode-option strong {
-  margin-bottom: 8px;
-  font-size: 16px;
-}
-
-.mode-option span {
-  color: #667085;
-  line-height: 1.6;
-}
-
-.status-card {
-  max-width: 720px;
-  margin-bottom: 18px;
-  border-radius: 8px;
-}
-
-.status-card__label {
-  margin-bottom: 6px;
-  color: #667085;
-  font-size: 13px;
-}
-
-.status-card__title {
-  color: #1f2937;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.status-card p {
-  margin: 8px 0 0;
-  color: #667085;
-  line-height: 1.7;
-}
-
-.health-result {
-  margin-top: 16px;
-  white-space: pre-wrap;
-}
-
-@media (max-width: 860px) {
-  .app-shell__body {
-    flex-direction: column;
-  }
-
-  .app-shell__aside {
-    width: 100% !important;
-    border-right: 0;
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  .app-sidebar {
-    display: flex;
-    overflow-x: auto;
-    min-height: auto;
-  }
-
-  .app-header {
-    align-items: flex-start;
-    flex-direction: column;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .app-shell__header {
-    height: 104px;
-  }
-
-  .page__header--with-action {
-    display: grid;
-  }
-
-  .project-summary,
-  .mode-grid {
+@media (max-width: 720px) {
+  .project-summary {
     grid-template-columns: 1fr;
   }
 }

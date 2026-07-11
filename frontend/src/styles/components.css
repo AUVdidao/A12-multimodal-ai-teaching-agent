@@ -1,0 +1,217 @@
+.app-shell {
+  min-height: 100vh;
+  background: var(--color-page);
+}
+
+.app-shell__header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 68px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.97);
+}
+
+.app-shell__body {
+  min-height: calc(100vh - 68px);
+}
+
+.app-shell__aside {
+  position: sticky;
+  top: 68px;
+  height: calc(100vh - 68px);
+  overflow: hidden auto;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.app-shell__main {
+  min-width: 0;
+  padding: 28px 32px 48px;
+}
+
+.app-shell__content {
+  width: 100%;
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+}
+
+.page {
+  width: 100%;
+  max-width: var(--page-max-width);
+}
+
+.page-enter-active,
+.page-leave-active {
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.surface-panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.page-card.el-card,
+.status-card.el-card {
+  border-color: var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.page-card .el-card__body {
+  padding: 24px;
+}
+
+.page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.inline-alert {
+  margin-top: 16px;
+}
+
+.form-card {
+  max-width: 840px;
+}
+
+.form-hint {
+  margin-left: 10px;
+  color: var(--color-text-muted);
+}
+
+.el-button {
+  min-height: var(--control-height);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.el-button:not(.is-disabled):active {
+  transform: translateY(1px);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner,
+.el-input-number .el-input__wrapper {
+  border-radius: var(--radius-md);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-input-number .el-input__wrapper {
+  min-height: var(--control-height);
+}
+
+.el-form-item__label {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.el-alert {
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+}
+
+.el-alert--success.is-light {
+  border-color: #bce8db;
+}
+
+.el-alert--warning.is-light {
+  border-color: #f0d59e;
+}
+
+.el-table {
+  --el-table-border-color: var(--color-border);
+  --el-table-header-bg-color: var(--color-surface-subtle);
+  --el-table-row-hover-bg-color: #f4f7ff;
+}
+
+.el-dialog,
+.el-message-box {
+  max-width: calc(100vw - 32px);
+  border-radius: var(--radius-lg);
+}
+
+.mobile-navigation .el-drawer__body {
+  padding: 0;
+}
+
+.status-card {
+  max-width: 760px;
+  margin-bottom: 20px;
+}
+
+.status-card__label {
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.status-card__title {
+  color: var(--color-text);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.status-card p {
+  margin: 8px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+
+@media (max-width: 1180px) {
+  .app-shell__main {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .app-shell__aside {
+    display: none;
+  }
+
+  .app-shell__main {
+    padding: 22px 20px 40px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell__header {
+    height: 60px;
+    padding: 0 14px;
+  }
+
+  .app-shell__body {
+    min-height: calc(100vh - 60px);
+  }
+
+  .app-shell__main {
+    padding: 18px 14px 32px;
+  }
+
+  .page-card .el-card__body {
+    padding: 18px;
+  }
+
+  .page__actions,
+  .page__actions .el-button {
+    width: 100%;
+  }
+
+  .page__actions .el-button + .el-button {
+    margin-left: 0;
+  }
+}

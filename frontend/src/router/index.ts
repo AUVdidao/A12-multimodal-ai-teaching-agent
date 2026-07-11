@@ -93,7 +93,14 @@ const routes: RouteRecordRaw[] = [
   },
 ];
 
-export default createRouter({
+const router = createRouter({
   history: createWebHistory(),
   routes,
 });
+
+router.afterEach((to) => {
+  const pageTitle = typeof to.meta.title === 'string' ? to.meta.title : '教师工作台';
+  document.title = `${pageTitle} | A12 多模态 AI 教学智能体`;
+});
+
+export default router;
