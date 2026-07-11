@@ -61,7 +61,11 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/projects/:projectId/summary',
-    redirect: (to) => `/projects/${to.params.projectId}/requirement-summary`,
+    redirect: (to) => ({
+      path: `/projects/${to.params.projectId}/requirement-summary`,
+      query: to.query,
+      hash: to.hash,
+    }),
   },
   {
     path: '/summary',

@@ -8,26 +8,34 @@ export const useProjectContextStore = defineStore('project-context', {
     loading: false,
     error: '',
     loadedAt: null as number | null,
+    requestId: 0,
   }),
   actions: {
     async load(projectId: number, force = false) {
       if (!force && this.projectId === projectId && this.project) return this.project;
+      const requestId = ++this.requestId;
       this.projectId = projectId;
+      this.project = null;
       this.loading = true;
       this.error = '';
       try {
-        this.project = await getProject(projectId);
+        const project = await getProject(projectId);
+        if (requestId !== this.requestId || this.projectId !== projectId) return null;
+        this.project = project;
         this.loadedAt = Date.now();
         return this.project;
       } catch {
-        this.project = null;
-        this.error = '暂时无法读取项目上下文。';
+        if (requestId === this.requestId) {
+          this.project = null;
+          this.error = '暂时无法读取项目上下文。';
+        }
         return null;
       } finally {
         this.loading = false;
       }
     },
     clear() {
+      this.requestId += 1;
       this.projectId = null;
       this.project = null;
       this.error = '';
