@@ -11,12 +11,21 @@ import jakarta.persistence.Table;
 @Table(name = "material_purposes")
 public class MaterialPurpose extends BaseCreatedEntity {
 
+    private Long projectId;
     private Long materialId;
 
     @Enumerated(EnumType.STRING)
     private PurposeType purposeType;
 
     private String purposeDescription;
+
+    public Long getProjectId() {
+        return projectId;
+    }
+
+    public void setProjectId(Long projectId) {
+        this.projectId = projectId;
+    }
 
     public Long getMaterialId() {
         return materialId;

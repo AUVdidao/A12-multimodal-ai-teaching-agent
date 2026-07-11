@@ -13,6 +13,8 @@ services:
       A12_AI_FALLBACK_TO_MOCK: "true"
       A12_AI_DIFY_BASE_URL: ${DIFY_BASE_URL:-https://api.dify.ai/v1}
       A12_AI_DIFY_API_KEY: ${DIFY_API_KEY:-}
+      APP_UPLOAD_DIR: ${APP_UPLOAD_DIR:-/app/data/uploads}
+      APP_MAX_UPLOAD_SIZE: ${APP_MAX_UPLOAD_SIZE:-20971520}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:

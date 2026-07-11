@@ -116,17 +116,27 @@ http://localhost:5173
 - 数据库文件不会提交到 Git，`.gitignore` 已忽略 `backend/data/`、`data/`、`*.db`、`*.mv.db`、`*.trace.db`
 - 后续部署阶段预留 PostgreSQL 或云数据库配置
 
-## Docker 部署预留说明
+## Docker 本地原型部署
 
-后续会在 `deploy/` 目录中补充：
+当前已提供本地 Docker Compose 原型部署：
 
-- 后端 Dockerfile
-- 前端 Dockerfile
-- docker-compose.yml
-- Nginx 配置
-- 云端部署说明
+- 前端：Nginx 托管 Vue 生产构建，并将 `/api/` 反向代理到后端
+- 后端：Spring Boot，默认使用 Mock AI Workflow 和 H2 文件数据库
+- 上传持久化：Docker named volume `backend-data` 挂载到 `/app/data`
+- 前端地址：`http://localhost:8081`
+- 后端健康检查：`http://localhost:8080/api/health`
 
-目标是支持本地 Docker Compose 演示，并能迁移到云服务器或云容器平台部署。
+启动与停止：
+
+```powershell
+docker compose config
+docker compose up -d --build
+powershell -ExecutionPolicy Bypass -File scripts/docker-smoke-test.ps1
+docker compose logs backend --tail=100
+docker compose down
+```
+
+本地上传默认写入 `./data/uploads`，单文件上限为 20 MB。真实 Dify、向量数据库、对象存储和生产 HTTPS 尚未接入。
 
 ## 环境变量说明
 
@@ -150,13 +160,16 @@ http://localhost:5173
 
 ## 当前开发状态
 
-当前阶段：仓库初始化。
+当前阶段：M2 资料增强闭环。
 
 已完成：
 
-- 创建项目仓库目录
-- 初始化 Git
-- 添加 Java Spring Boot + Vue + Node + Docker 适用的 `.gitignore`
-- 添加项目 README
+- M1 项目创建、需求澄清、摘要确认和多轮对话
+- TA-011 资料上传、项目隔离存储和受控下载
+- TA-012 资料用途绑定与回显
+- TA-013 原型解析、关键词、教学环节和失败重试
+- TA-014 本地知识片段索引、可解释关键词检索和来源追踪
+- TA-015 教学意图生成、编辑、确认和刷新恢复
+- 本地 Docker Compose、M1/M2 smoke、浏览器验收证据
 
-下一阶段将按照 Linear 中的 `A12` 项目任务推进工程骨架、后端模型、前端页面、Dify 接入、导出能力和部署流程。
+尚未实现：真实 OCR、真实向量 RAG、真实 Dify、PPT/Word/互动内容生成、生产部署。

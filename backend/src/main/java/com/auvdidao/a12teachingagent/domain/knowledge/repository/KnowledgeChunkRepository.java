@@ -7,5 +7,11 @@ import java.util.List;
 
 public interface KnowledgeChunkRepository extends JpaRepository<KnowledgeChunk, Long> {
 
-    List<KnowledgeChunk> findByCourseNameContainingIgnoreCase(String courseName);
+    List<KnowledgeChunk> findByProjectIdOrderByMaterialIdAscChunkNoAsc(Long projectId);
+
+    List<KnowledgeChunk> findByMaterialIdOrderByChunkNoAsc(Long materialId);
+
+    long countByProjectId(Long projectId);
+
+    void deleteByMaterialId(Long materialId);
 }

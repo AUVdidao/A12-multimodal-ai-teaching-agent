@@ -7,5 +7,5 @@ import java.util.Optional;
 
 public interface TeachingIntentRepository extends JpaRepository<TeachingIntent, Long> {
 
-    Optional<TeachingIntent> findFirstByProjectIdOrderByCreatedAtDesc(Long projectId);
+    Optional<TeachingIntent> findFirstByProjectIdOrderByCreatedAtDescIdDesc(Long projectId);
 }

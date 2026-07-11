@@ -22,12 +22,18 @@ const labels: Record<string, string> = {
   FINALIZED: '已定稿',
   DRAFT: '待确认',
   CONFIRMED: '已确认',
+  UPLOADED: '已上传',
+  NOT_STARTED: '等待解析',
+  PROCESSING: '解析中',
+  SUCCEEDED: '解析完成',
+  FAILED: '处理失败',
   UP: '服务正常',
 };
 
 const label = computed(() => props.label || labels[props.status] || props.status);
 const tone = computed(() => {
-  if (['CONFIRMED', 'REQUIREMENT_CONFIRMED', 'FINALIZED', 'UP'].includes(props.status)) return 'success';
+  if (['CONFIRMED', 'REQUIREMENT_CONFIRMED', 'INTENT_CONFIRMED', 'FINALIZED', 'UP', 'SUCCEEDED'].includes(props.status)) return 'success';
+  if (props.status === 'FAILED') return 'danger';
   if (['DRAFT', 'CREATED'].includes(props.status)) return 'warning';
   return 'neutral';
 });
@@ -66,5 +72,11 @@ const tone = computed(() => {
   border-color: #efd39a;
   background: var(--color-warning-soft);
   color: var(--color-warning);
+}
+
+.status-badge--danger {
+  border-color: #f0c4c8;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 </style>

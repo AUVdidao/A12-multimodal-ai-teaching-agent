@@ -36,8 +36,37 @@ function Invoke-A12Api {
         return $response.data
     }
     catch {
-        throw "Check failed: $Name at $url. Error: $($_.Exception.Message)"
+        $status = if ($null -ne $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { "n/a" }
+        $details = if (-not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) { $_.ErrorDetails.Message } else { $_.Exception.Message }
+        throw "Check failed: $Name at $url. HTTP: $status. Response: $details"
     }
+}
+
+function Invoke-A12Multipart {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ContentType,
+        [string]$Description = "Docker smoke material"
+    )
+
+    $url = "$baseUrl$Path"
+    Write-Host "Checking $Name`: POST $url"
+    $raw = & curl.exe -sS --fail-with-body -X POST -F "file=@$FilePath;type=$ContentType" -F "description=$Description" $url 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Check failed: $Name at $url. curl exit code: $LASTEXITCODE. Response: $($raw -join ' ')"
+    }
+    try {
+        $response = ($raw -join "`n") | ConvertFrom-Json
+    }
+    catch {
+        throw "Check failed: $Name at $url. Invalid JSON response: $($raw -join ' ')"
+    }
+    if ($null -eq $response -or $response.code -ne 0) {
+        throw "Check failed: $Name at $url. API response: $($raw -join ' ')"
+    }
+    return $response.data
 }
 
 Write-Host "Waiting for backend readiness: $readinessUrl"
@@ -76,12 +105,12 @@ $null = Invoke-A12Api -Name "AI workflow status" -Method "GET" -Path "/api/ai-wo
 $null = Invoke-A12Api -Name "model modes" -Method "GET" -Path "/api/model-modes"
 
 $project = Invoke-A12Api -Name "project creation" -Method "POST" -Path "/api/projects" -Body @{
-    projectName = "M1 Docker smoke project"
+    projectName = "M1 and M2 Docker smoke project"
     courseName = "Biology"
     chapterTitle = "Photosynthesis"
     targetStudents = "Grade 8"
     lessonDuration = 45
-    description = "Dynamic M1 smoke data"
+    description = "Dynamic M1 and M2 smoke data"
 }
 if ($null -eq $project.id) {
     throw "Project creation did not return an id"
@@ -185,5 +214,88 @@ if ($confirmedSummary.status -ne "CONFIRMED" -or [string]::IsNullOrWhiteSpace($c
     throw "Summary confirmation was not persisted"
 }
 
-Write-Host "M1 Docker smoke test passed."
-Write-Host "projectId=$projectId requirementId=$($completeRequirement.id) summaryId=$($summary.id) sessionId=$sessionId"
+$temporaryMaterial = Join-Path ([System.IO.Path]::GetTempPath()) "a12-m2-smoke-$([Guid]::NewGuid().ToString('N')).png"
+$materialId = $null
+$intentId = $null
+try {
+    $pngBytes = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z5f8AAAAASUVORK5CYII=")
+    [System.IO.File]::WriteAllBytes($temporaryMaterial, $pngBytes)
+
+    $material = Invoke-A12Multipart -Name "M2 material upload" -Path "/api/projects/$projectId/materials" -FilePath $temporaryMaterial -ContentType "image/png" -Description "Non-sensitive generated smoke image"
+    if ($null -eq $material.id -or $material.originalFilename -notlike "a12-m2-smoke-*.png") {
+        throw "Material upload did not return the generated smoke file metadata"
+    }
+    $materialId = [long]$material.id
+
+    $materials = Invoke-A12Api -Name "M2 material list" -Method "GET" -Path "/api/projects/$projectId/materials"
+    if (@($materials | Where-Object { $_.id -eq $materialId }).Count -ne 1) {
+        throw "Uploaded material was not restored by the material list"
+    }
+
+    $usage = Invoke-A12Api -Name "M2 material usage binding" -Method "PUT" -Path "/api/projects/$projectId/materials/$materialId/usages" -Body @{
+        usageTypes = @("TEXTBOOK_BASIS", "IMAGE_ASSET")
+        note = "Use for concept explanation and visual observation"
+    }
+    if ($usage.usageTypes.Count -ne 2) {
+        throw "Material usages were not persisted"
+    }
+
+    $parse = Invoke-A12Api -Name "M2 prototype parsing" -Method "POST" -Path "/api/projects/$projectId/materials/$materialId/parse"
+    if ($parse.parseStatus -ne "SUCCEEDED" -or [string]::IsNullOrWhiteSpace($parse.summary) -or $parse.keywords.Count -lt 3) {
+        throw "Prototype parse result is incomplete"
+    }
+    $parseResult = Invoke-A12Api -Name "M2 parse result restore" -Method "GET" -Path "/api/projects/$projectId/materials/$materialId/parse-result"
+    if ($parseResult.parseStatus -ne "SUCCEEDED" -or $parseResult.id -ne $parse.id) {
+        throw "Parse result was not restored"
+    }
+
+    $overview = Invoke-A12Api -Name "M2 knowledge overview" -Method "GET" -Path "/api/projects/$projectId/knowledge/overview"
+    if ($overview.indexedMaterialCount -lt 1 -or $overview.chunkCount -lt 3) {
+        throw "Knowledge chunks were not created from the uploaded material"
+    }
+
+    $search = Invoke-A12Api -Name "M2 knowledge search" -Method "POST" -Path "/api/projects/$projectId/knowledge/search" -Body @{
+        query = "Photosynthesis investigation"
+        limit = 5
+    }
+    if ($search.hits.Count -lt 1 -or [string]::IsNullOrWhiteSpace($search.hits[0].sourceFilename) -or [string]::IsNullOrWhiteSpace($search.hits[0].hitReason)) {
+        throw "Knowledge search did not return an explainable real-source hit"
+    }
+
+    $intent = Invoke-A12Api -Name "M2 teaching intent generation" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/generate"
+    if ($intent.status -ne "DRAFT" -or $intent.evidenceItems.Count -lt 1) {
+        throw "Teaching intent draft did not contain evidence"
+    }
+    $intentId = [long]$intent.id
+    $latestIntent = Invoke-A12Api -Name "M2 teaching intent latest" -Method "GET" -Path "/api/projects/$projectId/teaching-intents/latest"
+    if ($latestIntent.id -ne $intentId) {
+        throw "Teaching intent latest did not restore the draft"
+    }
+
+    $updatedIntent = Invoke-A12Api -Name "M2 teaching intent update" -Method "PUT" -Path "/api/projects/$projectId/teaching-intents/$intentId" -Body @{
+        generationGoal = "Explain photosynthesis with observable evidence"
+        contentBasis = $intent.contentBasis
+        teachingApproach = "Concept explanation and visual evidence analysis"
+        interactionMode = "Teacher prompts, student observation, discussion and feedback"
+        outputTypes = @("PPT", "LESSON_PLAN")
+        stylePreference = "Clear technology style"
+    }
+    if ($updatedIntent.generationGoal -ne "Explain photosynthesis with observable evidence") {
+        throw "Teaching intent update was not persisted"
+    }
+
+    $confirmedIntent = Invoke-A12Api -Name "M2 teaching intent confirmation" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/$intentId/confirm"
+    if ($confirmedIntent.status -ne "CONFIRMED" -or [string]::IsNullOrWhiteSpace($confirmedIntent.confirmedAt)) {
+        throw "Teaching intent confirmation was not persisted"
+    }
+    $restoredIntent = Invoke-A12Api -Name "M2 confirmed intent restore" -Method "GET" -Path "/api/projects/$projectId/teaching-intents/latest"
+    if ($restoredIntent.status -ne "CONFIRMED" -or $restoredIntent.id -ne $intentId) {
+        throw "Confirmed teaching intent was not restored"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $temporaryMaterial -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "M1 and M2 Docker smoke test passed."
+Write-Host "projectId=$projectId requirementId=$($completeRequirement.id) summaryId=$($summary.id) materialId=$materialId intentId=$intentId sessionId=$sessionId"
