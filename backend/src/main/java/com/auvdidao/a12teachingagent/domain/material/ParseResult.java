@@ -1,10 +1,21 @@
 package com.auvdidao.a12teachingagent.domain.material;
 
 import com.auvdidao.a12teachingagent.domain.common.BaseAuditableEntity;
+import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "parse_results")
@@ -16,11 +27,21 @@ public class ParseResult extends BaseAuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String summary;
 
-    @Lob
-    @Column(columnDefinition = "TEXT")
-    private String extractedText;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "parse_result_keywords", joinColumns = @JoinColumn(name = "parse_result_id"))
+    @Column(name = "keyword_value")
+    private List<String> keywords = new ArrayList<>();
 
-    private Boolean confirmed;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "parse_result_stages", joinColumns = @JoinColumn(name = "parse_result_id"))
+    @Column(name = "stage_value")
+    private List<String> applicableTeachingStages = new ArrayList<>();
+
+    @Enumerated(EnumType.STRING)
+    private MaterialParseStatus parseStatus;
+
+    private String failureReason;
+    private LocalDateTime parsedAt;
 
     public Long getMaterialId() {
         return materialId;
@@ -38,19 +59,45 @@ public class ParseResult extends BaseAuditableEntity {
         this.summary = summary;
     }
 
-    public String getExtractedText() {
-        return extractedText;
+    public List<String> getKeywords() {
+        return List.copyOf(keywords);
     }
 
-    public void setExtractedText(String extractedText) {
-        this.extractedText = extractedText;
+    public void setKeywords(List<String> keywords) {
+        this.keywords = keywords == null ? new ArrayList<>() : new ArrayList<>(keywords);
     }
 
-    public Boolean getConfirmed() {
-        return confirmed;
+    public List<String> getApplicableTeachingStages() {
+        return List.copyOf(applicableTeachingStages);
     }
 
-    public void setConfirmed(Boolean confirmed) {
-        this.confirmed = confirmed;
+    public void setApplicableTeachingStages(List<String> applicableTeachingStages) {
+        this.applicableTeachingStages = applicableTeachingStages == null
+                ? new ArrayList<>()
+                : new ArrayList<>(applicableTeachingStages);
+    }
+
+    public MaterialParseStatus getParseStatus() {
+        return parseStatus;
+    }
+
+    public void setParseStatus(MaterialParseStatus parseStatus) {
+        this.parseStatus = parseStatus;
+    }
+
+    public String getFailureReason() {
+        return failureReason;
+    }
+
+    public void setFailureReason(String failureReason) {
+        this.failureReason = failureReason;
+    }
+
+    public LocalDateTime getParsedAt() {
+        return parsedAt;
+    }
+
+    public void setParsedAt(LocalDateTime parsedAt) {
+        this.parsedAt = parsedAt;
     }
 }

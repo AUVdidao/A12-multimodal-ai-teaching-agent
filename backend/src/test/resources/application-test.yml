@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
   datasource:
     url: jdbc:h2:mem:a12_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -12,6 +16,11 @@ spring:
       ddl-auto: create-drop
     show-sql: false
     open-in-view: false
+
+app:
+  storage:
+    upload-dir: ${java.io.tmpdir}/a12-test-uploads
+    max-file-size: 20971520
 
 a12:
   ai:

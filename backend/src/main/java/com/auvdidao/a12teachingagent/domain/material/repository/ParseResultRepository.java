@@ -7,5 +7,5 @@ import java.util.Optional;
 
 public interface ParseResultRepository extends JpaRepository<ParseResult, Long> {
 
-    Optional<ParseResult> findFirstByMaterialIdOrderByCreatedAtDesc(Long materialId);
+    Optional<ParseResult> findFirstByMaterialIdOrderByCreatedAtDescIdDesc(Long materialId);
 }

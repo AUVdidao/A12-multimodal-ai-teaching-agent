@@ -1,9 +1,9 @@
 <template>
   <aside class="app-sidebar">
     <div class="app-sidebar__context">
-      <span>M1 演示闭环</span>
+      <span>{{ inM2 ? 'M2 资料增强闭环' : 'M1 需求澄清闭环' }}</span>
       <strong>{{ projectId ? `当前项目 #${projectId}` : '尚未选择项目' }}</strong>
-      <small>{{ projectId ? '需求澄清工作流进行中' : '从项目列表开始备课' }}</small>
+      <small>{{ projectId ? (inM2 ? '资料、知识与教学意图' : '需求澄清工作流进行中') : '从项目列表开始备课' }}</small>
     </div>
 
     <el-menu :default-active="activePath" router class="app-sidebar__menu" @select="emit('navigate')">
@@ -26,10 +26,18 @@
         <el-icon><DocumentChecked /></el-icon><span>需求摘要</span>
       </el-menu-item>
 
-      <li class="app-sidebar__group app-sidebar__group--locked">下一阶段</li>
-      <el-menu-item index="/materials" disabled>
-        <el-icon><Files /></el-icon><span>资料与知识库</span><Lock class="app-sidebar__lock" />
+      <li class="app-sidebar__group">M2 资料增强</li>
+      <el-menu-item :index="materialsPath" :disabled="!m2Available">
+        <el-icon><Files /></el-icon><span>资料与解析</span><Lock v-if="!m2Available" class="app-sidebar__lock" />
       </el-menu-item>
+      <el-menu-item :index="knowledgePath" :disabled="!m2Available">
+        <el-icon><Search /></el-icon><span>本地知识检索</span><Lock v-if="!m2Available" class="app-sidebar__lock" />
+      </el-menu-item>
+      <el-menu-item :index="intentPath" :disabled="!m2Available">
+        <el-icon><Aim /></el-icon><span>教学意图确认</span><Lock v-if="!m2Available" class="app-sidebar__lock" />
+      </el-menu-item>
+
+      <li class="app-sidebar__group app-sidebar__group--locked">下一阶段</li>
       <el-menu-item index="/plan" disabled>
         <el-icon><Tickets /></el-icon><span>内容生成</span><Lock class="app-sidebar__lock" />
       </el-menu-item>
@@ -43,8 +51,9 @@
 </template>
 
 <script setup lang="ts">
-import { DocumentChecked, EditPen, Files, Folder, House, Lock, Operation, Tickets } from '@element-plus/icons-vue';
-import { computed } from 'vue';
+import { getLatestRequirementSummary } from '@/api/requirementSummaries';
+import { Aim, DocumentChecked, EditPen, Files, Folder, House, Lock, Operation, Search, Tickets } from '@element-plus/icons-vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 const emit = defineEmits<{ navigate: [] }>();
@@ -56,8 +65,24 @@ const projectId = computed(() => {
 const modePath = computed(() => projectId.value ? `/projects/${projectId.value}/mode` : '/projects');
 const requirementsPath = computed(() => projectId.value ? `/projects/${projectId.value}/requirements` : '/projects');
 const summaryPath = computed(() => projectId.value ? `/projects/${projectId.value}/requirement-summary` : '/projects');
-const summaryAvailable = computed(() => Boolean(projectId.value && route.path.includes('/requirement-summary')));
+const materialsPath = computed(() => projectId.value ? `/projects/${projectId.value}/materials` : '/projects');
+const knowledgePath = computed(() => projectId.value ? `/projects/${projectId.value}/knowledge` : '/projects');
+const intentPath = computed(() => projectId.value ? `/projects/${projectId.value}/teaching-intent` : '/projects');
+const summaryConfirmed = ref(false);
+const summaryAvailable = computed(() => Boolean(projectId.value && (summaryConfirmed.value || route.path.includes('/requirement-summary'))));
+const m2Available = computed(() => Boolean(projectId.value && summaryConfirmed.value));
+const inM2 = computed(() => ['/materials', '/knowledge', '/teaching-intent'].some((segment) => route.path.includes(segment)));
+watch(() => [projectId.value, route.fullPath] as const, async ([value]) => {
+  summaryConfirmed.value = false;
+  if (!value) return;
+  const numericId = Number(value);
+  if (!Number.isInteger(numericId) || numericId <= 0) return;
+  try { summaryConfirmed.value = (await getLatestRequirementSummary(numericId))?.status === 'CONFIRMED'; } catch { summaryConfirmed.value = false; }
+}, { immediate: true });
 const activePath = computed(() => {
+  if (route.path.includes('/teaching-intent')) return intentPath.value;
+  if (route.path.includes('/knowledge')) return knowledgePath.value;
+  if (route.path.includes('/materials')) return materialsPath.value;
   if (route.path.includes('/requirement-summary')) return summaryPath.value;
   if (route.path.includes('/requirements') || route.path === '/dialog') return requirementsPath.value;
   if (route.path.includes('/mode')) return modePath.value;

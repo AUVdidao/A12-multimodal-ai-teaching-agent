@@ -87,11 +87,12 @@
         </section>
 
         <section class="next-stage-panel" aria-label="下一阶段说明">
-          <div><el-icon><Lock /></el-icon></div>
+          <div><el-icon><component :is="confirmed ? Files : Lock" /></el-icon></div>
           <span>下一阶段</span>
           <h2>资料上传与知识库构建</h2>
-          <p>该能力属于 M2，当前尚未实现。本页面不会伪造上传或生成结果。</p>
-          <el-button disabled>将在 M2 阶段开放</el-button>
+          <p>{{ confirmed ? '教学需求已锁定，可以进入真实资料上传、用途绑定和本地原型检索。' : '确认教学需求后开放 M2 资料增强流程。' }}</p>
+          <el-button v-if="confirmed" type="primary" @click="router.push(`/projects/${projectId}/materials`)">进入 M2 资料增强</el-button>
+          <el-button v-else disabled>确认摘要后开放</el-button>
         </section>
       </aside>
     </div>
@@ -113,7 +114,7 @@ import M1ProgressSteps from '@/components/M1ProgressSteps.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { Back, CircleCheck, Document, EditPen, Lock, Notebook, Reading, Refresh } from '@element-plus/icons-vue';
+import { Back, CircleCheck, Document, EditPen, Files, Lock, Notebook, Reading, Refresh } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';

@@ -7,5 +7,7 @@ import java.util.List;
 
 public interface MaterialPurposeRepository extends JpaRepository<MaterialPurpose, Long> {
 
-    List<MaterialPurpose> findByMaterialId(Long materialId);
+    List<MaterialPurpose> findByMaterialIdOrderByIdAsc(Long materialId);
+
+    void deleteByMaterialId(Long materialId);
 }
