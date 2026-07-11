@@ -9,6 +9,14 @@
 - 运行模式：本地 Mock AI + H2 文件数据库
 - 真实 Dify、真实 OCR、真实向量数据库不在本次 M2 范围内
 
+最终收尾记录：
+
+- 分支提交：`e5c22404eae77e2e20b55eb7578272ab7d6c93ce`
+- PR：[#4 feat: complete M2 material and knowledge workflow](https://github.com/AUVdidao/A12-multimodal-ai-teaching-agent/pull/4)
+- PR base/head：`main` <- `m2-material-knowledge-complete`
+- 合并提交：`11bae1428c51614befcba31f1ae47a837d84553b`
+- 合并后 main：`11bae1428c51614befcba31f1ae47a837d84553b`
+
 ## 2. TA-011 资料上传与存储
 
 结果：通过。
@@ -161,6 +169,8 @@ docker compose logs frontend --tail=150
 
 Smoke 动态输出包含：`projectId`、`materialId`、`intentId`、`sessionId`。M1 和 M2 均通过：项目创建、模式设置、需求/澄清/摘要确认、资料上传、用途绑定、解析、知识检索、教学意图生成/编辑/确认，以及对话历史查询。
 
+合并后 main 的 smoke 动态输出：`projectId=27`、`materialId=6`、`intentId=4`、`sessionId=project-27-clarification`。
+
 重启持久化通过：backend 重启后资料元数据、下载字节数、用途、解析结果、知识片段和教学意图仍可读取。日志未发现 500、502、Bean 冲突、H2 锁、迁移重复错误、路径下载或真实 Dify 请求。
 
 最终容器按项目负责人要求保持运行：frontend `http://localhost:8081`，backend `http://localhost:8080`。
@@ -211,6 +221,6 @@ Smoke 动态输出包含：`projectId`、`materialId`、`intentId`、`sessionId`
 
 ## 14. 最终验收结论
 
-在提交、PR、合并和合并后 `main` 复验全部完成后，本报告结论更新为：
-
 **M2 已完成、已合并、main 复验通过。**
+
+合并后复验结果：后端 `mvn test` 为 `108/108` 通过，前端 `npm.cmd run build` 通过，Docker `config/build/up/smoke` 通过，backend 重启后资料下载仍为 68 字节、解析状态为 `SUCCEEDED`、知识片段为 3 个、教学意图为 `CONFIRMED`，`git status` clean。容器按项目负责人要求保持运行。
