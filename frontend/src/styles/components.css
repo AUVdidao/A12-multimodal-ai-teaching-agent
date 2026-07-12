@@ -3,24 +3,24 @@
   background: var(--color-page);
 }
 
+.app-shell__workspace {
+  min-width: 0;
+}
+
 .app-shell__header {
   position: sticky;
   top: 0;
   z-index: 40;
   height: var(--header-height);
-  padding: 0 22px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--color-border);
   background: rgba(255, 255, 255, 0.97);
 }
 
-.app-shell__body {
-  min-height: calc(100vh - var(--header-height));
-}
-
 .app-shell__aside {
   position: sticky;
-  top: var(--header-height);
-  height: calc(100vh - var(--header-height));
+  top: 0;
+  height: 100vh;
   overflow: hidden auto;
   border-right: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -28,7 +28,7 @@
 
 .app-shell__main {
   min-width: 0;
-  padding: var(--content-padding) clamp(20px, 3vw, 40px) 48px;
+  padding: var(--content-padding) clamp(20px, 2.2vw, 32px) 40px;
 }
 
 .app-shell__content {
@@ -42,21 +42,7 @@
   max-width: var(--workspace-max-width);
 }
 
-.app-shell__content.is-project-workspace .page-heading {
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.app-shell__content.is-project-workspace .page-heading__eyebrow {
-  display: none;
-}
-
-.app-shell__content.is-project-workspace .page-heading h1 {
-  font-size: 20px;
-}
-
 .app-shell__content.is-project-workspace .page-heading p {
-  margin-top: 3px;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -158,6 +144,29 @@
   --el-table-row-hover-bg-color: #f4f7ff;
 }
 
+.app-shell .el-table th.el-table__cell {
+  height: 42px;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-shell .el-table td.el-table__cell {
+  height: 50px;
+  padding: 0;
+}
+
+.app-shell .el-input__wrapper.is-focus,
+.app-shell .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--color-primary), 0 0 0 3px var(--color-primary-soft);
+}
+
+.app-shell .el-tag {
+  min-height: 24px;
+  border-radius: var(--radius-sm);
+}
+
 .app-shell .el-dialog,
 .app-shell .el-message-box {
   max-width: calc(100vw - 32px);
@@ -205,16 +214,16 @@
   .app-shell__main {
     padding: 22px 20px 40px;
   }
+
+  .app-shell__workspace {
+    width: 100%;
+  }
 }
 
 @media (max-width: 640px) {
   .app-shell__header {
     height: var(--header-height);
     padding: 0 14px;
-  }
-
-  .app-shell__body {
-    min-height: calc(100vh - var(--header-height));
   }
 
   .app-shell__main {

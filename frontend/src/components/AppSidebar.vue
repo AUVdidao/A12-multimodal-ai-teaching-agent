@@ -16,23 +16,29 @@
     </el-menu>
 
     <div class="app-sidebar__footer">
-      <span class="app-sidebar__footer-dot" aria-hidden="true" />
-      <p>原型服务状态请查看顶部栏</p>
+      <div>
+        <span :class="['app-sidebar__footer-dot', `is-${app.systemStatus}`]" aria-hidden="true" />
+        <p>{{ app.systemStatusLabel }}</p>
+      </div>
+      <el-button text :icon="Refresh" :loading="app.systemStatus === 'checking'" aria-label="重新检查服务状态" title="重新检查服务状态" @click="app.checkHealth" />
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { Folder, House } from '@element-plus/icons-vue';
-import { computed } from 'vue';
+import { Folder, House, Refresh } from '@element-plus/icons-vue';
+import { computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import { useAppStore } from '@/stores/app';
 
 const emit = defineEmits<{ navigate: [] }>();
 const route = useRoute();
+const app = useAppStore();
 const activePath = computed(() => {
   if (route.path.startsWith('/projects')) return '/projects';
   return route.path;
 });
+onMounted(() => app.checkHealth());
 </script>
 
 <style scoped>
@@ -88,11 +94,14 @@ const activePath = computed(() => {
 .app-sidebar__footer {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 7px;
   margin: 16px 4px 0;
   padding: 13px 8px 0;
   border-top: 1px solid var(--color-border);
 }
+
+.app-sidebar__footer > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 .app-sidebar__footer p {
   margin: 0;
@@ -100,5 +109,7 @@ const activePath = computed(() => {
   font-size: 10px;
   line-height: 1.5;
 }
-.app-sidebar__footer-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-success); }
+.app-sidebar__footer-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-text-muted); }
+.app-sidebar__footer-dot.is-healthy { background: var(--color-success); }
+.app-sidebar__footer-dot.is-unavailable { background: var(--color-danger); }
 </style>

@@ -12,7 +12,7 @@
 
     <template v-else>
       <section class="surface-panel upload-workspace">
-        <div class="upload-workspace__copy"><span>SECURE LOCAL UPLOAD</span><h2>添加一份教学参考资料</h2><p>支持 PDF、DOCX、PPTX、PNG、JPG、JPEG，单文件不超过 20 MB。文件使用安全随机名保存在项目隔离目录。</p></div>
+        <div class="upload-workspace__copy"><span>上传资料</span><h2>添加一份教学参考资料</h2><p>支持 PDF、DOCX、PPTX、PNG、JPG、JPEG，单文件不超过 20 MB。上传后可在同一工作区绑定用途并查看解析结果。</p></div>
         <div :class="['drop-zone', { 'is-dragging': dragging }]" role="button" tabindex="0" @click="fileInput?.click()" @keydown.enter="fileInput?.click()" @dragenter.prevent="dragging = true" @dragover.prevent @dragleave.prevent="dragging = false" @drop.prevent="onDrop">
           <input ref="fileInput" class="sr-only" type="file" accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg" @change="onFileChange" />
           <el-icon><UploadFilled /></el-icon><strong>{{ selectedFile ? selectedFile.name : '点击选择或拖拽文件到这里' }}</strong><small>{{ selectedFile ? formatFileSize(selectedFile.size) : '选择后不会自动上传，请再次确认' }}</small>
@@ -186,7 +186,7 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 </script>
 
 <style scoped>
-.upload-workspace { display: grid; grid-template-columns: minmax(230px, .72fr) minmax(360px, 1.28fr); gap: 15px 22px; padding: 22px; }
+.upload-workspace { display: grid; grid-template-columns: minmax(230px, .72fr) minmax(360px, 1.28fr); gap: 14px 18px; padding: 18px 20px; }
 .upload-workspace__copy { grid-row: span 3; }
 .upload-workspace__copy span, .section-title span { color: var(--color-primary); font-size: 10px; font-weight: 800; }
 .upload-workspace__copy h2, .section-title h2, .upload-workspace__copy p, .section-title p { margin: 0; }
@@ -199,11 +199,11 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 .drop-zone small { color: var(--color-text-muted); font-size: 10px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .upload-workspace__actions { display: flex; justify-content: flex-end; gap: 9px; }
-.material-list-section { margin-top: 26px; }
+.material-list-section { margin-top: 16px; }
 .section-title { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 13px; }
 .section-title h2 { margin-top: 4px; font-size: 18px; }
 .section-title p { color: var(--color-text-muted); font-size: 11px; }
-.material-workbench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); align-items: start; gap: 18px; }.material-table-wrap { min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }.material-table-wrap :deep(.el-table__cell) { padding: 10px 0; }.material-table-wrap strong, .material-table-wrap small { display: block; }.material-table-wrap strong { overflow-wrap: anywhere; font-size: 12px; }.material-table-wrap small { margin-top: 3px; color: var(--color-text-muted); font-size: 10px; }.material-detail-panel { min-width: 0; }.material-detail-panel :deep(.material-card) { position: sticky; top: 88px; }
-@media (max-width: 980px) { .material-workbench { grid-template-columns: 1fr; } .material-detail-panel :deep(.material-card) { position: static; } } @media (max-width: 820px) { .upload-workspace { grid-template-columns: 1fr; } .upload-workspace__copy { grid-row: auto; } }
+.material-workbench { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, .65fr); align-items: start; gap: 16px; }.material-table-wrap { min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-card); }.material-table-wrap :deep(.el-table__cell) { padding: 8px 0; }.material-table-wrap strong, .material-table-wrap small { display: block; }.material-table-wrap strong { overflow-wrap: anywhere; font-size: 12px; }.material-table-wrap small { margin-top: 3px; color: var(--color-text-muted); font-size: 10px; }.material-detail-panel { min-width: 0; }.material-detail-panel :deep(.material-card) { position: sticky; top: 78px; max-height: calc(100vh - 96px); overflow-y: auto; }
+@media (max-width: 980px) { .material-workbench { grid-template-columns: 1fr; } .material-detail-panel :deep(.material-card) { position: static; max-height: none; overflow: visible; } } @media (max-width: 820px) { .upload-workspace { grid-template-columns: 1fr; } .upload-workspace__copy { grid-row: auto; } }
 @media (max-width: 560px) { .section-title { align-items: flex-start; flex-direction: column; gap: 5px; } .upload-workspace__actions, .upload-workspace__actions .el-button { width: 100%; } }
 </style>

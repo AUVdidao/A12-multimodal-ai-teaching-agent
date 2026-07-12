@@ -12,14 +12,14 @@
     <template v-else-if="intent">
       <div class="intent-workspace">
         <main class="surface-panel intent-document" v-loading="saving || confirming">
-          <header class="intent-document__header"><div><span>ENHANCED TEACHING INTENT</span><h2>生成前教学意图</h2><p>需求摘要 #{{ intent.requirementSummaryId }} · {{ confirmed ? '最终确认版本' : '可编辑草稿' }}</p></div><StatusBadge :status="intent.status" /></header>
+          <header class="intent-document__header"><div><span>教学意图草稿</span><h2>生成前教学意图</h2><p>需求摘要 #{{ intent.requirementSummaryId }} · {{ confirmed ? '最终确认版本' : '可编辑草稿' }}</p></div><StatusBadge :status="intent.status" /></header>
           <el-form label-position="top" @submit.prevent>
             <FormSection :icon="Aim" title="生成目标" description="保持教师已确认的教学目标，不由资料覆盖。"><el-form-item label="目标描述"><el-input v-model="form.generationGoal" type="textarea" :rows="3" maxlength="4000" :disabled="confirmed" /></el-form-item></FormSection>
             <FormSection :icon="Reading" title="内容依据" description="说明资料如何增强内容组织，并保留明确边界。"><el-form-item label="增强依据"><el-input v-model="form.contentBasis" type="textarea" :rows="4" maxlength="6000" :disabled="confirmed" /></el-form-item></FormSection>
             <FormSection :icon="Guide" title="教学组织" description="确认教学方法、互动方式和视觉表达。">
               <div class="form-grid"><el-form-item label="教学方法"><el-input v-model="form.teachingApproach" type="textarea" :rows="3" maxlength="4000" :disabled="confirmed" /></el-form-item><el-form-item label="互动方式"><el-input v-model="form.interactionMode" type="textarea" :rows="3" maxlength="500" :disabled="confirmed" /></el-form-item></div>
               <el-form-item label="输出类型"><el-checkbox-group v-model="form.outputTypes" :disabled="confirmed"><el-checkbox value="PPT">PPT 课件</el-checkbox><el-checkbox value="LESSON_PLAN">Word 教案</el-checkbox><el-checkbox value="INTERACTION">互动内容</el-checkbox></el-checkbox-group></el-form-item>
-              <el-form-item label="风格偏好"><el-input v-model="form.stylePreference" maxlength="500" :disabled="confirmed" /></el-form-item>
+              <el-form-item label="风格与备注"><el-input v-model="form.stylePreference" maxlength="500" :disabled="confirmed" placeholder="补充课件风格或其他教学说明" /></el-form-item>
             </FormSection>
             <el-alert v-if="errorMessage" :title="errorMessage" type="warning" show-icon :closable="false" />
           </el-form>
@@ -107,16 +107,16 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 </script>
 
 <style scoped>
-.intent-workspace { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(310px, .78fr); align-items: start; gap: 20px; }
-.intent-document { min-width: 0; padding: 24px; }
-.intent-document__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 2px solid var(--color-text); }
+.intent-workspace { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(330px, .65fr); align-items: start; gap: 16px; }
+.intent-document { min-width: 0; padding: 22px; }
+.intent-document__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--color-border); }
 .intent-document__header span:first-child, .status-panel > span, .next-stage-panel > span { color: var(--color-primary); font-size: 10px; font-weight: 800; }
 .intent-document__header h2, .intent-document__header p, .status-panel h2, .status-panel p, .next-stage-panel h2, .next-stage-panel p { margin: 0; }
 .intent-document__header h2 { margin-top: 5px; font-size: 20px; }
 .intent-document__header p { margin-top: 4px; color: var(--color-text-muted); font-size: 10px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.intent-sidebar { display: grid; gap: 15px; }
-.status-panel { position: sticky; top: 88px; padding: 20px; }
+.intent-sidebar { position: sticky; top: 78px; display: grid; max-height: calc(100vh - 100px); overflow-y: auto; gap: 14px; }
+.status-panel { padding: 18px; }
 .status-panel__title { display: flex; align-items: flex-start; gap: 10px; margin-top: 11px; }
 .status-panel__title > .el-icon { color: var(--color-success); font-size: 22px; }
 .status-panel h2 { font-size: 15px; }
@@ -133,6 +133,6 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 .next-stage-panel h2 { margin-top: 5px; font-size: 14px; }
 .next-stage-panel p { margin: 7px 0 13px; color: var(--color-text-muted); font-size: 10px; line-height: 1.6; }
 .m2-complete-note { color: var(--color-text-muted); font-size: 12px; }
-@media (max-width: 980px) { .intent-workspace { grid-template-columns: 1fr; } .status-panel { position: static; } }
+@media (max-width: 980px) { .intent-workspace { grid-template-columns: 1fr; } .intent-sidebar { position: static; max-height: none; overflow: visible; } }
 @media (max-width: 640px) { .intent-document { padding: 18px; } .intent-document__header { flex-direction: column; } .form-grid { grid-template-columns: 1fr; } }
 </style>

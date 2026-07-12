@@ -102,7 +102,7 @@
 
       <aside id="clarification" class="surface-panel clarification-panel" aria-label="AI 主动澄清">
         <header class="clarification-panel__header">
-          <div class="ai-identity"><span><el-icon><Cpu /></el-icon></span><div><strong>AI 需求助教</strong><small>确定性 Mock 分析</small></div></div>
+          <div class="ai-identity"><span><el-icon><Cpu /></el-icon></span><div><strong>AI 需求助教</strong><small>智能澄清</small></div></div>
           <StatusBadge :status="complete ? 'CONFIRMED' : latestRequirement ? 'DRAFT' : 'WAITING'" :label="complete ? '信息完整' : latestRequirement ? '正在澄清' : '等待需求'" />
         </header>
 
@@ -437,23 +437,27 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 
 .requirement-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(350px, 0.75fr);
+  grid-template-columns: minmax(0, 1.8fr) minmax(330px, .82fr);
   grid-template-areas: "clarification editor";
   align-items: start;
-  gap: 20px;
+  gap: 16px;
 }
 
 .requirement-editor {
   grid-area: editor;
+  position: sticky;
+  top: 78px;
   min-width: 0;
-  padding: 24px;
+  max-height: calc(100vh - 100px);
+  overflow: hidden auto;
+  padding: 18px;
 }
 
 .loaded-state {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
   padding: 12px 14px;
   border: 1px solid #bce8db;
   border-radius: var(--radius-md);
@@ -478,12 +482,12 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 16px;
+  grid-template-columns: 1fr;
+  gap: 0;
 }
 
 .form-grid--two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .output-types {
@@ -494,11 +498,8 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 
 .clarification-panel {
   grid-area: clarification;
-  position: sticky;
-  top: 90px;
   min-width: 0;
-  max-height: calc(100vh - 116px);
-  overflow: hidden auto;
+  min-height: 620px;
   padding: 20px;
 }
 
@@ -622,8 +623,12 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 }
 
 .supplement-action {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   width: 100%;
   margin-top: 18px;
+  box-shadow: 0 -10px 18px var(--color-surface);
 }
 
 .history-section {
@@ -658,7 +663,7 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 
 .dialogue-timeline {
   display: grid;
-  max-height: 330px;
+  max-height: 380px;
   gap: 12px;
   overflow-y: auto;
   padding: 4px 5px 4px 0;
@@ -672,6 +677,11 @@ function resolveErrorMessage(error: unknown, fallback: string) {
   }
 
   .clarification-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .requirement-editor {
     position: static;
     max-height: none;
   }

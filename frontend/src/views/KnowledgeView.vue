@@ -17,7 +17,7 @@
       </section>
 
       <section class="surface-panel search-workspace">
-        <div class="search-workspace__heading"><div><span>DETERMINISTIC RETRIEVAL</span><h2>检索教学证据</h2><p>当前不是向量数据库 RAG；相同数据和查询会得到稳定、可复验的结果。</p></div><el-tag type="warning" effect="plain">原型检索</el-tag></div>
+        <div class="search-workspace__heading"><div><span>本地资料检索</span><h2>检索教学证据</h2><p>从当前项目已解析资料中查找相关内容，结果可重复核对。</p></div><el-tag type="warning" effect="plain">原型检索</el-tag></div>
         <div class="search-bar"><el-input v-model="query" clearable maxlength="200" placeholder="输入课题、关键词或资料用途，例如：光合作用 / 教材依据" @keyup.enter="runSearch"><template #prefix><el-icon><Search /></el-icon></template></el-input><el-button type="primary" :icon="Search" :loading="searching" :disabled="!query.trim() || !hasKnowledge" @click="runSearch">执行检索</el-button></div>
         <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
       </section>
@@ -39,7 +39,7 @@
             />
           </div>
           <aside v-if="selectedHit" class="surface-panel knowledge-detail" aria-label="知识片段详情">
-            <div class="knowledge-detail__eyebrow">SELECTED EVIDENCE</div>
+            <div class="knowledge-detail__eyebrow">当前选中片段</div>
             <div class="knowledge-detail__score">原型相关性评分 {{ selectedHit.score.toFixed(1) }}</div>
             <h3>{{ selectedHit.title }}</h3>
             <p>{{ selectedHit.content }}</p>
@@ -130,14 +130,14 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 .knowledge-metrics span { color: var(--color-text-muted); font-size: 10px; font-weight: 700; }
 .knowledge-metrics strong { margin-top: 5px; color: var(--color-primary); font-size: 22px; }
 .knowledge-metrics small { margin-top: 3px; color: var(--color-text-secondary); font-size: 10px; }
-.search-workspace { display: grid; gap: 17px; padding: 21px; }
+.search-workspace { display: grid; gap: 15px; padding: 18px 20px; }
 .search-workspace__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .search-workspace__heading span, .section-title span { color: var(--color-primary); font-size: 10px; font-weight: 800; }
 .search-workspace__heading h2, .search-workspace__heading p, .section-title h2, .section-title p { margin: 0; }
 .search-workspace__heading h2 { margin-top: 4px; font-size: 18px; }
 .search-workspace__heading p { margin-top: 5px; color: var(--color-text-secondary); font-size: 11px; }
 .search-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
-.results-section { margin-top: 24px; }
+.results-section { margin-top: 16px; }
 .section-title { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
 .section-title h2 { margin-top: 3px; font-size: 18px; }
 .section-title p { color: var(--color-text-muted); font-size: 10px; }

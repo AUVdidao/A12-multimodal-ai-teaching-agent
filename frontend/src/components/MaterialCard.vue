@@ -70,10 +70,11 @@ h3 { overflow-wrap: anywhere; font-size: 15px; }
 .material-card__actions .el-button + .el-button { margin-left: 0; }
 .parse-result { padding: 16px; border-left: 3px solid var(--color-success); border-radius: var(--radius-md); background: var(--color-success-soft); }
 .parse-result h4 { margin-top: 13px; font-size: 13px; }
-.parse-result > p { margin-top: 6px; color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
+.parse-result > p { margin-top: 6px; overflow-wrap: anywhere; color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
 .prototype-note { display: flex; align-items: flex-start; gap: 7px; color: var(--color-success); font-size: 11px; font-weight: 650; }
 .result-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .result-groups > div > span { display: block; margin-bottom: 7px; color: var(--color-text-muted); font-size: 10px; font-weight: 700; }
 .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-row :deep(.el-tag) { max-width: 100%; height: auto; min-height: 24px; white-space: normal; word-break: break-all; }
 @media (max-width: 680px) { .material-card__header { align-items: flex-start; } .usage-grid, .result-groups { grid-template-columns: 1fr; } .material-card__actions, .material-card__actions .el-button { width: 100%; } }
 </style>
