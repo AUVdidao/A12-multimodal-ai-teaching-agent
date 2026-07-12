@@ -1,212 +1,36 @@
 <template>
   <section class="page projects-page">
-    <PageHeader eyebrow="教学项目" title="项目列表" description="查看项目状态并从安全的业务节点继续备课流程。">
-      <template #actions><el-button type="primary" :icon="Plus" @click="router.push('/projects/new')">新建项目</el-button></template>
-    </PageHeader>
-
-    <div class="project-toolbar">
-      <div><strong>{{ projects.length }}</strong><span>个本地教学项目</span></div>
-      <el-button :icon="Refresh" text :loading="loading" @click="loadProjects">刷新</el-button>
-    </div>
-
-    <div v-if="loading" class="surface-panel project-loading" aria-live="polite">
-      <el-skeleton :rows="5" animated />
-    </div>
-    <StatePanel v-else-if="errorMessage" type="error" title="项目列表读取失败" :description="errorMessage">
-      <template #action><el-button size="small" type="primary" @click="loadProjects">重新加载</el-button></template>
-    </StatePanel>
-    <StatePanel v-else-if="projects.length === 0" type="empty" title="还没有教学项目" description="创建项目后即可选择生成模式并开始需求澄清。">
-      <template #action><el-button size="small" type="primary" @click="router.push('/projects/new')">创建第一个项目</el-button></template>
-    </StatePanel>
-
-    <div v-else class="project-grid">
-      <article v-for="project in projects" :key="project.id" class="project-card">
-        <header>
-          <StatusBadge :status="project.status" />
-          <span class="project-card__id">项目 #{{ project.id }}</span>
-        </header>
-        <h2>{{ project.projectName }}</h2>
-        <p>{{ project.courseName }} · {{ project.chapterTitle }}</p>
-        <dl>
-          <div><dt>授课对象</dt><dd>{{ project.targetStudents || '待补充' }}</dd></div>
-          <div><dt>生成模式</dt><dd>{{ formatMode(project.modelMode) }}</dd></div>
-          <div><dt>最近更新</dt><dd>{{ formatDate(project.updatedAt) }}</dd></div>
-        </dl>
-        <footer>
-          <span>{{ nextStepLabel(project) }}</span>
-          <el-button type="primary" plain :icon="Right" @click="continueProject(project)">继续项目</el-button>
-        </footer>
-      </article>
-    </div>
+    <header class="projects-heading"><div><h1>教学项目</h1><p>查看、筛选并继续你的备课工作。</p></div><el-button type="primary" :icon="Plus" @click="router.push('/projects/new')">新建教学项目</el-button></header>
+    <section class="project-toolbar" aria-label="项目筛选">
+      <el-input v-model="keyword" :prefix-icon="Search" clearable placeholder="搜索项目、课程或课题" />
+      <el-select v-model="statusFilter" clearable placeholder="全部状态"><el-option v-for="status in availableStatuses" :key="status" :label="statusLabel(status)" :value="status" /></el-select>
+      <el-select v-model="sortOrder"><el-option label="最近更新" value="updated" /><el-option label="创建时间" value="created" /></el-select>
+      <el-button :icon="Refresh" :loading="loading" @click="loadProjects">刷新</el-button>
+    </section>
+    <div v-if="loading" class="surface-panel project-loading"><el-skeleton :rows="6" animated /></div>
+    <StatePanel v-else-if="errorMessage" type="error" title="项目列表读取失败" :description="errorMessage"><template #action><el-button size="small" @click="loadProjects">重新加载</el-button></template></StatePanel>
+    <StatePanel v-else-if="projects.length === 0" type="empty" title="还没有教学项目" description="创建项目后即可开始记录教学需求。"><template #action><el-button size="small" type="primary" @click="router.push('/projects/new')">创建项目</el-button></template></StatePanel>
+    <StatePanel v-else-if="filteredProjects.length === 0" type="empty" title="没有匹配的项目" description="换一个关键词或清除筛选条件试试。" />
+    <template v-else><div class="project-table-wrap"><el-table :data="filteredProjects" row-key="id" class="project-table" @row-click="openOverview"><el-table-column label="项目名称" min-width="220"><template #default="{ row }"><strong>{{ row.projectName }}</strong><span class="project-table__sub">{{ row.courseName }}</span></template></el-table-column><el-table-column label="学段 / 学科" min-width="170"><template #default="{ row }">{{ row.targetStudents || '待补充' }} · {{ row.courseName }}</template></el-table-column><el-table-column prop="chapterTitle" label="课题" min-width="170" /><el-table-column label="状态" width="130"><template #default="{ row }"><StatusBadge :status="row.status" /></template></el-table-column><el-table-column label="最近更新" width="150"><template #default="{ row }">{{ formatDate(row.updatedAt) }}</template></el-table-column><el-table-column label="操作" width="110" fixed="right"><template #default="{ row }"><el-button link type="primary" @click.stop="openOverview(row)">继续</el-button></template></el-table-column></el-table></div><div class="project-mobile-list"><article v-for="project in filteredProjects" :key="project.id" class="project-mobile-row" @click="openOverview(project)"><div><strong>{{ project.projectName }}</strong><span>{{ projectMeta(project) }}</span></div><StatusBadge :status="project.status" /></article></div></template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { listProjects, type TeachingProject } from '@/api/projects';
-import PageHeader from '@/components/PageHeader.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { Plus, Refresh, Right } from '@element-plus/icons-vue';
-import { onMounted, ref } from 'vue';
+import { Plus, Refresh, Search } from '@element-plus/icons-vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-
-const router = useRouter();
-const loading = ref(false);
-const projects = ref<TeachingProject[]>([]);
-const errorMessage = ref('');
-
-onMounted(loadProjects);
-
-async function loadProjects() {
-  loading.value = true;
-  errorMessage.value = '';
-  try {
-    projects.value = await listProjects();
-  } catch {
-    projects.value = [];
-    errorMessage.value = '暂时无法同步项目数据，请检查后端服务后重试。';
-  } finally {
-    loading.value = false;
-  }
-}
-
-function continueProject(project: TeachingProject) {
-  router.push(project.status === 'REQUIREMENT_CONFIRMED'
-    ? `/projects/${project.id}/requirement-summary`
-    : `/projects/${project.id}/mode`);
-}
-
-function nextStepLabel(project: TeachingProject) {
-  return project.status === 'REQUIREMENT_CONFIRMED' ? '继续查看确认摘要' : '继续完善项目需求';
-}
-
-function formatMode(mode: string) {
-  return ({ STANDARD: '标准模式', QUALITY: '高质量模式', ECONOMY: '经济模式' } as Record<string, string>)[mode] || '标准模式';
-}
-
-function formatDate(value: string) {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
-}
+const router = useRouter(); const projects = ref<TeachingProject[]>([]); const loading = ref(false); const errorMessage = ref(''); const keyword = ref(''); const statusFilter = ref(''); const sortOrder = ref('updated');
+const availableStatuses = computed(() => [...new Set(projects.value.map((item) => item.status))]);
+const filteredProjects = computed(() => projects.value.filter((item) => { const term = keyword.value.trim().toLowerCase(); return (!statusFilter.value || item.status === statusFilter.value) && (!term || [item.projectName, item.courseName, item.chapterTitle, item.targetStudents].filter(Boolean).join(' ').toLowerCase().includes(term)); }).sort((a, b) => new Date(sortOrder.value === 'created' ? b.createdAt : b.updatedAt).getTime() - new Date(sortOrder.value === 'created' ? a.createdAt : a.updatedAt).getTime()));
+onMounted(loadProjects); async function loadProjects() { loading.value = true; errorMessage.value = ''; try { projects.value = await listProjects(); } catch { errorMessage.value = '暂时无法同步项目数据，请检查后端服务后重试。'; } finally { loading.value = false; } }
+function openOverview(project: TeachingProject) { router.push(`/projects/${project.id}/overview`); } function projectMeta(project: TeachingProject) { return [project.targetStudents, project.courseName, project.chapterTitle].filter(Boolean).join(' · '); } function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)); } function statusLabel(status: string) { return ({ CREATED: '已创建', REQUIREMENT_CONFIRMED: '需求已确认', MATERIAL_READY: '资料已就绪', INTENT_CONFIRMED: '意图已确认' } as Record<string, string>)[status] || status; }
 </script>
 
 <style scoped>
-.project-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.project-toolbar strong {
-  margin-right: 7px;
-  font-size: 18px;
-}
-
-.project-toolbar span {
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.project-loading {
-  padding: 24px;
-}
-
-.project-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.project-card {
-  min-width: 0;
-  padding: 20px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
-}
-
-.project-card:hover {
-  border-color: var(--color-primary-border);
-  box-shadow: var(--shadow-float);
-  transform: translateY(-2px);
-}
-
-.project-card header,
-.project-card footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.project-card__id {
-  color: var(--color-text-muted);
-  font-size: 11px;
-}
-
-.project-card h2 {
-  margin: 18px 0 0;
-  font-size: 18px;
-  overflow-wrap: anywhere;
-}
-
-.project-card > p {
-  margin: 6px 0 0;
-  color: var(--color-text-secondary);
-}
-
-.project-card dl {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 20px 0;
-  padding: 15px 0;
-  border-top: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.project-card dt,
-.project-card dd {
-  margin: 0;
-}
-
-.project-card dt {
-  color: var(--color-text-muted);
-  font-size: 10px;
-}
-
-.project-card dd {
-  margin-top: 4px;
-  color: var(--color-text);
-  font-size: 12px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.project-card footer > span {
-  color: var(--color-text-muted);
-  font-size: 11px;
-}
-
-@media (max-width: 860px) {
-  .project-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 520px) {
-  .project-card dl {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .project-card footer {
-    align-items: stretch;
-    flex-direction: column;
-  }
-}
+.projects-heading, .project-toolbar, .project-mobile-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }.projects-heading { margin-bottom: 22px; }.projects-heading h1, .projects-heading p { margin: 0; }.projects-heading h1 { font-size: 27px; }.projects-heading p { margin-top: 4px; color: var(--color-text-secondary); }
+.project-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) 160px 130px auto; margin-bottom: 16px; }.project-loading { padding: 24px; }.project-table-wrap { border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; background: var(--color-surface); }.project-table :deep(.el-table__cell) { height: var(--row-height); }.project-table strong, .project-table__sub { display: block; }.project-table__sub { margin-top: 3px; color: var(--color-text-muted); font-size: 11px; }.project-mobile-list { display: none; }
+@media (max-width: 900px) { .project-toolbar { grid-template-columns: minmax(200px, 1fr) 140px auto; }.project-toolbar .el-select:last-of-type { display: none; } } @media (max-width: 680px) { .projects-heading { align-items: stretch; flex-direction: column; }.project-toolbar { grid-template-columns: 1fr auto; }.project-toolbar .el-select { display: none; }.project-table-wrap { display: none; }.project-mobile-list { display: grid; gap: 8px; }.project-mobile-row { padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }.project-mobile-row strong, .project-mobile-row span { display: block; }.project-mobile-row span { margin-top: 4px; color: var(--color-text-muted); font-size: 11px; } }
 </style>

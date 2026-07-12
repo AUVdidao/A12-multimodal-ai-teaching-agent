@@ -5,12 +5,16 @@
     </el-header>
 
     <el-container class="app-shell__body">
-      <el-aside class="app-shell__aside" width="240px">
+      <el-aside class="app-shell__aside" width="var(--sidebar-width)">
         <AppSidebar />
       </el-aside>
 
       <el-main class="app-shell__main">
-        <div class="app-shell__content">
+        <div class="app-shell__content" :class="{ 'is-project-workspace': projectId }">
+          <template v-if="projectId">
+            <ProjectContextHeader />
+            <ProjectWorkspaceNav :project-id="projectId" />
+          </template>
           <router-view v-slot="{ Component, route }">
             <transition name="page" mode="out-in">
               <component :is="Component" :key="route.fullPath" />
@@ -35,7 +39,15 @@
 <script setup lang="ts">
 import AppHeader from '@/components/AppHeader.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
-import { ref } from 'vue';
+import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
+import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
+import { computed, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
 const mobileNavigationOpen = ref(false);
+const route = useRoute();
+const projectId = computed(() => {
+  const value = Number(route.params.projectId);
+  return Number.isInteger(value) && value > 0 ? value : null;
+});
 </script>

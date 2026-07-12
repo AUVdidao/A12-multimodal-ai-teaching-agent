@@ -1,6 +1,14 @@
 import { http } from './http';
 import type { ApiResponse } from './health';
 
+export type ProjectStatus =
+  | 'CREATED'
+  | 'REQUIREMENT_CONFIRMED'
+  | 'MATERIAL_READY'
+  | 'INTENT_CONFIRMED'
+  | 'GENERATED'
+  | 'FINALIZED';
+
 export interface TeachingProject {
   id: number;
   projectName: string;
@@ -10,7 +18,7 @@ export interface TeachingProject {
   lessonDuration?: number;
   description?: string;
   modelMode: string;
-  status: string;
+  status: ProjectStatus;
   createdAt: string;
   updatedAt: string;
 }

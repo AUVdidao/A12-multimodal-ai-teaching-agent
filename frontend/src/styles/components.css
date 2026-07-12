@@ -7,20 +7,20 @@
   position: sticky;
   top: 0;
   z-index: 40;
-  height: 68px;
-  padding: 0 24px;
+  height: var(--header-height);
+  padding: 0 22px;
   border-bottom: 1px solid var(--color-border);
   background: rgba(255, 255, 255, 0.97);
 }
 
 .app-shell__body {
-  min-height: calc(100vh - 68px);
+  min-height: calc(100vh - var(--header-height));
 }
 
 .app-shell__aside {
   position: sticky;
-  top: 68px;
-  height: calc(100vh - 68px);
+  top: var(--header-height);
+  height: calc(100vh - var(--header-height));
   overflow: hidden auto;
   border-right: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -28,18 +28,37 @@
 
 .app-shell__main {
   min-width: 0;
-  padding: 28px 32px 48px;
+  padding: var(--content-padding) clamp(20px, 3vw, 40px) 48px;
 }
 
 .app-shell__content {
   width: 100%;
-  max-width: var(--page-max-width);
+  max-width: var(--workspace-max-width);
   margin: 0 auto;
 }
 
 .page {
   width: 100%;
-  max-width: var(--page-max-width);
+  max-width: var(--workspace-max-width);
+}
+
+.app-shell__content.is-project-workspace .page-heading {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.app-shell__content.is-project-workspace .page-heading__eyebrow {
+  display: none;
+}
+
+.app-shell__content.is-project-workspace .page-heading h1 {
+  font-size: 20px;
+}
+
+.app-shell__content.is-project-workspace .page-heading p {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .page-enter-active,
@@ -190,12 +209,12 @@
 
 @media (max-width: 640px) {
   .app-shell__header {
-    height: 60px;
+    height: var(--header-height);
     padding: 0 14px;
   }
 
   .app-shell__body {
-    min-height: calc(100vh - 60px);
+    min-height: calc(100vh - var(--header-height));
   }
 
   .app-shell__main {
