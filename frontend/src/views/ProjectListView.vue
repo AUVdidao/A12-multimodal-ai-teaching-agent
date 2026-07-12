@@ -1,6 +1,6 @@
 <template>
   <section class="page projects-page">
-    <header class="projects-heading"><div><h1>教学项目</h1><p>查看、筛选并继续你的备课工作。</p></div><el-button type="primary" :icon="Plus" @click="router.push('/projects/new')">新建教学项目</el-button></header>
+    <header class="projects-heading"><div><span>PROJECTS</span><h1>教学项目</h1><p>查看、筛选并继续你的备课工作。</p></div></header>
     <section class="project-toolbar" aria-label="项目筛选">
       <el-input v-model="keyword" :prefix-icon="Search" clearable placeholder="搜索项目、课程或课题" />
       <el-select v-model="statusFilter" clearable placeholder="全部状态"><el-option v-for="status in availableStatuses" :key="status" :label="statusLabel(status)" :value="status" /></el-select>
@@ -19,14 +19,14 @@
 import { listProjects, type TeachingProject } from '@/api/projects';
 import StatePanel from '@/components/StatePanel.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { Plus, Refresh, Search } from '@element-plus/icons-vue';
+import { Refresh, Search } from '@element-plus/icons-vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 const router = useRouter(); const projects = ref<TeachingProject[]>([]); const loading = ref(false); const errorMessage = ref(''); const keyword = ref(''); const statusFilter = ref(''); const sortOrder = ref('updated');
 const availableStatuses = computed(() => [...new Set(projects.value.map((item) => item.status))]);
 const filteredProjects = computed(() => projects.value.filter((item) => { const term = keyword.value.trim().toLowerCase(); return (!statusFilter.value || item.status === statusFilter.value) && (!term || [item.projectName, item.courseName, item.chapterTitle, item.targetStudents].filter(Boolean).join(' ').toLowerCase().includes(term)); }).sort((a, b) => new Date(sortOrder.value === 'created' ? b.createdAt : b.updatedAt).getTime() - new Date(sortOrder.value === 'created' ? a.createdAt : a.updatedAt).getTime()));
 onMounted(loadProjects); async function loadProjects() { loading.value = true; errorMessage.value = ''; try { projects.value = await listProjects(); } catch { errorMessage.value = '暂时无法同步项目数据，请检查后端服务后重试。'; } finally { loading.value = false; } }
-function openOverview(project: TeachingProject) { router.push(`/projects/${project.id}/overview`); } function projectMeta(project: TeachingProject) { return [project.targetStudents, project.courseName, project.chapterTitle].filter(Boolean).join(' · '); } function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)); } function statusLabel(status: string) { return ({ CREATED: '已创建', REQUIREMENT_CONFIRMED: '需求已确认', MATERIAL_READY: '资料已就绪', INTENT_CONFIRMED: '意图已确认' } as Record<string, string>)[status] || status; }
+function openOverview(project: TeachingProject) { router.push(`/projects/${project.id}/overview`); } function projectMeta(project: TeachingProject) { return [project.targetStudents, project.courseName, project.chapterTitle].filter(Boolean).join(' · '); } function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)); } function statusLabel(status: string) { return ({ CREATED: '待完善需求', REQUIREMENT_CONFIRMED: '需求已确认', MATERIAL_READY: '资料已就绪', INTENT_CONFIRMED: '意图已确认', GENERATED: '内容已生成', FINALIZED: '已定稿' } as Record<string, string>)[status] || status; }
 </script>
 
 <style scoped>

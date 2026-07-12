@@ -1,5 +1,13 @@
 <template>
-  <article class="knowledge-hit">
+  <article
+    class="knowledge-hit"
+    :class="{ 'is-selected': selected }"
+    role="button"
+    tabindex="0"
+    @click="emit('select')"
+    @keydown.enter="emit('select')"
+    @keydown.space.prevent="emit('select')"
+  >
     <header><div><span>匹配分数 {{ hit.score.toFixed(1) }}</span><h3>{{ hit.title }}</h3></div><el-tag type="success" effect="plain">本地原型命中</el-tag></header>
     <p class="knowledge-hit__content">{{ hit.content }}</p>
     <div class="knowledge-hit__reason"><el-icon><Search /></el-icon><strong>{{ hit.hitReason }}</strong></div>
@@ -11,11 +19,15 @@
 import type { KnowledgeHit } from '@/api/knowledge';
 import { usageLabels } from '@/utils/materialLabels';
 import { Document, Search } from '@element-plus/icons-vue';
-defineProps<{ hit: KnowledgeHit }>();
+
+defineProps<{ hit: KnowledgeHit; selected?: boolean }>();
+const emit = defineEmits<{ select: [] }>();
 </script>
 
 <style scoped>
-.knowledge-hit { padding: 18px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.knowledge-hit { padding: 18px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-card); cursor: pointer; transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+.knowledge-hit:hover, .knowledge-hit:focus-visible { border-color: color-mix(in srgb, var(--color-primary) 48%, var(--color-border)); box-shadow: var(--shadow-float); outline: none; }
+.knowledge-hit.is-selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft), var(--shadow-card); }
 header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 header span { color: var(--color-primary); font-size: 10px; font-weight: 800; }
 h3, p { margin: 0; }

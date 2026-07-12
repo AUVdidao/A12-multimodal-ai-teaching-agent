@@ -18,6 +18,7 @@
       <span class="app-header__status-dot" aria-hidden="true" />
       <span>{{ app.systemStatusLabel }}</span>
     </div>
+    <el-button v-if="showCreateProject" class="app-header__create" type="primary" @click="router.push('/projects/new')">新建教学项目</el-button>
   </div>
 </template>
 
@@ -25,13 +26,15 @@
 import { Menu } from '@element-plus/icons-vue';
 import { useAppStore } from '@/stores/app';
 import { computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 const emit = defineEmits<{ 'toggle-navigation': [] }>();
 const app = useAppStore();
 const route = useRoute();
+const router = useRouter();
 const pageTitle = computed(() => typeof route.meta.title === 'string' ? route.meta.title : '教师工作台');
 const pageHint = computed(() => route.path.startsWith('/projects/') ? '项目工作区' : '教师备课工作台');
+const showCreateProject = computed(() => route.path === '/' || route.path === '/projects');
 onMounted(() => app.checkHealth());
 </script>
 
@@ -41,7 +44,7 @@ onMounted(() => app.checkHealth());
   align-items: center;
   justify-content: space-between;
   height: 100%;
-  gap: 20px;
+  gap: 12px;
 }
 
 .app-header__brand {
@@ -82,7 +85,7 @@ onMounted(() => app.checkHealth());
   min-height: 30px;
   padding: 4px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--color-surface-subtle);
   color: var(--color-text-muted);
   font-size: 12px;
@@ -102,6 +105,7 @@ onMounted(() => app.checkHealth());
 .app-header__menu {
   display: none;
 }
+.app-header__create { margin-left: 2px; }
 
 @media (max-width: 1023px) {
   .app-header__menu {
@@ -117,7 +121,8 @@ onMounted(() => app.checkHealth());
   }
 
   .app-header__identity span,
-  .app-header__status span:last-child {
+  .app-header__status span:last-child,
+  .app-header__create {
     display: none;
   }
 

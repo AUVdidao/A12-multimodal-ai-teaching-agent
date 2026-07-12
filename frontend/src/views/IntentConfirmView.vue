@@ -27,12 +27,12 @@
 
         <aside class="intent-sidebar">
           <section class="surface-panel status-panel">
-            <span>确认状态</span><div class="status-panel__title"><el-icon><component :is="confirmed ? CircleCheck : EditPen" /></el-icon><div><h2>{{ confirmed ? '教学意图已确认' : '等待教师确认' }}</h2><p>{{ confirmed ? '该版本已经锁定，刷新后仍保持确认状态。' : '可编辑并保存，确认后进入 M3 准备状态。' }}</p></div></div>
+            <span>确认状态</span><div class="status-panel__title"><el-icon><component :is="confirmed ? CircleCheck : EditPen" /></el-icon><div><h2>{{ confirmed ? '教学意图已确认' : '等待教师确认' }}</h2><p>{{ confirmed ? '该版本已经锁定，刷新后仍保持确认状态。' : '可编辑并保存，确认后完成当前 M2 流程。' }}</p></div></div>
             <dl><div><dt>证据数量</dt><dd>{{ intent.evidenceItems.length }}</dd></div><div><dt>最近更新</dt><dd>{{ formatDateTime(intent.updatedAt) }}</dd></div><div v-if="intent.confirmedAt"><dt>确认时间</dt><dd>{{ formatDateTime(intent.confirmedAt) }}</dd></div></dl>
             <div v-if="!confirmed" class="status-panel__actions"><el-button :icon="EditPen" :loading="saving" @click="saveDraft">保存草稿</el-button><el-button type="primary" :icon="CircleCheck" :loading="confirming" :disabled="!canConfirm" @click="confirmIntent">确认教学意图</el-button></div>
           </section>
           <EvidencePanel :evidence="intent.evidenceItems" />
-          <section class="next-stage-panel"><div><el-icon><Lock /></el-icon></div><span>下一阶段</span><h2>课件、教案与互动内容生成</h2><p>{{ confirmed ? 'M2 已完成。M3 尚未实现，本页面不会伪造生成结果。' : '确认教学意图后将完成 M2，但 M3 入口仍保持锁定。' }}</p><el-button disabled>M3 阶段开放</el-button></section>
+          <section class="next-stage-panel"><div><el-icon><Lock /></el-icon></div><span>当前边界</span><h2>内容生成尚未开放</h2><p>{{ confirmed ? 'M2 已完成。后续内容生成将以这份已确认的教学意图作为输入。' : '确认教学意图后将完成当前 M2 资料增强流程。' }}</p></section>
         </aside>
       </div>
 
@@ -40,7 +40,7 @@
         <template #info>{{ confirmed ? 'M2 资料增强闭环已确认，可作为后续内容生成输入。' : '确认前仍可调整教学方法和互动方式。' }}</template>
         <template #secondary><el-button @click="router.push(`/projects/${projectId}/knowledge`)">返回知识检索</el-button></template>
         <el-button v-if="!confirmed" type="primary" :disabled="!canConfirm" @click="confirmIntent">确认并完成 M2</el-button>
-        <el-button v-else disabled>等待 M3 内容生成</el-button>
+        <span v-else class="m2-complete-note">M2 已确认，内容生成将在后续阶段开放。</span>
       </PrimaryActionBar>
     </template>
   </section>
@@ -132,7 +132,7 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 .next-stage-panel > div { display: grid; width: 34px; height: 34px; margin-bottom: 12px; place-items: center; border-radius: var(--radius-md); background: #eef1f5; color: var(--color-text-muted); }
 .next-stage-panel h2 { margin-top: 5px; font-size: 14px; }
 .next-stage-panel p { margin: 7px 0 13px; color: var(--color-text-muted); font-size: 10px; line-height: 1.6; }
-.next-stage-panel .el-button { width: 100%; }
+.m2-complete-note { color: var(--color-text-muted); font-size: 12px; }
 @media (max-width: 980px) { .intent-workspace { grid-template-columns: 1fr; } .status-panel { position: static; } }
 @media (max-width: 640px) { .intent-document { padding: 18px; } .intent-document__header { flex-direction: column; } .form-grid { grid-template-columns: 1fr; } }
 </style>

@@ -438,11 +438,13 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 .requirement-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(350px, 0.75fr);
+  grid-template-areas: "clarification editor";
   align-items: start;
   gap: 20px;
 }
 
 .requirement-editor {
+  grid-area: editor;
   min-width: 0;
   padding: 24px;
 }
@@ -491,6 +493,7 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 }
 
 .clarification-panel {
+  grid-area: clarification;
   position: sticky;
   top: 90px;
   min-width: 0;
@@ -665,6 +668,7 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 @media (max-width: 1120px) {
   .requirement-workspace {
     grid-template-columns: 1fr;
+    grid-template-areas: "clarification" "editor";
   }
 
   .clarification-panel {

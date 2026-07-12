@@ -27,8 +27,21 @@
         <div class="section-title"><div><span>项目资料 {{ materials.length }} 份</span><h2>用途绑定与原型解析</h2></div><p>资料用途和解析结果会在刷新后恢复。</p></div>
         <StatePanel v-if="loading && materials.length === 0" type="loading" title="正在读取资料" />
         <StatePanel v-else-if="materials.length === 0" type="empty" title="还没有参考资料" description="先上传一份非敏感教学资料，再标记它在本课中的用途。" />
-        <div v-else class="material-list">
-          <MaterialCard v-for="material in materials" :key="material.id" :material="material" :parse-result="parseResults[material.id]" :usage-types="usageDrafts[material.id]?.types || []" :usage-note="usageDrafts[material.id]?.note || ''" :saving-usage="savingUsageId === material.id" :parsing="parsingId === material.id" @update:usage-types="setUsageTypes(material.id, $event)" @update:usage-note="setUsageNote(material.id, $event)" @save-usages="saveUsages(material)" @parse="parseMaterial(material, false)" @retry="parseMaterial(material, true)" @download="handleDownload(material)" />
+        <div v-else class="material-workbench">
+          <div class="material-table-wrap">
+            <el-table :data="materials" row-key="id" highlight-current-row @row-click="selectMaterial">
+              <el-table-column label="文件名称" min-width="210"><template #default="{ row }"><strong>{{ row.originalFilename }}</strong><small>{{ row.description || '未补充说明' }}</small></template></el-table-column>
+              <el-table-column label="类型" width="82"><template #default="{ row }">{{ row.fileType }}</template></el-table-column>
+              <el-table-column label="用途" min-width="140"><template #default="{ row }"><span>{{ usageText(row) }}</span></template></el-table-column>
+              <el-table-column label="解析状态" width="108"><template #default="{ row }"><StatusBadge :status="row.parseStatus" :label="parseStatusText(row)" /></template></el-table-column>
+              <el-table-column label="更新时间" width="132"><template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template></el-table-column>
+              <el-table-column label="操作" width="82" fixed="right"><template #default="{ row }"><el-button link type="primary" @click.stop="selectMaterial(row)">查看</el-button></template></el-table-column>
+            </el-table>
+          </div>
+          <aside class="material-detail-panel">
+            <StatePanel v-if="!selectedMaterial" type="info" title="选择一份资料查看详情" description="详情区会显示用途、解析摘要与可用操作。" />
+            <MaterialCard v-else :material="selectedMaterial" :parse-result="parseResults[selectedMaterial.id]" :usage-types="usageDrafts[selectedMaterial.id]?.types || []" :usage-note="usageDrafts[selectedMaterial.id]?.note || ''" :saving-usage="savingUsageId === selectedMaterial.id" :parsing="parsingId === selectedMaterial.id" @update:usage-types="setUsageTypes(selectedMaterial.id, $event)" @update:usage-note="setUsageNote(selectedMaterial.id, $event)" @save-usages="saveUsages(selectedMaterial)" @parse="parseMaterial(selectedMaterial, false)" @retry="parseMaterial(selectedMaterial, true)" @download="handleDownload(selectedMaterial)" />
+          </aside>
         </div>
       </section>
 
@@ -52,10 +65,10 @@ import MaterialCard from '@/components/MaterialCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import PrimaryActionBar from '@/components/PrimaryActionBar.vue';
 import StatePanel from '@/components/StatePanel.vue';
-import { formatFileSize } from '@/utils/materialLabels';
+import { formatDateTime, formatFileSize, parseStatusLabels, usageLabels } from '@/utils/materialLabels';
 import { Refresh, Upload, UploadFilled } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 interface UsageDraft { types: MaterialUsageType[]; note: string }
@@ -63,6 +76,7 @@ const route = useRoute();
 const router = useRouter();
 const projectId = computed(() => { const value = Number(route.params.projectId); return Number.isInteger(value) && value > 0 ? value : null; });
 const materials = ref<MaterialRecord[]>([]);
+const selectedMaterialId = ref<number | null>(null);
 const parseResults = reactive<Record<number, MaterialParseResult>>({});
 const usageDrafts = reactive<Record<number, UsageDraft>>({});
 const summary = ref<RequirementSummary | null>(null);
@@ -86,8 +100,12 @@ const hasUsages = computed(() => hasMaterials.value && materials.value.every((it
 const hasParsed = computed(() => materials.value.some((item) => item.parseStatus === 'SUCCEEDED'));
 const hasKnowledge = computed(() => knowledgeCount.value > 0);
 const currentStep = computed(() => hasParsed.value ? 2 : hasUsages.value ? 1 : 0);
+const selectedMaterial = computed(() => materials.value.find((item) => item.id === selectedMaterialId.value) || null);
 
 onMounted(loadWorkspace);
+watch(selectedMaterial, (material) => {
+  if (material && !parseResults[material.id]) void loadParseResult(material.id);
+});
 
 async function loadWorkspace() {
   if (!projectId.value) return;
@@ -103,8 +121,7 @@ async function loadWorkspace() {
     knowledgeCount.value = overview.chunkCount;
     intentConfirmed.value = intent?.status === 'CONFIRMED';
     materialList.forEach((item) => { usageDrafts[item.id] = { types: [...item.usageTypes], note: item.usageNote || '' }; });
-    const results = await Promise.all(materialList.map((item) => getMaterialParseResult(projectId.value!, item.id)));
-    results.forEach((result) => { parseResults[result.materialId] = result; });
+    if (!selectedMaterialId.value || !materialList.some((item) => item.id === selectedMaterialId.value)) selectedMaterialId.value = materialList[0]?.id || null;
   } catch (error) { errorMessage.value = resolveError(error, 'M2 工作区读取失败，请稍后重试。'); }
   finally { loading.value = false; summaryChecked.value = true; }
 }
@@ -156,6 +173,14 @@ async function parseMaterial(material: MaterialRecord, retry: boolean) {
   catch (error) { ElMessage.error(resolveError(error, '原型解析失败。')); }
   finally { parsingId.value = null; }
 }
+async function loadParseResult(materialId: number) {
+  if (!projectId.value || parseResults[materialId]) return;
+  try { parseResults[materialId] = await getMaterialParseResult(projectId.value, materialId); }
+  catch { return; }
+}
+function selectMaterial(material: MaterialRecord) { selectedMaterialId.value = material.id; }
+function usageText(material: MaterialRecord) { return material.usageTypes.length ? material.usageTypes.map((usage) => usageLabels[usage]).join('、') : '待绑定用途'; }
+function parseStatusText(material: MaterialRecord) { return parseStatusLabels[material.parseStatus]; }
 async function handleDownload(material: MaterialRecord) { try { await downloadMaterial(projectId.value!, material); } catch (error) { ElMessage.error(resolveError(error, '文件下载失败。')); } }
 function resolveError(error: unknown, fallback: string) { const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message; return message && !/(Exception|java\.|Axios)/i.test(message) ? message : fallback; }
 </script>
@@ -178,7 +203,7 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 .section-title { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 13px; }
 .section-title h2 { margin-top: 4px; font-size: 18px; }
 .section-title p { color: var(--color-text-muted); font-size: 11px; }
-.material-list { display: grid; gap: 14px; }
-@media (max-width: 820px) { .upload-workspace { grid-template-columns: 1fr; } .upload-workspace__copy { grid-row: auto; } }
+.material-workbench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); align-items: start; gap: 18px; }.material-table-wrap { min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }.material-table-wrap :deep(.el-table__cell) { padding: 10px 0; }.material-table-wrap strong, .material-table-wrap small { display: block; }.material-table-wrap strong { overflow-wrap: anywhere; font-size: 12px; }.material-table-wrap small { margin-top: 3px; color: var(--color-text-muted); font-size: 10px; }.material-detail-panel { min-width: 0; }.material-detail-panel :deep(.material-card) { position: sticky; top: 88px; }
+@media (max-width: 980px) { .material-workbench { grid-template-columns: 1fr; } .material-detail-panel :deep(.material-card) { position: static; } } @media (max-width: 820px) { .upload-workspace { grid-template-columns: 1fr; } .upload-workspace__copy { grid-row: auto; } }
 @media (max-width: 560px) { .section-title { align-items: flex-start; flex-direction: column; gap: 5px; } .upload-workspace__actions, .upload-workspace__actions .el-button { width: 100%; } }
 </style>
