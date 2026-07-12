@@ -1,14 +1,12 @@
 <template>
   <el-container class="app-shell">
-    <el-header class="app-shell__header">
-      <AppHeader @toggle-navigation="mobileNavigationOpen = true" />
-    </el-header>
-
-    <el-container class="app-shell__body">
-      <el-aside class="app-shell__aside" width="var(--sidebar-width)">
-        <AppSidebar />
-      </el-aside>
-
+    <el-aside class="app-shell__aside" width="var(--sidebar-width)">
+      <AppSidebar />
+    </el-aside>
+    <el-container class="app-shell__workspace">
+      <el-header class="app-shell__header">
+        <AppHeader @toggle-navigation="mobileNavigationOpen = true" />
+      </el-header>
       <el-main class="app-shell__main">
         <div class="app-shell__content" :class="{ 'is-project-workspace': projectId }">
           <template v-if="projectId">

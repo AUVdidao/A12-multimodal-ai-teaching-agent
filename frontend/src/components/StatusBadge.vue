@@ -44,10 +44,10 @@ const tone = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 28px;
+  min-height: 24px;
   padding: 4px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--color-surface-subtle);
   color: var(--color-text-secondary);
   font-size: 12px;

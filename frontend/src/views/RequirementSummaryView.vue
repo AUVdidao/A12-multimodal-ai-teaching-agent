@@ -27,7 +27,7 @@
     <div v-else-if="summary" class="summary-workspace">
       <main class="surface-panel summary-document" v-loading="loading" aria-label="教学需求确认单内容">
         <header class="summary-document__header">
-          <div><span>STRUCTURED REQUIREMENT</span><h2>教学需求确认单</h2><p>{{ project?.courseName || form.subject || '课程待确认' }} · {{ project?.chapterTitle || form.topic || '课题待确认' }}</p></div>
+          <div><span>需求摘要</span><h2>教学需求确认单</h2><p>{{ project?.courseName || form.subject || '课程待确认' }} · {{ project?.chapterTitle || form.topic || '课题待确认' }}</p></div>
           <StatusBadge :status="summary.status" />
         </header>
 
@@ -250,12 +250,12 @@ function resolveErrorMessage(error: unknown, fallback: string) {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.55fr);
   align-items: start;
-  gap: 22px;
+  gap: 16px;
 }
 
 .summary-document {
   min-width: 0;
-  padding: 26px;
+  padding: 22px;
 }
 
 .summary-document__header {
@@ -265,7 +265,7 @@ function resolveErrorMessage(error: unknown, fallback: string) {
   gap: 20px;
   margin-bottom: 26px;
   padding-bottom: 20px;
-  border-bottom: 2px solid var(--color-text);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .summary-document__header span:first-child {

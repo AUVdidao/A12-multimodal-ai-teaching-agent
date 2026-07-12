@@ -17,7 +17,7 @@
       </section>
 
       <section class="surface-panel search-workspace">
-        <div class="search-workspace__heading"><div><span>DETERMINISTIC RETRIEVAL</span><h2>检索教学证据</h2><p>当前不是向量数据库 RAG；相同数据和查询会得到稳定、可复验的结果。</p></div><el-tag type="warning" effect="plain">原型检索</el-tag></div>
+        <div class="search-workspace__heading"><div><span>本地资料检索</span><h2>检索教学证据</h2><p>从当前项目已解析资料中查找相关内容，结果可重复核对。</p></div><el-tag type="warning" effect="plain">原型检索</el-tag></div>
         <div class="search-bar"><el-input v-model="query" clearable maxlength="200" placeholder="输入课题、关键词或资料用途，例如：光合作用 / 教材依据" @keyup.enter="runSearch"><template #prefix><el-icon><Search /></el-icon></template></el-input><el-button type="primary" :icon="Search" :loading="searching" :disabled="!query.trim() || !hasKnowledge" @click="runSearch">执行检索</el-button></div>
         <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
       </section>
@@ -28,7 +28,28 @@
         <StatePanel v-if="searching" type="loading" title="正在执行本地原型检索" />
         <StatePanel v-else-if="searched && hits.length === 0" type="empty" title="没有匹配的知识片段" description="系统不会返回与上传资料无关的固定结果，请更换查询词。" />
         <StatePanel v-else-if="!searched" type="info" title="输入课题或教学关键词开始检索" description="命中结果会显示来源资料、评分依据和用途标签。" />
-        <div v-else class="hit-list"><KnowledgeHitCard v-for="hit in hits" :key="hit.chunkId" :hit="hit" /></div>
+        <div v-else class="knowledge-result-layout">
+          <div class="hit-list">
+            <KnowledgeHitCard
+              v-for="hit in hits"
+              :key="hit.chunkId"
+              :hit="hit"
+              :selected="selectedHit?.chunkId === hit.chunkId"
+              @select="selectedHit = hit"
+            />
+          </div>
+          <aside v-if="selectedHit" class="surface-panel knowledge-detail" aria-label="知识片段详情">
+            <div class="knowledge-detail__eyebrow">当前选中片段</div>
+            <div class="knowledge-detail__score">原型相关性评分 {{ selectedHit.score.toFixed(1) }}</div>
+            <h3>{{ selectedHit.title }}</h3>
+            <p>{{ selectedHit.content }}</p>
+            <dl>
+              <div><dt>命中理由</dt><dd>{{ selectedHit.hitReason }}</dd></div>
+              <div><dt>来源资料</dt><dd>{{ selectedHit.sourceFilename }}</dd></div>
+            </dl>
+          </aside>
+          <StatePanel v-else type="info" title="选择一条知识片段" description="选择结果后可查看它的来源资料和命中理由。" />
+        </div>
       </section>
 
       <PrimaryActionBar>
@@ -62,6 +83,7 @@ const projectLabel = ref<string>();
 const overview = ref<KnowledgeOverview | null>(null);
 const searchResult = ref<KnowledgeSearchResult | null>(null);
 const hits = ref<KnowledgeHit[]>([]);
+const selectedHit = ref<KnowledgeHit | null>(null);
 const query = ref('');
 const loading = ref(false);
 const searching = ref(false);
@@ -88,7 +110,12 @@ async function loadWorkspace() {
 async function runSearch() {
   if (!projectId.value || !query.value.trim() || searching.value) return;
   searching.value = true; errorMessage.value = '';
-  try { searchResult.value = await searchKnowledge(projectId.value, query.value.trim(), 10); hits.value = searchResult.value.hits; searched.value = true; }
+  try {
+    searchResult.value = await searchKnowledge(projectId.value, query.value.trim(), 10);
+    hits.value = searchResult.value.hits;
+    selectedHit.value = hits.value[0] || null;
+    searched.value = true;
+  }
   catch (error) { errorMessage.value = resolveError(error, '检索失败，请检查查询词后重试。'); }
   finally { searching.value = false; }
 }
@@ -103,17 +130,30 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 .knowledge-metrics span { color: var(--color-text-muted); font-size: 10px; font-weight: 700; }
 .knowledge-metrics strong { margin-top: 5px; color: var(--color-primary); font-size: 22px; }
 .knowledge-metrics small { margin-top: 3px; color: var(--color-text-secondary); font-size: 10px; }
-.search-workspace { display: grid; gap: 17px; padding: 21px; }
+.search-workspace { display: grid; gap: 15px; padding: 18px 20px; }
 .search-workspace__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .search-workspace__heading span, .section-title span { color: var(--color-primary); font-size: 10px; font-weight: 800; }
 .search-workspace__heading h2, .search-workspace__heading p, .section-title h2, .section-title p { margin: 0; }
 .search-workspace__heading h2 { margin-top: 4px; font-size: 18px; }
 .search-workspace__heading p { margin-top: 5px; color: var(--color-text-secondary); font-size: 11px; }
 .search-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
-.results-section { margin-top: 24px; }
+.results-section { margin-top: 16px; }
 .section-title { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
 .section-title h2 { margin-top: 3px; font-size: 18px; }
 .section-title p { color: var(--color-text-muted); font-size: 10px; }
+.knowledge-result-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, .85fr); align-items: start; gap: 16px; }
 .hit-list { display: grid; gap: 12px; }
+.knowledge-detail { position: sticky; top: 82px; padding: 20px; }
+.knowledge-detail__eyebrow, .knowledge-detail__score { font-size: 10px; font-weight: 800; }
+.knowledge-detail__eyebrow { color: var(--color-text-muted); }
+.knowledge-detail__score { margin-top: 8px; color: var(--color-primary); }
+.knowledge-detail h3, .knowledge-detail p { margin: 0; }
+.knowledge-detail h3 { margin-top: 8px; font-size: 16px; line-height: 1.45; }
+.knowledge-detail p { margin-top: 12px; color: var(--color-text-secondary); font-size: 12px; line-height: 1.75; }
+.knowledge-detail dl { display: grid; gap: 12px; margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--color-border); }
+.knowledge-detail dl div { display: grid; gap: 4px; }
+.knowledge-detail dt { color: var(--color-text-muted); font-size: 10px; font-weight: 700; }
+.knowledge-detail dd { margin: 0; color: var(--color-text); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+@media (max-width: 980px) { .knowledge-result-layout { grid-template-columns: 1fr; } .knowledge-detail { position: static; } }
 @media (max-width: 720px) { .knowledge-metrics { grid-template-columns: 1fr; } .search-bar { grid-template-columns: 1fr; } .search-workspace__heading, .section-title { align-items: flex-start; flex-direction: column; } .search-bar .el-button { width: 100%; } }
 </style>

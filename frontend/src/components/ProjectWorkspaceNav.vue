@@ -31,8 +31,9 @@ function isActive(key: string) {
 </script>
 
 <style scoped>
-.workspace-nav { display: flex; gap: 4px; overflow-x: auto; padding: 12px 0 18px; scrollbar-width: thin; }
-.workspace-nav__item { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px; border-radius: var(--radius-md); color: var(--color-text-secondary); font-size: 12px; font-weight: 650; text-decoration: none; transition: background-color var(--transition-fast), color var(--transition-fast); }
+.workspace-nav { display: flex; gap: 22px; overflow-x: auto; margin-bottom: 16px; border-bottom: 1px solid var(--color-border); scrollbar-width: thin; }
+.workspace-nav__item { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; min-height: 40px; padding: 0 1px; color: var(--color-text-secondary); font-size: 12px; font-weight: 650; text-decoration: none; transition: color var(--transition-fast); }
 .workspace-nav__item:hover { background: var(--color-surface-subtle); color: var(--color-primary); }
-.workspace-nav__item.is-active { background: var(--color-primary-soft); color: var(--color-primary); }
+.workspace-nav__item.is-active { color: var(--color-primary); }
+.workspace-nav__item.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; border-radius: 2px; background: var(--color-primary); content: ''; }
 </style>

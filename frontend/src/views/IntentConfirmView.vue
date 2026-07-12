@@ -12,14 +12,14 @@
     <template v-else-if="intent">
       <div class="intent-workspace">
         <main class="surface-panel intent-document" v-loading="saving || confirming">
-          <header class="intent-document__header"><div><span>ENHANCED TEACHING INTENT</span><h2>生成前教学意图</h2><p>需求摘要 #{{ intent.requirementSummaryId }} · {{ confirmed ? '最终确认版本' : '可编辑草稿' }}</p></div><StatusBadge :status="intent.status" /></header>
+          <header class="intent-document__header"><div><span>教学意图草稿</span><h2>生成前教学意图</h2><p>需求摘要 #{{ intent.requirementSummaryId }} · {{ confirmed ? '最终确认版本' : '可编辑草稿' }}</p></div><StatusBadge :status="intent.status" /></header>
           <el-form label-position="top" @submit.prevent>
             <FormSection :icon="Aim" title="生成目标" description="保持教师已确认的教学目标，不由资料覆盖。"><el-form-item label="目标描述"><el-input v-model="form.generationGoal" type="textarea" :rows="3" maxlength="4000" :disabled="confirmed" /></el-form-item></FormSection>
             <FormSection :icon="Reading" title="内容依据" description="说明资料如何增强内容组织，并保留明确边界。"><el-form-item label="增强依据"><el-input v-model="form.contentBasis" type="textarea" :rows="4" maxlength="6000" :disabled="confirmed" /></el-form-item></FormSection>
             <FormSection :icon="Guide" title="教学组织" description="确认教学方法、互动方式和视觉表达。">
               <div class="form-grid"><el-form-item label="教学方法"><el-input v-model="form.teachingApproach" type="textarea" :rows="3" maxlength="4000" :disabled="confirmed" /></el-form-item><el-form-item label="互动方式"><el-input v-model="form.interactionMode" type="textarea" :rows="3" maxlength="500" :disabled="confirmed" /></el-form-item></div>
               <el-form-item label="输出类型"><el-checkbox-group v-model="form.outputTypes" :disabled="confirmed"><el-checkbox value="PPT">PPT 课件</el-checkbox><el-checkbox value="LESSON_PLAN">Word 教案</el-checkbox><el-checkbox value="INTERACTION">互动内容</el-checkbox></el-checkbox-group></el-form-item>
-              <el-form-item label="风格偏好"><el-input v-model="form.stylePreference" maxlength="500" :disabled="confirmed" /></el-form-item>
+              <el-form-item label="风格与备注"><el-input v-model="form.stylePreference" maxlength="500" :disabled="confirmed" placeholder="补充课件风格或其他教学说明" /></el-form-item>
             </FormSection>
             <el-alert v-if="errorMessage" :title="errorMessage" type="warning" show-icon :closable="false" />
           </el-form>
@@ -27,12 +27,12 @@
 
         <aside class="intent-sidebar">
           <section class="surface-panel status-panel">
-            <span>确认状态</span><div class="status-panel__title"><el-icon><component :is="confirmed ? CircleCheck : EditPen" /></el-icon><div><h2>{{ confirmed ? '教学意图已确认' : '等待教师确认' }}</h2><p>{{ confirmed ? '该版本已经锁定，刷新后仍保持确认状态。' : '可编辑并保存，确认后进入 M3 准备状态。' }}</p></div></div>
+            <span>确认状态</span><div class="status-panel__title"><el-icon><component :is="confirmed ? CircleCheck : EditPen" /></el-icon><div><h2>{{ confirmed ? '教学意图已确认' : '等待教师确认' }}</h2><p>{{ confirmed ? '该版本已经锁定，刷新后仍保持确认状态。' : '可编辑并保存，确认后完成当前 M2 流程。' }}</p></div></div>
             <dl><div><dt>证据数量</dt><dd>{{ intent.evidenceItems.length }}</dd></div><div><dt>最近更新</dt><dd>{{ formatDateTime(intent.updatedAt) }}</dd></div><div v-if="intent.confirmedAt"><dt>确认时间</dt><dd>{{ formatDateTime(intent.confirmedAt) }}</dd></div></dl>
             <div v-if="!confirmed" class="status-panel__actions"><el-button :icon="EditPen" :loading="saving" @click="saveDraft">保存草稿</el-button><el-button type="primary" :icon="CircleCheck" :loading="confirming" :disabled="!canConfirm" @click="confirmIntent">确认教学意图</el-button></div>
           </section>
           <EvidencePanel :evidence="intent.evidenceItems" />
-          <section class="next-stage-panel"><div><el-icon><Lock /></el-icon></div><span>下一阶段</span><h2>课件、教案与互动内容生成</h2><p>{{ confirmed ? 'M2 已完成。M3 尚未实现，本页面不会伪造生成结果。' : '确认教学意图后将完成 M2，但 M3 入口仍保持锁定。' }}</p><el-button disabled>M3 阶段开放</el-button></section>
+          <section class="next-stage-panel"><div><el-icon><Lock /></el-icon></div><span>当前边界</span><h2>内容生成尚未开放</h2><p>{{ confirmed ? 'M2 已完成。后续内容生成将以这份已确认的教学意图作为输入。' : '确认教学意图后将完成当前 M2 资料增强流程。' }}</p></section>
         </aside>
       </div>
 
@@ -40,7 +40,7 @@
         <template #info>{{ confirmed ? 'M2 资料增强闭环已确认，可作为后续内容生成输入。' : '确认前仍可调整教学方法和互动方式。' }}</template>
         <template #secondary><el-button @click="router.push(`/projects/${projectId}/knowledge`)">返回知识检索</el-button></template>
         <el-button v-if="!confirmed" type="primary" :disabled="!canConfirm" @click="confirmIntent">确认并完成 M2</el-button>
-        <el-button v-else disabled>等待 M3 内容生成</el-button>
+        <span v-else class="m2-complete-note">M2 已确认，内容生成将在后续阶段开放。</span>
       </PrimaryActionBar>
     </template>
   </section>
@@ -107,16 +107,16 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 </script>
 
 <style scoped>
-.intent-workspace { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(310px, .78fr); align-items: start; gap: 20px; }
-.intent-document { min-width: 0; padding: 24px; }
-.intent-document__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 2px solid var(--color-text); }
+.intent-workspace { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(330px, .65fr); align-items: start; gap: 16px; }
+.intent-document { min-width: 0; padding: 22px; }
+.intent-document__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--color-border); }
 .intent-document__header span:first-child, .status-panel > span, .next-stage-panel > span { color: var(--color-primary); font-size: 10px; font-weight: 800; }
 .intent-document__header h2, .intent-document__header p, .status-panel h2, .status-panel p, .next-stage-panel h2, .next-stage-panel p { margin: 0; }
 .intent-document__header h2 { margin-top: 5px; font-size: 20px; }
 .intent-document__header p { margin-top: 4px; color: var(--color-text-muted); font-size: 10px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.intent-sidebar { display: grid; gap: 15px; }
-.status-panel { position: sticky; top: 88px; padding: 20px; }
+.intent-sidebar { position: sticky; top: 78px; display: grid; max-height: calc(100vh - 100px); overflow-y: auto; gap: 14px; }
+.status-panel { padding: 18px; }
 .status-panel__title { display: flex; align-items: flex-start; gap: 10px; margin-top: 11px; }
 .status-panel__title > .el-icon { color: var(--color-success); font-size: 22px; }
 .status-panel h2 { font-size: 15px; }
@@ -132,7 +132,7 @@ function resolveError(error: unknown, fallback: string) { const message = (error
 .next-stage-panel > div { display: grid; width: 34px; height: 34px; margin-bottom: 12px; place-items: center; border-radius: var(--radius-md); background: #eef1f5; color: var(--color-text-muted); }
 .next-stage-panel h2 { margin-top: 5px; font-size: 14px; }
 .next-stage-panel p { margin: 7px 0 13px; color: var(--color-text-muted); font-size: 10px; line-height: 1.6; }
-.next-stage-panel .el-button { width: 100%; }
-@media (max-width: 980px) { .intent-workspace { grid-template-columns: 1fr; } .status-panel { position: static; } }
+.m2-complete-note { color: var(--color-text-muted); font-size: 12px; }
+@media (max-width: 980px) { .intent-workspace { grid-template-columns: 1fr; } .intent-sidebar { position: static; max-height: none; overflow: visible; } }
 @media (max-width: 640px) { .intent-document { padding: 18px; } .intent-document__header { flex-direction: column; } .form-grid { grid-template-columns: 1fr; } }
 </style>
