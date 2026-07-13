@@ -1,138 +1,633 @@
 <template>
-  <section class="page intent-page">
-    <PageHeader eyebrow="M2 · 最终确认" title="资料增强教学意图确认单" description="教师需求保持最高优先级，资料和知识命中只作为可追溯的增强依据。" :project-label="projectLabel">
-      <template #actions><el-button :icon="Refresh" :loading="loading" @click="loadWorkspace">刷新状态</el-button></template>
-    </PageHeader>
+  <section class="intent-page" data-testid="teaching-intent-page">
+    <IntentWorkflowStepper />
 
-    <M2ProgressSteps v-if="projectId" :current-step="4" :project-id="projectId" :has-materials="hasMaterials" :has-usages="hasUsages" :has-parsed="hasParsed" :has-knowledge="hasKnowledge" :intent-confirmed="confirmed" />
-    <StatePanel v-if="!projectId" type="error" title="没有可用的教学项目" description="请从知识检索页进入教学意图确认。" />
-    <StatePanel v-else-if="loading && !intent" type="loading" title="正在融合教学意图" description="读取教师确认需求、资料用途和真实知识命中。" />
-    <StatePanel v-else-if="errorMessage && !intent" type="error" title="教学意图生成失败" :description="errorMessage"><template #action><el-button type="primary" @click="loadWorkspace">重新生成</el-button></template></StatePanel>
+    <div class="intent-page__content">
+      <form class="intent-page__form" @submit.prevent="confirmIntent">
+        <section class="intent-project-card">
+          <span class="intent-project-card__icon">
+            <A12AssetIcon name="folder" :size="34" />
+          </span>
+          <div>
+            <small>项目名称</small>
+            <div class="intent-project-card__title">
+              <h2>人工智能基础概念与应用</h2>
+              <button type="button" aria-label="编辑项目名称">
+                <A12AssetIcon name="pencil" :size="20" />
+              </button>
+            </div>
+          </div>
+          <p>面向大学本科一年级学生，理解人工智能的基本概念、发展历程与典型应用，建立初步的 AI 素养。</p>
+        </section>
 
-    <template v-else-if="intent">
-      <div class="intent-workspace">
-        <main class="surface-panel intent-document" v-loading="saving || confirming">
-          <header class="intent-document__header"><div><span>ENHANCED TEACHING INTENT</span><h2>生成前教学意图</h2><p>需求摘要 #{{ intent.requirementSummaryId }} · {{ confirmed ? '最终确认版本' : '可编辑草稿' }}</p></div><StatusBadge :status="intent.status" /></header>
-          <el-form label-position="top" @submit.prevent>
-            <FormSection :icon="Aim" title="生成目标" description="保持教师已确认的教学目标，不由资料覆盖。"><el-form-item label="目标描述"><el-input v-model="form.generationGoal" type="textarea" :rows="3" maxlength="4000" :disabled="confirmed" /></el-form-item></FormSection>
-            <FormSection :icon="Reading" title="内容依据" description="说明资料如何增强内容组织，并保留明确边界。"><el-form-item label="增强依据"><el-input v-model="form.contentBasis" type="textarea" :rows="4" maxlength="6000" :disabled="confirmed" /></el-form-item></FormSection>
-            <FormSection :icon="Guide" title="教学组织" description="确认教学方法、互动方式和视觉表达。">
-              <div class="form-grid"><el-form-item label="教学方法"><el-input v-model="form.teachingApproach" type="textarea" :rows="3" maxlength="4000" :disabled="confirmed" /></el-form-item><el-form-item label="互动方式"><el-input v-model="form.interactionMode" type="textarea" :rows="3" maxlength="500" :disabled="confirmed" /></el-form-item></div>
-              <el-form-item label="输出类型"><el-checkbox-group v-model="form.outputTypes" :disabled="confirmed"><el-checkbox value="PPT">PPT 课件</el-checkbox><el-checkbox value="LESSON_PLAN">Word 教案</el-checkbox><el-checkbox value="INTERACTION">互动内容</el-checkbox></el-checkbox-group></el-form-item>
-              <el-form-item label="风格偏好"><el-input v-model="form.stylePreference" maxlength="500" :disabled="confirmed" /></el-form-item>
-            </FormSection>
-            <el-alert v-if="errorMessage" :title="errorMessage" type="warning" show-icon :closable="false" />
-          </el-form>
-        </main>
+        <IntentFormSection
+          title="生成目标"
+          description="本项目意图达成的核心教学目标（可多选）"
+          icon="target"
+          tone="purple"
+        >
+          <div class="intent-tag-grid">
+            <IntentCheckTag
+              v-for="goal in goalOptions"
+              :key="goal"
+              :label="goal"
+              :selected="goals.includes(goal)"
+              @toggle="toggleGoal(goal)"
+            />
+          </div>
+        </IntentFormSection>
 
-        <aside class="intent-sidebar">
-          <section class="surface-panel status-panel">
-            <span>确认状态</span><div class="status-panel__title"><el-icon><component :is="confirmed ? CircleCheck : EditPen" /></el-icon><div><h2>{{ confirmed ? '教学意图已确认' : '等待教师确认' }}</h2><p>{{ confirmed ? '该版本已经锁定，刷新后仍保持确认状态。' : '可编辑并保存，确认后进入 M3 准备状态。' }}</p></div></div>
-            <dl><div><dt>证据数量</dt><dd>{{ intent.evidenceItems.length }}</dd></div><div><dt>最近更新</dt><dd>{{ formatDateTime(intent.updatedAt) }}</dd></div><div v-if="intent.confirmedAt"><dt>确认时间</dt><dd>{{ formatDateTime(intent.confirmedAt) }}</dd></div></dl>
-            <div v-if="!confirmed" class="status-panel__actions"><el-button :icon="EditPen" :loading="saving" @click="saveDraft">保存草稿</el-button><el-button type="primary" :icon="CircleCheck" :loading="confirming" :disabled="!canConfirm" @click="confirmIntent">确认教学意图</el-button></div>
-          </section>
-          <EvidencePanel :evidence="intent.evidenceItems" />
-          <section class="next-stage-panel"><div><el-icon><Lock /></el-icon></div><span>下一阶段</span><h2>课件、教案与互动内容生成</h2><p>{{ confirmed ? 'M2 已完成。M3 尚未实现，本页面不会伪造生成结果。' : '确认教学意图后将完成 M2，但 M3 入口仍保持锁定。' }}</p><el-button disabled>M3 阶段开放</el-button></section>
-        </aside>
-      </div>
+        <IntentFormSection
+          title="内容依据"
+          description="教学内容的主要来源与依据"
+          icon="document"
+          tone="blue"
+          align="start"
+        >
+          <div class="intent-basis">
+            <label class="intent-select intent-select--wide">
+              <select v-model="basis" aria-label="教学内容的主要来源与依据">
+                <option v-for="item in basisOptions" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+              <span aria-hidden="true" />
+            </label>
+            <small>补充依据（可选）</small>
+            <div class="intent-basis__tags">
+              <span v-for="(item, index) in supplementalBasis" :key="item">
+                {{ item }}
+                <button type="button" :aria-label="`删除${item}`" @click="removeBasis(index)">×</button>
+              </span>
+              <button class="intent-basis__add" type="button" @click="addBasis">
+                <A12AssetIcon name="plus-circle" :size="17" />
+                添加依据
+              </button>
+            </div>
+          </div>
+        </IntentFormSection>
 
-      <PrimaryActionBar>
-        <template #info>{{ confirmed ? 'M2 资料增强闭环已确认，可作为后续内容生成输入。' : '确认前仍可调整教学方法和互动方式。' }}</template>
-        <template #secondary><el-button @click="router.push(`/projects/${projectId}/knowledge`)">返回知识检索</el-button></template>
-        <el-button v-if="!confirmed" type="primary" :disabled="!canConfirm" @click="confirmIntent">确认并完成 M2</el-button>
-        <el-button v-else disabled>等待 M3 内容生成</el-button>
-      </PrimaryActionBar>
-    </template>
+        <IntentFormSection
+          title="教学组织"
+          description="面向学生、学时安排与教学形式"
+          icon="users"
+          tone="green"
+        >
+          <div class="intent-organization">
+            <label>
+              <span>面向对象</span>
+              <span class="intent-select">
+                <select v-model="audience" aria-label="面向对象">
+                  <option value="u1">大学本科一年级</option>
+                  <option value="u2">大学本科二年级</option>
+                </select>
+                <i aria-hidden="true" />
+              </span>
+            </label>
+            <label>
+              <span>总学时</span>
+              <span class="intent-select">
+                <select v-model="hours" aria-label="总学时">
+                  <option value="16">16 学时</option>
+                  <option value="20">20 学时</option>
+                </select>
+                <i aria-hidden="true" />
+              </span>
+            </label>
+            <label>
+              <span>教学形式</span>
+              <span class="intent-select">
+                <select v-model="format" aria-label="教学形式">
+                  <option value="mix">线上线下混合式教学</option>
+                  <option value="offline">线下课堂教学</option>
+                </select>
+                <i aria-hidden="true" />
+              </span>
+            </label>
+          </div>
+        </IntentFormSection>
+
+        <IntentFormSection
+          title="输出类型"
+          description="期望产出的教学方案与资源"
+          icon="lightbulb"
+          tone="orange"
+        >
+          <div class="intent-tag-grid">
+            <IntentCheckTag
+              v-for="output in outputOptions"
+              :key="output"
+              :label="output"
+              :selected="outputs.includes(output)"
+              @toggle="toggleOutput(output)"
+            />
+          </div>
+        </IntentFormSection>
+
+        <IntentFormSection
+          title="备注说明（可选）"
+          description=""
+          icon="document"
+          tone="gray"
+          layout="stacked"
+        >
+          <div class="intent-notes">
+            <textarea
+              v-model="notes"
+              maxlength="200"
+              aria-label="备注说明"
+              placeholder="请输入补充说明，如教学重点、使用限制等（200字以内）"
+            />
+            <span>{{ notes.length }}/200</span>
+          </div>
+        </IntentFormSection>
+
+        <div class="intent-page__actions">
+          <button class="intent-button intent-button--secondary" type="button" @click="saveDraft">
+            <A12AssetIcon name="document" :size="20" />
+            保存草稿
+          </button>
+          <button class="intent-button intent-button--primary" type="submit">
+            <A12AssetIcon name="check-circle" :size="20" />
+            确认教学意图
+          </button>
+        </div>
+      </form>
+
+      <aside class="intent-page__aside">
+        <IntentStatusCard />
+        <IntentEvidencePanel
+          :items="evidence"
+          @expand="showFeedback('已展开全部依据证据')"
+          @search="router.push(`/projects/${projectId}/knowledge`)"
+        />
+      </aside>
+    </div>
+
+    <transition name="intent-toast">
+      <div v-if="feedback" class="intent-feedback" role="status">{{ feedback }}</div>
+    </transition>
   </section>
 </template>
 
 <script setup lang="ts">
-import { getKnowledgeOverview } from '@/api/knowledge';
-import { listMaterials } from '@/api/materials';
-import { getProject } from '@/api/projects';
-import { confirmTeachingIntent, generateTeachingIntent, getLatestTeachingIntent, updateTeachingIntent, type TeachingIntent, type TeachingIntentPayload } from '@/api/teachingIntents';
-import EvidencePanel from '@/components/EvidencePanel.vue';
-import FormSection from '@/components/FormSection.vue';
-import M2ProgressSteps from '@/components/M2ProgressSteps.vue';
-import PageHeader from '@/components/PageHeader.vue';
-import PrimaryActionBar from '@/components/PrimaryActionBar.vue';
-import StatePanel from '@/components/StatePanel.vue';
-import StatusBadge from '@/components/StatusBadge.vue';
-import { formatDateTime } from '@/utils/materialLabels';
-import { Aim, CircleCheck, EditPen, Guide, Lock, Reading, Refresh } from '@element-plus/icons-vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { computed, onMounted, reactive, ref } from 'vue';
+import IntentCheckTag from '@/components/intent/IntentCheckTag.vue';
+import IntentEvidencePanel from '@/components/intent/IntentEvidencePanel.vue';
+import IntentFormSection from '@/components/intent/IntentFormSection.vue';
+import IntentStatusCard from '@/components/intent/IntentStatusCard.vue';
+import IntentWorkflowStepper from '@/components/intent/IntentWorkflowStepper.vue';
+import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
+import { onBeforeUnmount, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 const route = useRoute();
 const router = useRouter();
-const projectId = computed(() => { const value = Number(route.params.projectId); return Number.isInteger(value) && value > 0 ? value : null; });
-const projectLabel = ref<string>();
-const intent = ref<TeachingIntent | null>(null);
-const form = reactive<TeachingIntentPayload>({ generationGoal: '', contentBasis: '', teachingApproach: '', interactionMode: '', outputTypes: [], stylePreference: '' });
-const loading = ref(false); const saving = ref(false); const confirming = ref(false); const errorMessage = ref('');
-const hasMaterials = ref(false); const hasUsages = ref(false); const hasParsed = ref(false); const hasKnowledge = ref(false);
-const confirmed = computed(() => intent.value?.status === 'CONFIRMED');
-const canConfirm = computed(() => Boolean(form.generationGoal.trim() && form.contentBasis.trim() && form.teachingApproach.trim() && form.interactionMode.trim() && form.outputTypes.length && intent.value?.evidenceItems.length));
+const projectId = String(route.params.projectId || '1');
 
-onMounted(loadWorkspace);
-async function loadWorkspace() {
-  if (!projectId.value) return;
-  loading.value = true; errorMessage.value = '';
-  try {
-    const [project, materials, overview, latest] = await Promise.all([getProject(projectId.value), listMaterials(projectId.value), getKnowledgeOverview(projectId.value), getLatestTeachingIntent(projectId.value)]);
-    projectLabel.value = project.projectName; hasMaterials.value = materials.length > 0; hasUsages.value = hasMaterials.value && materials.every((item) => item.usageTypes.length > 0); hasParsed.value = materials.some((item) => item.parseStatus === 'SUCCEEDED'); hasKnowledge.value = overview.chunkCount > 0;
-    intent.value = latest || await generateTeachingIntent(projectId.value); applyIntent(intent.value);
-  } catch (error) { errorMessage.value = resolveError(error, '教学意图生成失败，请先完成资料解析和有命中的知识检索。'); }
-  finally { loading.value = false; }
+const goalOptions = ['知识理解', '概念掌握', '应用能力', '思维提升', '价值塑造'];
+const outputOptions = ['教学大纲', '教学PPT', '课堂活动', '习题与测评', '案例库', '参考资料'];
+const goals = ref(['知识理解', '概念掌握', '应用能力']);
+const outputs = ref(['教学大纲', '教学PPT', '课堂活动', '习题与测评', '案例库']);
+const basis = ref('outline');
+const basisOptions = [
+  {
+    value: 'outline',
+    label: '教育部高等学校人工智能专业教学指导分委员会《人工智能导论》课程大纲（2023）',
+  },
+  { value: 'textbook', label: '《人工智能基础（第3版）》教材解析' },
+];
+const supplementalBasis = ref([
+  '中国新一代人工智能发展规划（2017）',
+  '斯坦福大学《AI 100》课程大纲',
+]);
+const audience = ref('u1');
+const hours = ref('16');
+const format = ref('mix');
+const notes = ref('');
+const feedback = ref('');
+let feedbackTimer: number | undefined;
+
+const evidence = [
+  {
+    title: '《人工智能导论》课程大纲（2023）',
+    type: '官方文件',
+    source: '教育部高等学校人工智能专业教学指导分委员会',
+    reason: '明确了人工智能基础概念、发展历程与应用场景为课程核心内容，与项目目标高度一致。',
+    fragment: '课程目标：使学生理解人工智能的基本概念、原理与方法，了...',
+    tone: 'purple' as const,
+  },
+  {
+    title: '中国新一代人工智能发展规划（2017）',
+    type: '政策文件',
+    source: '国务院',
+    reason: '提供了人工智能发展的国家战略背景与应用方向，支撑课程的价值塑造目标。',
+    fragment: '到2030年，我国人工智能理论、技术与应用总体达到世界领先...',
+    tone: 'blue' as const,
+  },
+  {
+    title: '斯坦福大学《AI 100》课程大纲',
+    type: '课程资料',
+    source: 'Stanford University',
+    reason: '国际知名高校通识课程，内容体系完整，可作为教学内容组织与案例设计的参考。',
+    fragment: 'This course provides a broad introduction to artificial intelligenc...',
+    tone: 'green' as const,
+  },
+];
+
+function toggleGoal(value: string) {
+  goals.value = goals.value.includes(value)
+    ? goals.value.filter((item) => item !== value)
+    : [...goals.value, value];
 }
-async function saveDraft() {
-  if (!projectId.value || !intent.value || confirmed.value || saving.value) return;
-  saving.value = true; errorMessage.value = '';
-  try { intent.value = await updateTeachingIntent(projectId.value, intent.value.id, payload()); applyIntent(intent.value); ElMessage.success('教学意图草稿已保存'); }
-  catch (error) { errorMessage.value = resolveError(error, '教学意图保存失败。'); }
-  finally { saving.value = false; }
+
+function toggleOutput(value: string) {
+  outputs.value = outputs.value.includes(value)
+    ? outputs.value.filter((item) => item !== value)
+    : [...outputs.value, value];
 }
-async function confirmIntent() {
-  if (!projectId.value || !intent.value || confirmed.value || !canConfirm.value || confirming.value) return;
-  try { await ElMessageBox.confirm('确认后教学意图将锁定，M2 资料增强闭环完成。', '确认教学意图', { confirmButtonText: '确认并锁定', cancelButtonText: '继续检查', type: 'warning', autofocus: false }); } catch { return; }
-  confirming.value = true; errorMessage.value = '';
-  try { intent.value = await updateTeachingIntent(projectId.value, intent.value.id, payload()); intent.value = await confirmTeachingIntent(projectId.value, intent.value.id); applyIntent(intent.value); ElMessage.success('教学意图已确认，M2 已完成'); }
-  catch (error) { errorMessage.value = resolveError(error, '教学意图确认失败。'); }
-  finally { confirming.value = false; }
+
+function removeBasis(index: number) {
+  supplementalBasis.value.splice(index, 1);
 }
-function payload(): TeachingIntentPayload { return { generationGoal: form.generationGoal, contentBasis: form.contentBasis, teachingApproach: form.teachingApproach, interactionMode: form.interactionMode, outputTypes: [...form.outputTypes], stylePreference: form.stylePreference }; }
-function applyIntent(value: TeachingIntent) { form.generationGoal = value.generationGoal || ''; form.contentBasis = value.contentBasis || ''; form.teachingApproach = value.teachingApproach || ''; form.interactionMode = value.interactionMode || ''; form.outputTypes = [...(value.outputTypes || [])]; form.stylePreference = value.stylePreference || ''; }
-function resolveError(error: unknown, fallback: string) { const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message; return message && !/(Exception|java\.|Axios)/i.test(message) ? message : fallback; }
+
+function addBasis() {
+  const mockBasis = '人工智能通识教育教学指南';
+  if (!supplementalBasis.value.includes(mockBasis)) {
+    supplementalBasis.value.push(mockBasis);
+  }
+}
+
+function showFeedback(message: string) {
+  feedback.value = message;
+  window.clearTimeout(feedbackTimer);
+  feedbackTimer = window.setTimeout(() => {
+    feedback.value = '';
+  }, 1800);
+}
+
+function saveDraft() {
+  showFeedback('草稿已保存');
+}
+
+function confirmIntent() {
+  showFeedback('教学意图已确认');
+  window.setTimeout(() => {
+    router.push(`/projects/${projectId}/plan`);
+  }, 300);
+}
+
+onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 </script>
 
 <style scoped>
-.intent-workspace { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(310px, .78fr); align-items: start; gap: 20px; }
-.intent-document { min-width: 0; padding: 24px; }
-.intent-document__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 2px solid var(--color-text); }
-.intent-document__header span:first-child, .status-panel > span, .next-stage-panel > span { color: var(--color-primary); font-size: 10px; font-weight: 800; }
-.intent-document__header h2, .intent-document__header p, .status-panel h2, .status-panel p, .next-stage-panel h2, .next-stage-panel p { margin: 0; }
-.intent-document__header h2 { margin-top: 5px; font-size: 20px; }
-.intent-document__header p { margin-top: 4px; color: var(--color-text-muted); font-size: 10px; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.intent-sidebar { display: grid; gap: 15px; }
-.status-panel { position: sticky; top: 88px; padding: 20px; }
-.status-panel__title { display: flex; align-items: flex-start; gap: 10px; margin-top: 11px; }
-.status-panel__title > .el-icon { color: var(--color-success); font-size: 22px; }
-.status-panel h2 { font-size: 15px; }
-.status-panel p { margin-top: 4px; color: var(--color-text-muted); font-size: 10px; line-height: 1.5; }
-.status-panel dl { margin: 16px 0; border-top: 1px solid var(--color-border); }
-.status-panel dl div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
-.status-panel dt, .status-panel dd { margin: 0; font-size: 10px; }
-.status-panel dt { color: var(--color-text-muted); }
-.status-panel dd { font-weight: 700; text-align: right; }
-.status-panel__actions { display: grid; gap: 8px; }
-.status-panel__actions .el-button { width: 100%; margin-left: 0; }
-.next-stage-panel { padding: 20px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
-.next-stage-panel > div { display: grid; width: 34px; height: 34px; margin-bottom: 12px; place-items: center; border-radius: var(--radius-md); background: #eef1f5; color: var(--color-text-muted); }
-.next-stage-panel h2 { margin-top: 5px; font-size: 14px; }
-.next-stage-panel p { margin: 7px 0 13px; color: var(--color-text-muted); font-size: 10px; line-height: 1.6; }
-.next-stage-panel .el-button { width: 100%; }
-@media (max-width: 980px) { .intent-workspace { grid-template-columns: 1fr; } .status-panel { position: static; } }
-@media (max-width: 640px) { .intent-document { padding: 18px; } .intent-document__header { flex-direction: column; } .form-grid { grid-template-columns: 1fr; } }
+.intent-page {
+  position: relative;
+  display: flex;
+  min-width: 1160px;
+  height: 100%;
+  flex-direction: column;
+  color: #171b2c;
+}
+
+.intent-page > :deep(.intent-stepper) {
+  flex: 0 0 48px;
+  margin-bottom: 9px;
+}
+
+.intent-page__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(440px, 38%, 510px);
+  min-height: 0;
+  flex: 1;
+  gap: 13px;
+}
+
+.intent-page__form {
+  display: grid;
+  grid-template-rows: 104px 102px 162px 90px 90px 104px 44px;
+  min-width: 0;
+  min-height: 0;
+  gap: 10px;
+}
+
+.intent-project-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e6eaf2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.intent-project-card__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 11px;
+  background: #f1edff;
+}
+
+.intent-project-card small {
+  color: #8b95aa;
+  font-size: 11px;
+}
+
+.intent-project-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.intent-project-card h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.intent-project-card__title button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.intent-project-card p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #4d5871;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.intent-tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 8px;
+}
+
+.intent-basis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.intent-basis > small {
+  color: #808ba3;
+  font-size: 10.5px;
+}
+
+.intent-basis__tags {
+  display: flex;
+  min-height: 65px;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+  padding: 5px 6px;
+  border: 1px solid #e1e5ed;
+  border-radius: 7px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.intent-basis__tags > span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #f1edff;
+  color: #6554ed;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.intent-basis__tags button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #9589e8;
+  cursor: pointer;
+}
+
+.intent-basis__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 7px;
+  border: 1px solid #dfe4ed;
+  border-radius: 7px;
+  background: #fff;
+  color: #6d7890;
+  cursor: pointer;
+  font-size: 10px;
+  white-space: nowrap;
+  margin-right: calc(100% - 92px);
+}
+
+.intent-select {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.intent-select--wide {
+  width: 100%;
+}
+
+.intent-select select {
+  width: 100%;
+  height: 36px;
+  padding: 0 34px 0 10px;
+  border: 1px solid #dfe4ed;
+  border-radius: 7px;
+  outline: 0;
+  appearance: none;
+  background: #fff;
+  color: #48536c;
+  font-size: 11.5px;
+}
+
+.intent-select select:focus {
+  border-color: #8f82fb;
+  box-shadow: 0 0 0 2px rgba(98, 87, 246, 0.1);
+}
+
+.intent-select > span,
+.intent-select > i {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid #8791a8;
+  border-bottom: 1.5px solid #8791a8;
+  pointer-events: none;
+  transform: translateY(-70%) rotate(45deg);
+}
+
+.intent-organization {
+  display: grid;
+  grid-template-columns: 1fr 0.78fr 1.22fr;
+  gap: 10px;
+}
+
+.intent-organization > label {
+  display: grid;
+  gap: 4px;
+  color: #78849d;
+  font-size: 10px;
+}
+
+.intent-organization .intent-select select {
+  height: 36px;
+}
+
+.intent-notes {
+  position: relative;
+}
+
+.intent-notes textarea {
+  display: block;
+  width: 100%;
+  height: 54px;
+  padding: 10px 12px 20px;
+  border: 1px solid #dfe4ed;
+  border-radius: 7px;
+  outline: 0;
+  resize: none;
+  color: #3e485f;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.intent-notes textarea::placeholder {
+  color: #a0a9ba;
+}
+
+.intent-notes textarea:focus {
+  border-color: #8f82fb;
+}
+
+.intent-notes span {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  color: #8c96ab;
+  font-size: 10px;
+}
+
+.intent-page__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-right: 23px;
+  transform: translateY(-1px);
+}
+
+.intent-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 42px;
+  padding: 0 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.intent-button--secondary {
+  min-width: 150px;
+  border: 1px solid #d9dfe9;
+  background: #fff;
+  color: #58647d;
+}
+
+.intent-button--primary {
+  min-width: 166px;
+  border: 1px solid #5b45f6;
+  background: linear-gradient(135deg, #735eff, #5438ef);
+  box-shadow: 0 5px 12px rgba(91, 69, 246, 0.2);
+  color: #fff;
+}
+
+.intent-button--primary :deep(.a12-asset-icon) {
+  filter: brightness(0) invert(1);
+}
+
+.intent-button--secondary :deep(.a12-asset-icon) {
+  filter: grayscale(1);
+}
+
+.intent-page__aside {
+  display: grid;
+  grid-template-rows: 224px minmax(0, 1fr);
+  min-height: 0;
+  gap: 11px;
+}
+
+.intent-feedback {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  z-index: 10;
+  padding: 9px 16px;
+  border: 1px solid #dcd7ff;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(32, 39, 66, 0.12);
+  color: #5b45f6;
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+
+.intent-toast-enter-active,
+.intent-toast-leave-active {
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.intent-toast-enter-from,
+.intent-toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -4px);
+}
+
+@media (max-width: 1320px) {
+  .intent-page__content {
+    grid-template-columns: minmax(0, 1fr) 440px;
+  }
+
+  .intent-tag-grid :deep(.intent-check-tag) {
+    width: 108px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .intent-page {
+    min-width: 0;
+    height: auto;
+  }
+
+  .intent-page__content {
+    grid-template-columns: 1fr;
+  }
+
+  .intent-page__form {
+    grid-template-rows: auto;
+  }
+
+  .intent-page__aside {
+    grid-template-rows: 224px 540px;
+  }
+}
 </style>

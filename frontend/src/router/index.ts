@@ -5,19 +5,25 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     name: 'home',
     component: () => import('@/views/HomeView.vue'),
-    meta: { title: '首页' },
+    meta: { title: '教师工作台' },
   },
   {
     path: '/projects',
     name: 'projects',
     component: () => import('@/views/ProjectListView.vue'),
-    meta: { title: '项目列表' },
+    meta: { title: '教学项目' },
   },
   {
     path: '/projects/new',
     name: 'project-create',
     component: () => import('@/views/ProjectCreateView.vue'),
-    meta: { title: '新建课件项目' },
+    meta: { title: '新建教学项目' },
+  },
+  {
+    path: '/projects/:projectId',
+    name: 'project-overview',
+    component: () => import('@/views/ProjectOverviewView.vue'),
+    meta: { title: '项目概览' },
   },
   {
     path: '/projects/:projectId/mode',
@@ -26,50 +32,14 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '生成模式选择' },
   },
   {
-    path: '/projects/:projectId/overview',
-    name: 'project-overview',
-    component: () => import('@/views/ProjectOverviewView.vue'),
-    meta: { title: '项目概览', layout: 'wide' },
-  },
-  {
     path: '/projects/:projectId/requirements',
     name: 'project-requirements',
     component: () => import('@/views/RequirementInputView.vue'),
-    meta: { title: '教学需求输入' },
-  },
-  {
-    path: '/projects/:projectId/clarification',
-    redirect: (to) => ({ path: `/projects/${to.params.projectId}/requirements`, hash: '#clarification' }),
-  },
-  {
-    path: '/requirements',
-    name: 'requirements',
-    component: () => import('@/views/RequirementInputView.vue'),
-    meta: { title: '教学需求输入' },
-  },
-  {
-    path: '/dialog',
-    name: 'dialog',
-    component: () => import('@/views/DialogClarificationView.vue'),
-    meta: { title: '智能澄清对话' },
-  },
-  {
-    path: '/projects/:projectId/requirement-summary',
-    name: 'project-requirement-summary',
-    component: () => import('@/views/RequirementSummaryView.vue'),
-    meta: { title: '需求摘要确认' },
+    meta: { title: '教学需求与澄清' },
   },
   {
     path: '/projects/:projectId/summary',
-    redirect: (to) => ({
-      path: `/projects/${to.params.projectId}/requirement-summary`,
-      query: to.query,
-      hash: to.hash,
-    }),
-  },
-  {
-    path: '/summary',
-    name: 'summary',
+    name: 'project-summary',
     component: () => import('@/views/RequirementSummaryView.vue'),
     meta: { title: '需求摘要确认' },
   },
@@ -77,39 +47,69 @@ const routes: RouteRecordRaw[] = [
     path: '/projects/:projectId/materials',
     name: 'project-materials',
     component: () => import('@/views/MaterialUploadView.vue'),
-    meta: { title: '资料上传与用途绑定' },
+    meta: { title: '参考资料与解析' },
   },
   {
     path: '/projects/:projectId/knowledge',
     name: 'project-knowledge',
-    component: () => import('@/views/KnowledgeView.vue'),
+    component: () => import('@/views/KnowledgeRetrievalView.vue'),
     meta: { title: '本地知识检索' },
   },
   {
-    path: '/projects/:projectId/teaching-intent',
-    name: 'project-teaching-intent',
+    path: '/projects/:projectId/intent',
+    name: 'project-intent',
     component: () => import('@/views/IntentConfirmView.vue'),
     meta: { title: '教学意图确认' },
   },
-  { path: '/materials', redirect: '/projects' },
-  { path: '/intent', redirect: '/projects' },
+  {
+    path: '/projects/:projectId/plan',
+    name: 'project-plan',
+    component: () => import('@/views/GenerationPlanView.vue'),
+    meta: { title: '教学内容生成' },
+  },
+  {
+    path: '/projects/:projectId/preview',
+    name: 'project-preview',
+    component: () => import('@/views/ArtifactPreviewView.vue'),
+    meta: { title: '方案预览与修改' },
+  },
+  {
+    path: '/projects/:projectId/export',
+    name: 'project-export',
+    component: () => import('@/views/ExportView.vue'),
+    meta: { title: '版本与导出' },
+  },
+  {
+    path: '/requirements',
+    redirect: '/projects/1/requirements',
+  },
+  {
+    path: '/dialog',
+    redirect: '/projects/1/requirements',
+  },
+  {
+    path: '/summary',
+    redirect: '/projects/1/summary',
+  },
+  {
+    path: '/materials',
+    redirect: '/projects/1/materials',
+  },
+  {
+    path: '/intent',
+    redirect: '/projects/1/intent',
+  },
   {
     path: '/plan',
-    name: 'plan',
-    component: () => import('@/views/GenerationPlanView.vue'),
-    meta: { title: '课件生成方案' },
+    redirect: '/projects/1/plan',
   },
   {
     path: '/preview',
-    name: 'preview',
-    component: () => import('@/views/ArtifactPreviewView.vue'),
-    meta: { title: '生成结果预览' },
+    redirect: '/projects/1/preview',
   },
   {
     path: '/export',
-    name: 'export',
-    component: () => import('@/views/ExportView.vue'),
-    meta: { title: '文件导出' },
+    redirect: '/projects/1/export',
   },
   {
     path: '/:pathMatch(.*)*',
@@ -119,14 +119,7 @@ const routes: RouteRecordRaw[] = [
   },
 ];
 
-const router = createRouter({
+export default createRouter({
   history: createWebHistory(),
   routes,
 });
-
-router.afterEach((to) => {
-  const pageTitle = typeof to.meta.title === 'string' ? to.meta.title : '教师工作台';
-  document.title = `${pageTitle} | A12 多模态 AI 教学智能体`;
-});
-
-export default router;

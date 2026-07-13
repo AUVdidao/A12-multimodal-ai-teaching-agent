@@ -1,20 +1,44 @@
-<template>
+﻿<template>
   <section class="page">
-    <header class="page__header">
-      <h2 class="page__title">课件生成方案</h2>
-      <p class="page__description">展示即将生成的 PPT 页结构、Word 教案结构和互动内容设计。</p>
-    </header>
-    <StatusCard title="生成方案骨架" description="当前只呈现流程页面，真实方案生成将在后续 AI 网关任务中接入。" />
-    <div class="page__actions">
-      <el-button type="primary" @click="router.push('/preview')">下一步：生成结果预览</el-button>
-      <el-button @click="router.push('/intent')">返回教学意图</el-button>
+    <ProjectContextHeader :project="project" />
+    <ProjectWorkspaceNav :project-id="project.id" />
+
+    <section class="page-hero">
+      <div>
+        <h2>教学内容生成</h2>
+        <p>M3 阶段页面已预留。当前前端只展示生成计划结构，不调用真实生成接口。</p>
+      </div>
+      <div class="page-actions">
+        <el-button @click="router.push(`/projects/${project.id}/intent`)">返回意图</el-button>
+        <el-button type="primary" @click="router.push(`/projects/${project.id}/preview`)">查看预览</el-button>
+      </div>
+    </section>
+
+    <div class="grid cols-3">
+      <section v-for="block in blocks" :key="block.title" class="panel">
+        <h3>{{ block.title }}</h3>
+        <p>{{ block.desc }}</p>
+        <ul>
+          <li v-for="item in block.items" :key="item">{{ item }}</li>
+        </ul>
+        <span class="tag-soft warning">后续接入</span>
+      </section>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import StatusCard from '@/components/StatusCard.vue';
-import { useRouter } from 'vue-router';
+import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
+import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
+import { getDemoProject } from '@/mock/demo';
+import { useRoute, useRouter } from 'vue-router';
 
+const route = useRoute();
 const router = useRouter();
+const project = getDemoProject(route.params.projectId as string);
+const blocks = [
+  { title: 'PPT 课件', desc: '围绕课程导入、概念讲解、案例讨论和课堂总结组织页面。', items: ['课程导入', '核心概念', '典型案例', '课堂练习'] },
+  { title: 'Word 教案', desc: '沉淀教学目标、教学流程、活动设计和评价方式。', items: ['教学目标', '重点难点', '教学流程', '评价标准'] },
+  { title: '互动内容', desc: '为课堂问答、小组讨论和即时测评预留结构。', items: ['随堂问答', '小组讨论', '知识投票', '课后测评'] },
+];
 </script>
