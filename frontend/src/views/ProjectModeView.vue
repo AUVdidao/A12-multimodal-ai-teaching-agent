@@ -1,119 +1,65 @@
-<template>
+﻿<template>
   <section class="page">
-    <header class="page__header">
-      <h2 class="page__title">生成模式选择</h2>
-      <p class="page__description">
-        为当前课件项目选择生成质量、速度和成本的平衡方式，保存后进入教学需求输入。
-      </p>
-    </header>
+    <ProjectContextHeader :project="project" />
 
-    <StatusCard
-      title="Mock AI 模式准备就绪"
-      description="当前仅保存生成模式，不接入真实 Dify。后续教学需求页面会继续沿用 TA-005 的 Mock AI Workflow 契约。"
-    />
-
-    <el-card class="page-card" shadow="never">
-      <div v-if="project" class="project-summary">
+    <section class="panel">
+      <div class="panel__header">
         <div>
-          <span>项目</span>
-          <strong>{{ project.projectName }}</strong>
-        </div>
-        <div>
-          <span>课程</span>
-          <strong>{{ project.courseName }}</strong>
-        </div>
-        <div>
-          <span>章节</span>
-          <strong>{{ project.chapterTitle }}</strong>
+          <h3>选择生成模式</h3>
+          <p>该设置后续会影响 AI 工作流成本、速度和质量。当前为前端演示选择。</p>
         </div>
       </div>
 
-      <el-radio-group v-model="selectedMode" class="mode-grid">
-        <el-radio-button
-          v-for="mode in modes"
-          :key="mode.code"
-          :label="mode.code"
-          class="mode-option"
-        >
-          <strong>{{ mode.name }}</strong>
-          <span>{{ mode.description }}</span>
+      <el-radio-group v-model="mode" class="grid cols-3" style="width: 100%">
+        <el-radio-button v-for="item in modes" :key="item.code" :label="item.code">
+          <strong>{{ item.name }}</strong>
+          <span>{{ item.desc }}</span>
         </el-radio-button>
       </el-radio-group>
 
-      <el-alert
-        v-if="errorMessage"
-        class="inline-alert"
-        :title="errorMessage"
-        type="warning"
-        show-icon
-        :closable="false"
-      />
-
-      <div class="page__actions">
-        <el-button type="primary" :loading="saving" @click="handleSaveMode">
-          保存并进入教学需求输入
-        </el-button>
-        <el-button @click="router.push('/projects')">返回项目列表</el-button>
+      <div class="page-actions">
+        <el-button type="primary" @click="router.push(`/projects/${project.id}/requirements`)">保存并进入教学需求</el-button>
+        <el-button @click="router.push(`/projects/${project.id}`)">返回项目概览</el-button>
       </div>
-    </el-card>
+    </section>
   </section>
 </template>
 
 <script setup lang="ts">
-import StatusCard from '@/components/StatusCard.vue';
-import {
-  getProject,
-  getProjectModelMode,
-  listModelModes,
-  saveProjectModelMode,
-  type ModelModeOption,
-  type TeachingProject,
-} from '@/api/projects';
-import { ElMessage } from 'element-plus';
-import { onMounted, ref } from 'vue';
+import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
+import { getDemoProject } from '@/mock/demo';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 const route = useRoute();
 const router = useRouter();
-const projectId = route.params.projectId as string;
-
-const project = ref<TeachingProject>();
-const modes = ref<ModelModeOption[]>([]);
-const selectedMode = ref<ModelModeOption['code']>('STANDARD');
-const saving = ref(false);
-const errorMessage = ref('');
-
-onMounted(loadInitialData);
-
-async function loadInitialData() {
-  errorMessage.value = '';
-
-  try {
-    const [projectResult, modeOptions, savedMode] = await Promise.all([
-      getProject(projectId),
-      listModelModes(),
-      getProjectModelMode(projectId),
-    ]);
-    project.value = projectResult;
-    modes.value = modeOptions;
-    selectedMode.value = savedMode.mode || 'STANDARD';
-  } catch (error) {
-    errorMessage.value = '生成模式信息读取失败，请确认后端服务已启动。';
-  }
-}
-
-async function handleSaveMode() {
-  saving.value = true;
-  errorMessage.value = '';
-
-  try {
-    await saveProjectModelMode(projectId, selectedMode.value);
-    ElMessage.success('生成模式已保存');
-    router.push(`/projects/${projectId}/requirements`);
-  } catch (error) {
-    errorMessage.value = '生成模式保存失败，请稍后重试。';
-  } finally {
-    saving.value = false;
-  }
-}
+const project = getDemoProject(route.params.projectId as string);
+const mode = ref('STANDARD');
+const modes = [
+  { code: 'STANDARD', name: '标准模式', desc: '平衡质量、速度与成本，适合常规备课。' },
+  { code: 'QUALITY', name: '质量优先', desc: '更重视内容完整度和证据质量。' },
+  { code: 'ECONOMY', name: '快速草稿', desc: '快速产出可编辑初稿。' },
+];
 </script>
+
+<style scoped>
+:deep(.el-radio-button__inner) {
+  width: 100%;
+  min-height: 120px;
+  padding: 20px;
+  border-radius: 10px !important;
+  text-align: left;
+  white-space: normal;
+}
+
+:deep(.el-radio-button__inner span),
+:deep(.el-radio-button__inner strong) {
+  display: block;
+}
+
+:deep(.el-radio-button__inner span) {
+  margin-top: 8px;
+  color: var(--ui-muted);
+  line-height: 1.55;
+}
+</style>

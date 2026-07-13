@@ -1,15 +1,37 @@
 <template>
   <div class="app-header">
-    <div>
-      <h1>A12 多模态 AI 教学智能体</h1>
-      <p>面向教师备课的课件、教案与互动内容生成系统原型</p>
+    <div class="app-header__title">
+      <h1>{{ title }}</h1>
     </div>
-    <el-tag effect="plain" type="success">{{ app.mode }}</el-tag>
+
+    <div class="app-header__search" role="search">
+      <A12AssetIcon name="search" :size="23" />
+      <input aria-label="搜索项目、资料、知识" placeholder="搜索项目、资料、知识..." />
+      <kbd>⌘K</kbd>
+    </div>
+
+    <div class="app-header__actions">
+      <button class="icon-button notification-button" type="button" aria-label="通知">
+        <A12AssetIcon name="bell" :size="29" />
+        <span>8</span>
+      </button>
+      <button class="icon-button" type="button" aria-label="帮助">
+        <A12AssetIcon name="question-help" :size="29" />
+      </button>
+      <button class="user-chip" type="button" aria-label="打开用户菜单">
+        <span>张</span>
+        <strong>张老师</strong>
+        <i aria-hidden="true" />
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useAppStore } from '@/stores/app';
+import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 
-const app = useAppStore();
+const route = useRoute();
+const title = computed(() => route.meta.title || '教师工作台');
 </script>

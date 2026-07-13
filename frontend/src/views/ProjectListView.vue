@@ -1,120 +1,198 @@
-<template>
+﻿<template>
   <section class="page">
-    <header class="page__header page__header--with-action">
+    <header class="page-hero">
       <div>
-        <h2 class="page__title">项目列表</h2>
-        <p class="page__description">
-          查看已创建的备课项目，继续选择生成模式或进入教学需求输入。
-        </p>
+        <h2>教学项目</h2>
+        <p>集中管理备课项目，快速筛选当前阶段并继续下一项教学任务。</p>
       </div>
-      <el-button type="primary" @click="router.push('/projects/new')">
-        新建项目
-      </el-button>
+      <el-button type="primary" @click="router.push('/projects/new')">新建教学项目</el-button>
     </header>
 
-    <StatusCard
-      title="主流程起点"
-      description="当前页面已接入项目列表接口，支持从首页进入项目管理并继续演示闭环。"
-    />
+    <section class="panel">
+      <div class="panel__header">
+        <el-input v-model="keyword" clearable placeholder="搜索项目名称、课程或受众..." style="max-width: 360px" />
+        <div class="inline-actions">
+          <el-radio-group v-model="filter" size="large">
+            <el-radio-button label="全部状态" />
+            <el-radio-button label="需求澄清中" />
+            <el-radio-button label="资料解析中" />
+            <el-radio-button label="意图已确认" />
+            <el-radio-button label="已定稿" />
+          </el-radio-group>
+          <el-button @click="toggleSort">更新时间 {{ sortDesc ? '↓' : '↑' }}</el-button>
+        </div>
+      </div>
 
-    <el-card class="page-card" shadow="never">
-      <el-table
-        v-loading="loading"
-        :data="projects"
-        empty-text="暂无项目，请先新建课件项目"
-        @row-click="goToModeSelection"
-      >
-        <el-table-column prop="projectName" label="项目名称" min-width="180" />
-        <el-table-column prop="courseName" label="课程" width="120" />
-        <el-table-column prop="chapterTitle" label="章节主题" min-width="160" />
-        <el-table-column label="状态" width="120">
+      <el-table :data="visibleProjects" @row-click="openProject">
+        <el-table-column label="教学项目" min-width="260">
           <template #default="{ row }">
-            <el-tag size="small" effect="plain">{{ formatStatus(row.status) }}</el-tag>
+            <div class="project-table-identity">
+              <UiSubjectIcon :icon="projectPresentation[row.id].icon" :tone="projectPresentation[row.id].tone" />
+              <div>
+                <strong>{{ row.projectName }}</strong>
+                <span>{{ projectPresentation[row.id].subtitle }}</span>
+              </div>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="更新时间" min-width="180">
+        <el-table-column label="课程" min-width="160">
           <template #default="{ row }">
-            {{ formatDate(row.updatedAt) }}
+            {{ row.courseName }}<div class="muted">{{ row.textbook }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="下一步" width="132" fixed="right">
+        <el-table-column prop="targetStudents" label="面向受众" min-width="150" />
+        <el-table-column label="当前阶段" width="140">
           <template #default="{ row }">
-            <el-button link type="primary" @click.stop="goToModeSelection(row)">
-              选择模式
-            </el-button>
+            <UiStatusPill :label="stageLabel(row.status)" :tone="statusTone(row.status)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="进度" width="170">
+          <template #default="{ row }">
+            <div class="project-table-progress" :aria-label="`进度 ${row.progress}%`">
+              <span class="project-table-progress__track">
+                <i :class="projectPresentation[row.id].tone" :style="{ width: `${row.progress}%` }" />
+              </span>
+              <strong>{{ row.progress }}%</strong>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="更新时间" width="160">
+          <template #default="{ row }">
+            <time :datetime="row.updatedAt">{{ projectPresentation[row.id].updatedLabel }}</time>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" plain @click.stop="openProject(row)">继续项目</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <el-alert
-        v-if="errorMessage"
-        class="inline-alert"
-        :title="errorMessage"
-        type="warning"
-        show-icon
-        :closable="false"
-      />
-    </el-card>
-
-    <div class="page__actions">
-      <el-button @click="loadProjects">刷新列表</el-button>
-      <el-button @click="router.push('/')">返回首页</el-button>
-    </div>
+      <p class="muted" style="margin: 14px 0 0">共 {{ visibleProjects.length }} 个项目</p>
+    </section>
   </section>
 </template>
 
 <script setup lang="ts">
-import StatusCard from '@/components/StatusCard.vue';
-import { listProjects, type TeachingProject } from '@/api/projects';
-import { onMounted, ref } from 'vue';
+import { demoProjects, stageLabel, type DemoProject } from '@/mock/demo';
+import UiStatusPill from '@/components/ui/UiStatusPill.vue';
+import UiSubjectIcon from '@/components/ui/UiSubjectIcon.vue';
+import { projectPresentation } from '@/mock/projectPresentation';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
-const loading = ref(false);
-const projects = ref<TeachingProject[]>([]);
-const errorMessage = ref('');
+const keyword = ref('');
+const filter = ref('全部状态');
+const sortDesc = ref(true);
 
-onMounted(loadProjects);
+const visibleProjects = computed(() => {
+  const text = keyword.value.trim().toLowerCase();
+  return [...demoProjects]
+    .filter((project) => filter.value === '全部状态' || stageLabel(project.status) === filter.value)
+    .filter((project) => {
+      if (!text) return true;
+      return `${project.projectName} ${project.courseName} ${project.targetStudents}`.toLowerCase().includes(text);
+    })
+    .sort((left, right) => (sortDesc.value ? right.updatedAt.localeCompare(left.updatedAt) : left.updatedAt.localeCompare(right.updatedAt)));
+});
 
-async function loadProjects() {
-  loading.value = true;
-  errorMessage.value = '';
-
-  try {
-    projects.value = await listProjects();
-  } catch (error) {
-    projects.value = [];
-    errorMessage.value = '项目列表读取失败，请确认后端服务已启动。';
-  } finally {
-    loading.value = false;
-  }
+function openProject(project: DemoProject) {
+  router.push(`/projects/${project.id}`);
 }
 
-function goToModeSelection(project: TeachingProject) {
-  router.push(`/projects/${project.id}/mode`);
+function toggleSort() {
+  sortDesc.value = !sortDesc.value;
 }
 
-function formatStatus(status: string) {
-  const statusMap: Record<string, string> = {
-    CREATED: '已创建',
-    REQUIREMENT_CONFIRMED: '需求已确认',
-    MATERIAL_READY: '资料就绪',
-    INTENT_CONFIRMED: '意图已确认',
-    GENERATED: '已生成',
-    FINALIZED: '已定稿',
-  };
-  return statusMap[status] || status;
-}
-
-function formatDate(value: string) {
-  if (!value) {
-    return '-';
-  }
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
+function statusTone(status: string) {
+  if (status === 'MATERIAL_ANALYZING') return 'blue';
+  if (status === 'INTENT_CONFIRMED') return 'green';
+  if (status === 'DRAFT_READY') return 'purple';
+  return 'orange';
 }
 </script>
+
+<style scoped>
+.project-table-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.project-table-identity > div {
+  min-width: 0;
+}
+
+.project-table-identity > div > strong,
+.project-table-identity > div > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-table-identity > div > strong {
+  color: #222b3f;
+  line-height: 20px;
+}
+
+.project-table-identity > div > span {
+  margin-top: 2px;
+  color: #77809a;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.project-table-progress {
+  display: grid;
+  grid-template-columns: 92px 42px;
+  align-items: center;
+  gap: 10px;
+}
+
+.project-table-progress strong {
+  color: #4d5670;
+  font-size: 13px;
+}
+
+.project-table-progress__track {
+  display: block;
+  overflow: hidden;
+  height: 7px;
+  border-radius: 999px;
+  background: #edf0f5;
+}
+
+.project-table-progress__track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.project-table-progress__track .purple {
+  background: #635bff;
+}
+
+.project-table-progress__track .green {
+  background: #18aa55;
+}
+
+.project-table-progress__track .orange {
+  background: #ff941f;
+}
+
+.project-table-progress__track .blue {
+  background: #3f91f7;
+}
+
+.project-table-progress__track .red {
+  background: #ff6278;
+}
+
+time {
+  color: #66708a;
+  white-space: nowrap;
+}
+</style>
