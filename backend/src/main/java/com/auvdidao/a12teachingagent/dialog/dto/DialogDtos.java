@@ -29,4 +29,10 @@ public final class DialogDtos {
             LocalDateTime createdAt
     ) {
     }
+
+    public record DialogClearResponse(
+            Long projectId,
+            long deletedCount
+    ) {
+    }
 }

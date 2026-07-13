@@ -108,9 +108,15 @@ public class TeachingIntentService {
         intent.setProjectId(projectId);
         intent.setRequirementSummaryId(summary.getId());
         intent.setGenerationGoal(summary.getTeachingGoals());
+        intent.setGenerationGoals(hasText(summary.getTeachingGoals()) ? List.of(summary.getTeachingGoals()) : List.of());
         intent.setContentBasis("以教师已确认需求为主，结合资料「" + sources + "」的用途、原型摘要与本地知识片段作为增强依据。资料不会覆盖教师明确要求。");
+        intent.setPrimaryBasis("已确认教学需求与本地知识库");
+        intent.setSupplementalBasis(parsedMaterials.stream().map(UploadedMaterial::getOriginalFileName).toList());
+        intent.setTargetAudience(firstNonBlank(summary.getGradeLevel(), project.getTargetAudience()));
+        intent.setTotalHours(resolveTotalHours(summary.getLessonDuration(), project.getLessonDurationMinutes()));
         intent.setTeachingApproach(resolveApproach(usages));
         intent.setInteractionMode(resolveInteraction(usages));
+        intent.setTeachingFormat(intent.getInteractionMode());
         intent.setOutputTypes(summary.getOutputTypes());
         intent.setStylePreference(summary.getStylePreference());
         intent.setEvidenceItems(hits.stream().map(TeachingIntentService::toEvidence).toList());
@@ -138,9 +144,12 @@ public class TeachingIntentService {
             throw new BadRequestException("Request body is required");
         }
         intent.setGenerationGoal(request.generationGoal().trim());
+        intent.setGenerationGoals(List.of(request.generationGoal().trim()));
         intent.setContentBasis(request.contentBasis().trim());
+        intent.setPrimaryBasis(request.contentBasis().trim());
         intent.setTeachingApproach(request.teachingApproach().trim());
         intent.setInteractionMode(request.interactionMode().trim());
+        intent.setTeachingFormat(request.interactionMode().trim());
         intent.setOutputTypes(normalizeValues(request.outputTypes()));
         intent.setStylePreference(trimToNull(request.stylePreference()));
         return toResponse(intentRepository.save(intent));
@@ -286,6 +295,36 @@ public class TeachingIntentService {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        return hasText(preferred) ? preferred.trim() : trimToNull(fallback);
+    }
+
+    private static Integer resolveTotalHours(String lessonDuration, Integer lessonDurationMinutes) {
+        if (hasText(lessonDuration)) {
+            java.util.regex.Matcher periods = java.util.regex.Pattern
+                    .compile("(\\d+)\\s*(?:课时|学时)")
+                    .matcher(lessonDuration);
+            if (periods.find()) return Integer.parseInt(periods.group(1));
+
+            java.util.regex.Matcher minutes = java.util.regex.Pattern
+                    .compile("(\\d+)\\s*分钟")
+                    .matcher(lessonDuration);
+            if (minutes.find()) return (int) Math.ceil(Integer.parseInt(minutes.group(1)) / 45.0);
+
+            java.util.regex.Matcher hours = java.util.regex.Pattern
+                    .compile("(\\d+)\\s*小时")
+                    .matcher(lessonDuration);
+            if (hours.find()) return (int) Math.ceil(Integer.parseInt(hours.group(1)) * 60 / 45.0);
+
+            java.util.regex.Matcher number = java.util.regex.Pattern.compile("(\\d+)").matcher(lessonDuration);
+            if (number.find()) return Integer.parseInt(number.group(1));
+        }
+        if (lessonDurationMinutes == null || lessonDurationMinutes <= 0) {
+            return null;
+        }
+        return (int) Math.ceil(lessonDurationMinutes / 45.0);
     }
 
     private static String abbreviate(String value, int limit) {

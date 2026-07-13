@@ -15,12 +15,14 @@ public final class RequirementSummaryDtos {
             @Size(max = 100) String gradeLevel,
             @Size(max = 100) String subject,
             @Size(max = 200) String topic,
+            @Size(max = 500) String baselineLevel,
             @Size(max = 100) String lessonDuration,
             @Size(max = 4000) String teachingGoals,
             @Size(max = 4000) String keyPoints,
             @Size(max = 4000) String difficultPoints,
             @Size(max = 10) List<@Size(max = 50) String> outputTypes,
-            @Size(max = 200) String stylePreference
+            @Size(max = 200) String stylePreference,
+            @Size(max = 500) String interactionType
     ) {
     }
 
@@ -31,12 +33,14 @@ public final class RequirementSummaryDtos {
             String gradeLevel,
             String subject,
             String topic,
+            String baselineLevel,
             String lessonDuration,
             String teachingGoals,
             String keyPoints,
             String difficultPoints,
             List<String> outputTypes,
             String stylePreference,
+            String interactionType,
             String generationMode,
             RequirementSummaryStatus status,
             LocalDateTime createdAt,

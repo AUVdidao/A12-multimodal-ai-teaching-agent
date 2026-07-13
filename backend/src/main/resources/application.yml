@@ -6,8 +6,8 @@ spring:
     name: a12-teaching-agent-backend
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 21MB
+      max-file-size: 200MB
+      max-request-size: 205MB
   datasource:
     url: jdbc:h2:file:./data/a12-teaching-agent
     driver-class-name: org.h2.Driver
@@ -33,7 +33,7 @@ logging:
 app:
   storage:
     upload-dir: ${APP_UPLOAD_DIR:./data/uploads}
-    max-file-size: ${APP_MAX_UPLOAD_SIZE:20971520}
+    max-file-size: ${APP_MAX_UPLOAD_SIZE:209715200}
 
 a12:
   ai:

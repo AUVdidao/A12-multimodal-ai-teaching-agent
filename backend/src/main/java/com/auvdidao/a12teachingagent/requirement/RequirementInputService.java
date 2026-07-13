@@ -40,10 +40,13 @@ public class RequirementInputService {
         requirement.setGradeLevel(trimToNull(request.gradeLevel()));
         requirement.setSubject(trimToNull(request.subject()));
         requirement.setTopic(trimToNull(request.topic()));
+        requirement.setBaselineLevel(trimToNull(request.baselineLevel()));
         requirement.setLessonDuration(trimToNull(request.lessonDuration()));
         requirement.setTeachingGoals(trimToNull(request.teachingGoals()));
         requirement.setKeyPoints(trimToNull(request.keyPoints()));
         requirement.setDifficultPoints(trimToNull(request.difficultPoints()));
+        requirement.setStylePreference(trimToNull(request.stylePreference()));
+        requirement.setInteractionType(trimToNull(request.interactionType()));
         requirement.setOutputTypes(normalizeOutputTypes(request.outputTypes()));
         requirement.setRawRequirementText(trimToNull(request.rawRequirementText()));
         requirement.setContent(requirement.getRawRequirementText());
@@ -76,10 +79,13 @@ public class RequirementInputService {
                 requirement.getGradeLevel(),
                 requirement.getSubject(),
                 requirement.getTopic(),
+                requirement.getBaselineLevel(),
                 requirement.getLessonDuration(),
                 requirement.getTeachingGoals(),
                 requirement.getKeyPoints(),
                 requirement.getDifficultPoints(),
+                requirement.getStylePreference(),
+                requirement.getInteractionType(),
                 requirement.getOutputTypes(),
                 requirement.getRawRequirementText(),
                 requirement.getCreatedAt(),

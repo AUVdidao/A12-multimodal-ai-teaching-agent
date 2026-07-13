@@ -27,6 +27,7 @@ public class RequirementSummary extends BaseAuditableEntity {
     private String gradeLevel;
     private String subject;
     private String topic;
+    private String baselineLevel;
     private String lessonDuration;
 
     @Lob
@@ -51,6 +52,7 @@ public class RequirementSummary extends BaseAuditableEntity {
     private List<String> outputTypes = new ArrayList<>();
 
     private String stylePreference;
+    private String interactionType;
 
     @Enumerated(EnumType.STRING)
     private GenerationMode generationMode;
@@ -100,6 +102,14 @@ public class RequirementSummary extends BaseAuditableEntity {
         this.topic = topic;
     }
 
+    public String getBaselineLevel() {
+        return baselineLevel;
+    }
+
+    public void setBaselineLevel(String baselineLevel) {
+        this.baselineLevel = baselineLevel;
+    }
+
     public String getLessonDuration() {
         return lessonDuration;
     }
@@ -146,6 +156,14 @@ public class RequirementSummary extends BaseAuditableEntity {
 
     public void setStylePreference(String stylePreference) {
         this.stylePreference = stylePreference;
+    }
+
+    public String getInteractionType() {
+        return interactionType;
+    }
+
+    public void setInteractionType(String interactionType) {
+        this.interactionType = interactionType;
     }
 
     public GenerationMode getGenerationMode() {

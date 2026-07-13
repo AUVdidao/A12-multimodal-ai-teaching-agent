@@ -69,12 +69,14 @@ public class RequirementSummaryService {
         summary.setGradeLevel(requirement.getGradeLevel());
         summary.setSubject(requirement.getSubject());
         summary.setTopic(requirement.getTopic());
+        summary.setBaselineLevel(requirement.getBaselineLevel());
         summary.setLessonDuration(requirement.getLessonDuration());
         summary.setTeachingGoals(requirement.getTeachingGoals());
         summary.setKeyPoints(requirement.getKeyPoints());
         summary.setDifficultPoints(requirement.getDifficultPoints());
         summary.setOutputTypes(requirement.getOutputTypes());
-        summary.setStylePreference(resolveStylePreference(projectId));
+        summary.setStylePreference(firstNonBlank(requirement.getStylePreference(), resolveStylePreference(projectId)));
+        summary.setInteractionType(requirement.getInteractionType());
         summary.setGenerationMode(project.getGenerationMode() == null ? GenerationMode.STANDARD : project.getGenerationMode());
         summary.setStatus(RequirementSummaryStatus.DRAFT);
 
@@ -107,12 +109,18 @@ public class RequirementSummaryService {
         summary.setGradeLevel(trimToNull(request.gradeLevel()));
         summary.setSubject(trimToNull(request.subject()));
         summary.setTopic(trimToNull(request.topic()));
+        if (request.baselineLevel() != null) {
+            summary.setBaselineLevel(trimToNull(request.baselineLevel()));
+        }
         summary.setLessonDuration(trimToNull(request.lessonDuration()));
         summary.setTeachingGoals(trimToNull(request.teachingGoals()));
         summary.setKeyPoints(trimToNull(request.keyPoints()));
         summary.setDifficultPoints(trimToNull(request.difficultPoints()));
         summary.setOutputTypes(normalizeOutputTypes(request.outputTypes()));
         summary.setStylePreference(trimToNull(request.stylePreference()));
+        if (request.interactionType() != null) {
+            summary.setInteractionType(trimToNull(request.interactionType()));
+        }
 
         return toResponse(requirementSummaryRepository.save(summary));
     }
@@ -186,12 +194,14 @@ public class RequirementSummaryService {
                 summary.getGradeLevel(),
                 summary.getSubject(),
                 summary.getTopic(),
+                summary.getBaselineLevel(),
                 summary.getLessonDuration(),
                 summary.getTeachingGoals(),
                 summary.getKeyPoints(),
                 summary.getDifficultPoints(),
                 summary.getOutputTypes(),
                 summary.getStylePreference(),
+                summary.getInteractionType(),
                 normalizeMode(summary.getGenerationMode()),
                 summary.getStatus(),
                 summary.getCreatedAt(),
@@ -231,5 +241,10 @@ public class RequirementSummaryService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        String normalized = trimToNull(preferred);
+        return normalized == null ? fallback : normalized;
     }
 }

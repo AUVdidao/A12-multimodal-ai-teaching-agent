@@ -136,7 +136,13 @@ docker compose logs backend --tail=100
 docker compose down
 ```
 
-本地上传默认写入 `./data/uploads`，单文件上限为 20 MB。真实 Dify、向量数据库、对象存储和生产 HTTPS 尚未接入。
+本地上传默认写入 `./data/uploads`，默认/生产单文件上限为 200 MB（测试 profile 为 20 MB）。真实 Dify、向量数据库、对象存储和生产 HTTPS 尚未接入。
+
+## API 文档
+
+- [UI V6 后端接口契约](docs/api/ui-v6-backend-api.md)：覆盖教师工作台、项目列表、项目概览、需求澄清、需求摘要、资料工作台、知识检索和教学意图八个目标页面。
+- [项目入口流程契约](docs/api/project-flow-contract.md)
+- [AI 工作流契约](docs/api/ai-workflow-contract.md)
 
 ## 环境变量说明
 

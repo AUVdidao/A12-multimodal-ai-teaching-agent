@@ -10,4 +10,6 @@ public interface DialogMessageRepository extends JpaRepository<DialogMessage, Lo
     List<DialogMessage> findByProjectIdOrderByCreatedAtAscIdAsc(Long projectId);
 
     List<DialogMessage> findBySessionIdOrderByCreatedAtAscIdAsc(String sessionId);
+
+    long deleteByProjectId(Long projectId);
 }

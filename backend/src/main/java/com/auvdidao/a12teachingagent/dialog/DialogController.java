@@ -1,9 +1,11 @@
 package com.auvdidao.a12teachingagent.dialog;
 
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
+import com.auvdidao.a12teachingagent.dialog.dto.DialogDtos.DialogClearResponse;
 import com.auvdidao.a12teachingagent.dialog.dto.DialogDtos.DialogMessageRequest;
 import com.auvdidao.a12teachingagent.dialog.dto.DialogDtos.DialogMessageResponse;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +36,11 @@ public class DialogController {
     @GetMapping("/projects/{projectId}/dialogues")
     public ApiResponse<List<DialogMessageResponse>> listProjectDialogues(@PathVariable Long projectId) {
         return ApiResponse.success(dialogService.listProjectMessages(projectId));
+    }
+
+    @DeleteMapping("/projects/{projectId}/dialogues")
+    public ApiResponse<DialogClearResponse> clearProjectDialogues(@PathVariable Long projectId) {
+        return ApiResponse.success(dialogService.clearProjectMessages(projectId));
     }
 
     @GetMapping("/dialogues/{sessionId}")

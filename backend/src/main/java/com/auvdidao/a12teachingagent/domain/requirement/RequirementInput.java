@@ -25,6 +25,7 @@ public class RequirementInput extends BaseAuditableEntity {
     private String gradeLevel;
     private String subject;
     private String topic;
+    private String baselineLevel;
     private String lessonDuration;
 
     @Lob
@@ -38,6 +39,9 @@ public class RequirementInput extends BaseAuditableEntity {
     @Lob
     @Column(columnDefinition = "TEXT")
     private String difficultPoints;
+
+    private String stylePreference;
+    private String interactionType;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
@@ -91,6 +95,14 @@ public class RequirementInput extends BaseAuditableEntity {
         this.topic = topic;
     }
 
+    public String getBaselineLevel() {
+        return baselineLevel;
+    }
+
+    public void setBaselineLevel(String baselineLevel) {
+        this.baselineLevel = baselineLevel;
+    }
+
     public String getLessonDuration() {
         return lessonDuration;
     }
@@ -121,6 +133,22 @@ public class RequirementInput extends BaseAuditableEntity {
 
     public void setDifficultPoints(String difficultPoints) {
         this.difficultPoints = difficultPoints;
+    }
+
+    public String getStylePreference() {
+        return stylePreference;
+    }
+
+    public void setStylePreference(String stylePreference) {
+        this.stylePreference = stylePreference;
+    }
+
+    public String getInteractionType() {
+        return interactionType;
+    }
+
+    public void setInteractionType(String interactionType) {
+        this.interactionType = interactionType;
     }
 
     public List<String> getOutputTypes() {

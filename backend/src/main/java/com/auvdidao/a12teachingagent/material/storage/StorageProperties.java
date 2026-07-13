@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 public class StorageProperties {
 
     private String uploadDir = "./data/uploads";
-    private long maxFileSize = 20L * 1024 * 1024;
+    private long maxFileSize = 200L * 1024 * 1024;
 
     public String getUploadDir() {
         return uploadDir;

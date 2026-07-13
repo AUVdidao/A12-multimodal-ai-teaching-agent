@@ -2,6 +2,7 @@ package com.auvdidao.a12teachingagent.dialog;
 
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
+import com.auvdidao.a12teachingagent.dialog.dto.DialogDtos.DialogClearResponse;
 import com.auvdidao.a12teachingagent.dialog.dto.DialogDtos.DialogMessageRequest;
 import com.auvdidao.a12teachingagent.dialog.dto.DialogDtos.DialogMessageResponse;
 import com.auvdidao.a12teachingagent.domain.common.DialogRole;
@@ -60,6 +61,12 @@ public class DialogService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public DialogClearResponse clearProjectMessages(Long projectId) {
+        ensureProjectExists(projectId);
+        return new DialogClearResponse(projectId, dialogMessageRepository.deleteByProjectId(projectId));
     }
 
     private void ensureProjectExists(Long projectId) {
