@@ -7,12 +7,14 @@ export interface RequirementSummaryPayload {
   gradeLevel?: string;
   subject?: string;
   topic?: string;
+  baselineLevel?: string;
   lessonDuration?: string;
   teachingGoals?: string;
   keyPoints?: string;
   difficultPoints?: string;
   outputTypes: string[];
   stylePreference?: string;
+  interactionType?: string;
 }
 
 export interface RequirementSummary extends RequirementSummaryPayload {

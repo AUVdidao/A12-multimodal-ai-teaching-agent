@@ -26,7 +26,8 @@ function Invoke-A12Api {
         }
         if ($null -ne $Body) {
             $parameters.ContentType = "application/json; charset=utf-8"
-            $parameters.Body = $Body | ConvertTo-Json -Depth 10 -Compress
+            $json = $Body | ConvertTo-Json -Depth 10 -Compress
+            $parameters.Body = [System.Text.Encoding]::UTF8.GetBytes($json)
         }
 
         $response = Invoke-RestMethod @parameters
@@ -117,6 +118,16 @@ if ($null -eq $project.id) {
 }
 $projectId = [long]$project.id
 
+$workspaceOverview = Invoke-A12Api -Name "UI V6 teacher workspace" -Method "GET" -Path "/api/workspace/overview"
+if ($workspaceOverview.metrics.projectCount -lt 1) {
+    throw "Teacher workspace did not include the created project"
+}
+
+$workspaceProjects = Invoke-A12Api -Name "UI V6 project workspace list" -Method "GET" -Path "/api/workspace/projects?page=0&size=10&sort=UPDATED_DESC"
+if (@($workspaceProjects.items | Where-Object { $_.id -eq $projectId }).Count -ne 1) {
+    throw "Workspace project list did not include the created project"
+}
+
 $null = Invoke-A12Api -Name "save model mode" -Method "PUT" -Path "/api/projects/$projectId/model-mode" -Body @{
     mode = "STANDARD"
 }
@@ -148,7 +159,7 @@ if ($clarificationQuestions.questions.Count -eq 0) {
 }
 
 $sessionId = "project-$projectId-clarification"
-$aiContent = ($clarificationQuestions.questions -join "`n")
+$aiContent = "Please add the learner profile, prior knowledge, teaching style, interaction design, and expected outputs."
 $null = Invoke-A12Api -Name "save AI dialogue" -Method "POST" -Path "/api/projects/$projectId/dialogues" -Body @{
     sessionId = $sessionId
     sender = "AI"
@@ -166,14 +177,22 @@ if ($dialogues.Count -lt 2) {
     throw "Dialogue history did not persist both messages"
 }
 
+$requirementWorkspace = Invoke-A12Api -Name "UI V6 requirement workspace" -Method "GET" -Path "/api/projects/$projectId/requirements/workspace"
+if ($requirementWorkspace.dialogues.Count -lt 2 -or $requirementWorkspace.completeness.total -ne 9) {
+    throw "Requirement workspace aggregate is incomplete"
+}
+
 $completePayload = @{
     gradeLevel = "Grade 8"
     subject = "Biology"
     topic = "Photosynthesis"
+    baselineLevel = "Basic biology knowledge and first exposure to inquiry variables"
     lessonDuration = "45 minutes"
     teachingGoals = "Explain the basic photosynthesis process"
     keyPoints = "Conditions for photosynthesis"
     difficultPoints = "Matter and energy conversion"
+    stylePreference = "Inquiry-based visual teaching"
+    interactionType = "Prediction, observation, discussion and feedback"
     outputTypes = @("PPT", "LESSON_PLAN")
     rawRequirementText = "Use classroom examples and a technology style"
 }
@@ -198,12 +217,14 @@ $updatedSummary = Invoke-A12Api -Name "summary update" -Method "PUT" -Path "/api
     gradeLevel = $summary.gradeLevel
     subject = $summary.subject
     topic = "Photosynthesis investigation"
+    baselineLevel = $summary.baselineLevel
     lessonDuration = $summary.lessonDuration
     teachingGoals = $summary.teachingGoals
     keyPoints = $summary.keyPoints
     difficultPoints = $summary.difficultPoints
     outputTypes = @($summary.outputTypes)
     stylePreference = "Technology style"
+    interactionType = $summary.interactionType
 }
 if ($updatedSummary.topic -ne "Photosynthesis investigation") {
     throw "Summary update was not persisted"
@@ -212,6 +233,11 @@ if ($updatedSummary.topic -ne "Photosynthesis investigation") {
 $confirmedSummary = Invoke-A12Api -Name "summary confirmation" -Method "POST" -Path "/api/projects/$projectId/requirement-summaries/$($summary.id)/confirm"
 if ($confirmedSummary.status -ne "CONFIRMED" -or [string]::IsNullOrWhiteSpace($confirmedSummary.confirmedAt)) {
     throw "Summary confirmation was not persisted"
+}
+
+$summaryWorkspace = Invoke-A12Api -Name "UI V6 summary workspace" -Method "GET" -Path "/api/projects/$projectId/requirement-summaries/workspace"
+if ($summaryWorkspace.summary.id -ne $summary.id -or $summaryWorkspace.summary.status -ne "CONFIRMED") {
+    throw "Summary workspace did not restore the confirmed summary"
 }
 
 $temporaryMaterial = Join-Path ([System.IO.Path]::GetTempPath()) "a12-m2-smoke-$([Guid]::NewGuid().ToString('N')).png"
@@ -249,6 +275,11 @@ try {
         throw "Parse result was not restored"
     }
 
+    $materialWorkspace = Invoke-A12Api -Name "UI V6 material workspace" -Method "GET" -Path "/api/projects/$projectId/materials/workspace"
+    if (-not $materialWorkspace.uploadPolicy.uploadEnabled -or $materialWorkspace.statistics.total -lt 1 -or @($materialWorkspace.materials | Where-Object { $_.id -eq $materialId }).Count -ne 1) {
+        throw "Material workspace did not include the uploaded material"
+    }
+
     $overview = Invoke-A12Api -Name "M2 knowledge overview" -Method "GET" -Path "/api/projects/$projectId/knowledge/overview"
     if ($overview.indexedMaterialCount -lt 1 -or $overview.chunkCount -lt 3) {
         throw "Knowledge chunks were not created from the uploaded material"
@@ -257,6 +288,17 @@ try {
     $search = Invoke-A12Api -Name "M2 knowledge search" -Method "POST" -Path "/api/projects/$projectId/knowledge/search" -Body @{
         query = "Photosynthesis investigation"
         limit = 5
+    }
+
+    $workspaceSearch = Invoke-A12Api -Name "UI V6 knowledge workspace search" -Method "POST" -Path "/api/projects/$projectId/knowledge/workspace-search" -Body @{
+        query = "Photosynthesis investigation"
+        matchMode = "PRECISE"
+        caseSensitive = $false
+        page = 0
+        size = 10
+    }
+    if ($workspaceSearch.totalElements -lt 1 -or $workspaceSearch.hits.Count -lt 1) {
+        throw "Knowledge workspace search did not return a real-source hit"
     }
     if ($search.hits.Count -lt 1 -or [string]::IsNullOrWhiteSpace($search.hits[0].sourceFilename) -or [string]::IsNullOrWhiteSpace($search.hits[0].hitReason)) {
         throw "Knowledge search did not return an explainable real-source hit"
@@ -284,6 +326,21 @@ try {
         throw "Teaching intent update was not persisted"
     }
 
+    $updatedIntentWorkspace = Invoke-A12Api -Name "UI V6 teaching intent workspace update" -Method "PUT" -Path "/api/projects/$projectId/teaching-intents/$intentId/workspace" -Body @{
+        generationGoals = @("KNOWLEDGE_UNDERSTANDING", "CONCEPT_MASTERY", "APPLICATION_ABILITY")
+        primaryBasis = "OFFICIAL_OUTLINE"
+        supplementalBasis = @("LOCAL_KNOWLEDGE", "MATERIAL_EVIDENCE")
+        targetAudience = "Grade 8"
+        totalHours = 16
+        teachingFormat = "MIXED"
+        outputTypes = @("OUTLINE", "PPT", "ACTIVITY", "ASSESSMENT")
+        stylePreference = "Clear inquiry-based technology style"
+        notes = "Use observable evidence and classroom discussion to connect concepts with application."
+    }
+    if ($updatedIntentWorkspace.intent.generationGoals.Count -ne 3 -or $updatedIntentWorkspace.intent.primaryBasis -ne "OFFICIAL_OUTLINE") {
+        throw "Teaching intent workspace update was not persisted"
+    }
+
     $confirmedIntent = Invoke-A12Api -Name "M2 teaching intent confirmation" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/$intentId/confirm"
     if ($confirmedIntent.status -ne "CONFIRMED" -or [string]::IsNullOrWhiteSpace($confirmedIntent.confirmedAt)) {
         throw "Teaching intent confirmation was not persisted"
@@ -291,6 +348,16 @@ try {
     $restoredIntent = Invoke-A12Api -Name "M2 confirmed intent restore" -Method "GET" -Path "/api/projects/$projectId/teaching-intents/latest"
     if ($restoredIntent.status -ne "CONFIRMED" -or $restoredIntent.id -ne $intentId) {
         throw "Confirmed teaching intent was not restored"
+    }
+
+    $intentWorkspace = Invoke-A12Api -Name "UI V6 teaching intent workspace" -Method "GET" -Path "/api/projects/$projectId/teaching-intents/workspace"
+    if ($intentWorkspace.intent.id -ne $intentId -or $intentWorkspace.intent.status -ne "CONFIRMED") {
+        throw "Teaching intent workspace did not restore the confirmed intent"
+    }
+
+    $projectWorkspace = Invoke-A12Api -Name "UI V6 project overview" -Method "GET" -Path "/api/projects/$projectId/workspace-overview"
+    if ($projectWorkspace.project.id -ne $projectId -or $projectWorkspace.timeline.Count -lt 8) {
+        throw "Project workspace overview is incomplete"
     }
 }
 finally {

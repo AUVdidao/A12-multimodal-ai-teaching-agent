@@ -296,6 +296,9 @@ class M2WorkflowControllerTest {
         mockMvc.perform(get("/api/projects/{projectId}/teaching-intents/latest", pipeline.projectId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id", is(firstId.intValue())));
+        mockMvc.perform(get("/api/projects/{projectId}/teaching-intents/workspace", pipeline.projectId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent.totalHours", is(1)));
     }
 
     @Test

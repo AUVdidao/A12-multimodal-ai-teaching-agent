@@ -29,15 +29,32 @@ public class TeachingIntent extends BaseAuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String generationGoal;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "teaching_intent_generation_goals", joinColumns = @JoinColumn(name = "intent_id"))
+    @OrderColumn(name = "sort_order")
+    @Column(name = "goal_value")
+    private List<String> generationGoals = new ArrayList<>();
+
     @Lob
     @Column(columnDefinition = "TEXT")
     private String contentBasis;
+
+    private String primaryBasis;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "teaching_intent_supplemental_basis", joinColumns = @JoinColumn(name = "intent_id"))
+    @OrderColumn(name = "sort_order")
+    @Column(name = "basis_value")
+    private List<String> supplementalBasis = new ArrayList<>();
 
     @Lob
     @Column(columnDefinition = "TEXT")
     private String teachingApproach;
 
     private String interactionMode;
+    private String targetAudience;
+    private Integer totalHours;
+    private String teachingFormat;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "teaching_intent_output_types", joinColumns = @JoinColumn(name = "intent_id"))
@@ -46,6 +63,10 @@ public class TeachingIntent extends BaseAuditableEntity {
     private List<String> outputTypes = new ArrayList<>();
 
     private String stylePreference;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String notes;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "teaching_intent_evidence", joinColumns = @JoinColumn(name = "intent_id"))
@@ -81,12 +102,36 @@ public class TeachingIntent extends BaseAuditableEntity {
         this.generationGoal = generationGoal;
     }
 
+    public List<String> getGenerationGoals() {
+        return List.copyOf(generationGoals);
+    }
+
+    public void setGenerationGoals(List<String> generationGoals) {
+        this.generationGoals = generationGoals == null ? new ArrayList<>() : new ArrayList<>(generationGoals);
+    }
+
     public String getContentBasis() {
         return contentBasis;
     }
 
     public void setContentBasis(String contentBasis) {
         this.contentBasis = contentBasis;
+    }
+
+    public String getPrimaryBasis() {
+        return primaryBasis;
+    }
+
+    public void setPrimaryBasis(String primaryBasis) {
+        this.primaryBasis = primaryBasis;
+    }
+
+    public List<String> getSupplementalBasis() {
+        return List.copyOf(supplementalBasis);
+    }
+
+    public void setSupplementalBasis(List<String> supplementalBasis) {
+        this.supplementalBasis = supplementalBasis == null ? new ArrayList<>() : new ArrayList<>(supplementalBasis);
     }
 
     public String getTeachingApproach() {
@@ -105,6 +150,30 @@ public class TeachingIntent extends BaseAuditableEntity {
         this.interactionMode = interactionMode;
     }
 
+    public String getTargetAudience() {
+        return targetAudience;
+    }
+
+    public void setTargetAudience(String targetAudience) {
+        this.targetAudience = targetAudience;
+    }
+
+    public Integer getTotalHours() {
+        return totalHours;
+    }
+
+    public void setTotalHours(Integer totalHours) {
+        this.totalHours = totalHours;
+    }
+
+    public String getTeachingFormat() {
+        return teachingFormat;
+    }
+
+    public void setTeachingFormat(String teachingFormat) {
+        this.teachingFormat = teachingFormat;
+    }
+
     public List<String> getOutputTypes() {
         return List.copyOf(outputTypes);
     }
@@ -119,6 +188,14 @@ public class TeachingIntent extends BaseAuditableEntity {
 
     public void setStylePreference(String stylePreference) {
         this.stylePreference = stylePreference;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
     }
 
     public List<TeachingIntentEvidence> getEvidenceItems() {

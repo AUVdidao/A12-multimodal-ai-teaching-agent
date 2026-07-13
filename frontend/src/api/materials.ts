@@ -1,7 +1,18 @@
 import { http } from './http';
 import type { ApiResponse } from './health';
 
-export type MaterialFileType = 'PDF' | 'DOCX' | 'PPTX' | 'PNG' | 'JPG' | 'JPEG';
+export type MaterialFileType =
+  | 'PDF'
+  | 'DOCX'
+  | 'PPT'
+  | 'PPTX'
+  | 'XLSX'
+  | 'TXT'
+  | 'MD'
+  | 'PNG'
+  | 'JPG'
+  | 'JPEG'
+  | 'MP4';
 export type MaterialParseStatus = 'NOT_STARTED' | 'PROCESSING' | 'SUCCEEDED' | 'FAILED';
 export type MaterialUsageType =
   | 'TEXTBOOK_BASIS'
@@ -104,6 +115,13 @@ export async function retryMaterialParse(projectId: number, materialId: number) 
   return response.data.data;
 }
 
+export async function indexMaterial(projectId: number, materialId: number) {
+  const response = await http.post<ApiResponse<unknown[]>>(
+    `/api/projects/${projectId}/materials/${materialId}/index`,
+  );
+  return response.data.data;
+}
+
 export async function downloadMaterial(projectId: number, material: MaterialRecord) {
   const response = await http.get(`/api/projects/${projectId}/materials/${material.id}/download`, {
     responseType: 'blob',
@@ -112,6 +130,18 @@ export async function downloadMaterial(projectId: number, material: MaterialReco
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = material.originalFilename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadMaterialById(projectId: number, materialId: number, filename: string) {
+  const response = await http.get(`/api/projects/${projectId}/materials/${materialId}/download`, {
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
 }

@@ -116,6 +116,21 @@ class MaterialControllerTest {
     }
 
     @Test
+    void uploadsUiV6DocumentAndVideoFormats() throws Exception {
+        Project project = createProject(true);
+
+        upload(project.getId(), file(
+                "课堂数据.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                SAMPLE
+        )).andExpect(status().isOk()).andExpect(jsonPath("$.data.fileType", is("XLSX")));
+        upload(project.getId(), file("课程说明.md", "text/markdown", SAMPLE))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.fileType", is("MD")));
+        upload(project.getId(), file("课堂实录.mp4", "video/mp4", SAMPLE))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.fileType", is("MP4")));
+    }
+
+    @Test
     void uploadsPngWithChineseSpacesAndParentheses() throws Exception {
         Project project = createProject(true);
 

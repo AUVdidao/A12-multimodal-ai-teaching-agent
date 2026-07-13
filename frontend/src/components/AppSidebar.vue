@@ -1,92 +1,197 @@
 <template>
   <aside class="app-sidebar">
-    <div class="app-sidebar__brand"><span class="app-sidebar__brand-mark">A12</span><strong>教学智能体</strong></div>
+    <div class="brand">
+      <UiBrandMark :size="64" />
+      <div>
+        <strong>A12 教学智能体</strong>
+        <span>多模态 AI 互动式教学</span>
+      </div>
+    </div>
 
-    <el-menu :default-active="activePath" router class="app-sidebar__menu" @select="emit('navigate')">
-      <li class="app-sidebar__group">工作区</li>
-      <el-menu-item index="/">
-        <el-icon><House /></el-icon><span>教师工作台</span>
-      </el-menu-item>
-      <el-menu-item index="/projects">
-        <el-icon><Folder /></el-icon><span>教学项目</span>
-      </el-menu-item>
-    </el-menu>
+    <nav class="sidebar-mobile-nav" aria-label="移动端主导航">
+      <RouterLink
+        :class="['sidebar-mobile-nav__item', { 'is-active': isNavActive(workspaceItem) }]"
+        :to="workspaceItem.to"
+        aria-label="工作台"
+        title="工作台"
+        @click="selectNavItem(workspaceItem)"
+      >
+        <A12AssetIcon name="home" :size="22" />
+      </RouterLink>
+      <RouterLink
+        :class="['sidebar-mobile-nav__item', { 'is-active': isNavActive(projectsItem) }]"
+        :to="projectsItem.to"
+        aria-label="教学项目"
+        title="教学项目"
+        @click="selectNavItem(projectsItem)"
+      >
+        <A12AssetIcon name="folder" :size="22" />
+      </RouterLink>
+      <span class="sidebar-mobile-nav__status" :title="serviceUp ? '服务正常' : '服务离线'">
+        <i :class="{ 'is-down': !serviceUp }" />
+        <span class="sr-only">{{ serviceUp ? '服务正常' : '服务离线' }}</span>
+      </span>
+    </nav>
 
-    <div class="app-sidebar__footer">
-      <p>V1.0 原型</p>
+    <nav class="sidebar-nav" aria-label="全局导航">
+      <RouterLink
+        class="sidebar-nav__item sidebar-nav__item--workspace"
+        :class="{ 'is-active': isNavActive(workspaceItem) }"
+        :to="workspaceItem.to"
+        :aria-current="isNavActive(workspaceItem) ? 'page' : undefined"
+        @click="selectNavItem(workspaceItem)"
+      >
+        <A12AssetIcon name="home" :size="23" />
+        <span>工作台</span>
+      </RouterLink>
+
+      <template v-for="group in navGroups" :key="group.label">
+        <div class="sidebar-nav__group">{{ group.label }}</div>
+        <component
+          v-for="item in group.items"
+          :key="item.key"
+          :is="item.future ? 'span' : RouterLink"
+          class="sidebar-nav__item"
+          :class="{ 'is-active': isNavActive(item), 'is-disabled': item.future }"
+          :to="item.future ? undefined : item.to"
+          :aria-current="isNavActive(item) ? 'page' : undefined"
+          :aria-disabled="item.future || undefined"
+          :title="item.future ? '后续阶段开放' : undefined"
+          @click="!item.future && selectNavItem(item)"
+        >
+          <A12AssetIcon :name="item.icon" :size="21" />
+          <span>{{ item.label }}</span>
+        </component>
+      </template>
+    </nav>
+
+    <div class="sidebar-status">
+      <span>系统状态</span>
+      <strong><i :class="{ 'is-down': !serviceUp }" /> {{ serviceUp ? '服务正常' : '服务离线' }}</strong>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { Folder, House } from '@element-plus/icons-vue';
-import { computed } from 'vue';
-import { useRoute } from 'vue-router';
+import A12AssetIcon, { type A12AssetIconName } from '@/components/ui/A12AssetIcon.vue';
+import { checkBackendHealth } from '@/api/health';
+import UiBrandMark from '@/components/ui/UiBrandMark.vue';
+import { computed, onMounted, ref } from 'vue';
+import { RouterLink, useRoute } from 'vue-router';
 
-const emit = defineEmits<{ navigate: [] }>();
+interface SidebarNavItem {
+  key: string;
+  label: string;
+  to: string;
+  icon: A12AssetIconName;
+  future?: boolean;
+  activeRouteNames?: string[];
+}
+
+const workspaceItem: SidebarNavItem = {
+  key: 'workspace',
+  label: '工作台',
+  to: '/',
+  icon: 'home',
+  activeRouteNames: ['home'],
+};
+
+const projectsItem: SidebarNavItem = {
+  key: 'projects',
+  label: '教学项目',
+  to: '/projects',
+  icon: 'folder',
+  activeRouteNames: [
+    'projects',
+    'project-create',
+    'project-mode',
+    'project-overview',
+    'project-requirements',
+    'project-summary',
+    'project-materials',
+    'project-knowledge',
+    'project-intent',
+    'project-plan',
+    'project-preview',
+    'project-export',
+  ],
+};
+
+const navGroups: Array<{
+  label: string;
+  items: SidebarNavItem[];
+}> = [
+  {
+    label: '教学项目',
+    items: [
+      projectsItem,
+      {
+        key: 'tasks',
+        label: '我的任务',
+        to: '/projects',
+        icon: 'document',
+        future: true,
+        activeRouteNames: ['project-requirements', 'project-summary'],
+      },
+      { key: 'recent', label: '最近访问', to: '/projects', icon: 'clock', activeRouteNames: ['project-overview'] },
+      { key: 'recycle-bin', label: '回收站', to: '/projects', icon: 'layers', future: true },
+    ],
+  },
+  {
+    label: '资源中心',
+    items: [
+      {
+        key: 'materials',
+        label: '资料库',
+        to: '/projects',
+        icon: 'document',
+        activeRouteNames: ['project-materials'],
+      },
+      {
+        key: 'knowledge',
+        label: '知识库',
+        to: '/projects',
+        icon: 'book',
+        activeRouteNames: ['project-knowledge'],
+      },
+      { key: 'templates', label: '模板中心', to: '/projects', icon: 'layers', future: true },
+    ],
+  },
+  {
+    label: '智能工具',
+    items: [
+      { key: 'ai-assistant', label: 'AI 助手', to: '/projects', icon: 'sparkle', future: true },
+      { key: 'teaching-analysis', label: '教学分析', to: '/projects', icon: 'document', future: true },
+      { key: 'learning-insights', label: '学情洞察', to: '/projects', icon: 'lightbulb', future: true },
+    ],
+  },
+];
+
 const route = useRoute();
-const activePath = computed(() => {
-  if (route.path.startsWith('/projects')) return '/projects';
-  return route.path;
+const storageKey = 'a12-sidebar-selected-item';
+const allNavItems = [workspaceItem, ...navGroups.flatMap((group) => group.items)];
+const selectedKey = ref(typeof window === 'undefined' ? '' : window.sessionStorage.getItem(storageKey) || '');
+const serviceUp = ref(false);
+const selectedItem = computed(() => allNavItems.find((item) => item.key === selectedKey.value));
+
+function selectNavItem(item: SidebarNavItem) {
+  selectedKey.value = item.key;
+  window.sessionStorage.setItem(storageKey, item.key);
+}
+
+function isNavActive(item: SidebarNavItem) {
+  if (selectedItem.value && route.path === selectedItem.value.to) {
+    return selectedItem.value.key === item.key;
+  }
+  return item.activeRouteNames?.includes(String(route.name)) || false;
+}
+
+onMounted(async () => {
+  try {
+    const result = await checkBackendHealth();
+    serviceUp.value = result.data.status === 'UP';
+  } catch {
+    serviceUp.value = false;
+  }
 });
 </script>
-
-<style scoped>
-.app-sidebar {
-  display: flex;
-  min-height: 100%;
-  flex-direction: column;
-  padding: 18px 12px 16px;
-}
-
-.app-sidebar__brand { display: flex; align-items: center; gap: 8px; margin: 0 8px 18px; color: var(--color-text); font-size: 13px; }
-.app-sidebar__brand-mark { display: grid; width: 28px; height: 28px; place-items: center; border-radius: var(--radius-md); background: var(--color-primary); color: #fff; font-size: 10px; font-weight: 800; }
-
-.app-sidebar__menu {
-  flex: 1;
-  border-right: 0;
-}
-
-.app-sidebar__group {
-  margin: 14px 12px 5px;
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 800;
-  list-style: none;
-}
-
-.app-sidebar__menu :deep(.el-menu-item) {
-  height: 42px;
-  margin: 2px 0;
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-}
-
-.app-sidebar__menu :deep(.el-menu-item:hover) {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-.app-sidebar__menu :deep(.el-menu-item.is-active) {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-weight: 700;
-}
-
-.app-sidebar__menu :deep(.el-menu-item.is-disabled) {
-  opacity: 0.58;
-}
-
-.app-sidebar__footer {
-  margin: 16px 4px 0;
-  padding: 12px;
-  border-top: 1px solid var(--color-border);
-}
-
-.app-sidebar__footer p {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 10px;
-  line-height: 1.5;
-}
-</style>

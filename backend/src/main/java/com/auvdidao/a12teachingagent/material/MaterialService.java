@@ -38,13 +38,18 @@ import java.util.Set;
 @Service
 public class MaterialService {
 
-    private static final Map<String, FileRule> FILE_RULES = Map.of(
-            "pdf", new FileRule(MaterialFileType.PDF, Set.of("application/pdf")),
-            "docx", new FileRule(MaterialFileType.DOCX, Set.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
-            "pptx", new FileRule(MaterialFileType.PPTX, Set.of("application/vnd.openxmlformats-officedocument.presentationml.presentation")),
-            "png", new FileRule(MaterialFileType.PNG, Set.of("image/png")),
-            "jpg", new FileRule(MaterialFileType.JPG, Set.of("image/jpeg", "image/jpg")),
-            "jpeg", new FileRule(MaterialFileType.JPEG, Set.of("image/jpeg", "image/jpg"))
+    private static final Map<String, FileRule> FILE_RULES = Map.ofEntries(
+            Map.entry("pdf", new FileRule(MaterialFileType.PDF, Set.of("application/pdf"))),
+            Map.entry("docx", new FileRule(MaterialFileType.DOCX, Set.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))),
+            Map.entry("pptx", new FileRule(MaterialFileType.PPTX, Set.of("application/vnd.openxmlformats-officedocument.presentationml.presentation"))),
+            Map.entry("ppt", new FileRule(MaterialFileType.PPT, Set.of("application/vnd.ms-powerpoint"))),
+            Map.entry("xlsx", new FileRule(MaterialFileType.XLSX, Set.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))),
+            Map.entry("txt", new FileRule(MaterialFileType.TXT, Set.of("text/plain", "application/octet-stream"))),
+            Map.entry("md", new FileRule(MaterialFileType.MD, Set.of("text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"))),
+            Map.entry("mp4", new FileRule(MaterialFileType.MP4, Set.of("video/mp4", "application/mp4"))),
+            Map.entry("png", new FileRule(MaterialFileType.PNG, Set.of("image/png"))),
+            Map.entry("jpg", new FileRule(MaterialFileType.JPG, Set.of("image/jpeg", "image/jpg"))),
+            Map.entry("jpeg", new FileRule(MaterialFileType.JPEG, Set.of("image/jpeg", "image/jpg")))
     );
 
     private final ProjectRepository projectRepository;
@@ -225,7 +230,8 @@ public class MaterialService {
             throw new BadRequestException("The uploaded file must not be empty");
         }
         if (file.getSize() > storageProperties.getMaxFileSize()) {
-            throw new PayloadTooLargeException("The uploaded file exceeds the 20 MB prototype limit");
+            long maxSizeMb = storageProperties.getMaxFileSize() / (1024 * 1024);
+            throw new PayloadTooLargeException("The uploaded file exceeds the " + maxSizeMb + " MB limit");
         }
 
         String original = sanitizeOriginalFilename(file.getOriginalFilename());
