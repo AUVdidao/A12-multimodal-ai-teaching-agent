@@ -11,25 +11,35 @@
       <div>
         <div class="project-context__eyebrow">{{ project.courseName }} / {{ project.chapterTitle }}</div>
         <h2>{{ project.projectName }}</h2>
-        <p>{{ project.targetStudents }} · {{ project.lessonDuration }} · {{ project.mode }}</p>
+        <p>{{ project.targetStudents || '授课对象待补充' }} · {{ project.lessonDurationLabel || '课时待补充' }} · {{ modeLabel }}</p>
       </div>
     </div>
     <div class="project-context__meta">
-      <UiStatusPill :label="stageLabel(project.status)" tone="green" dot />
-      <span>更新于 {{ project.updatedAt }}</span>
+      <UiStatusPill :label="project.stageLabel" :tone="stageTone(project.stage)" dot />
+      <span>更新于 {{ formatRelativeTime(project.updatedAt) }}</span>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { stageLabel, type DemoProject } from '@/mock/demo';
+import type { ProjectBrief } from '@/api/workspace';
+import { formatRelativeTime, stageTone } from '@/utils/presentation';
 import { ArrowLeft, FolderOpened } from '@element-plus/icons-vue';
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 
-defineProps<{
-  project: DemoProject;
+const props = defineProps<{
+  project: ProjectBrief;
 }>();
 
 const router = useRouter();
+const modeLabel = computed(() => {
+  const labels: Record<string, string> = {
+    STANDARD: '标准模式',
+    QUALITY: '高质量模式',
+    ECONOMY: '经济模式',
+  };
+  return labels[props.project.modelMode] || props.project.modelMode || '标准模式';
+});
 </script>

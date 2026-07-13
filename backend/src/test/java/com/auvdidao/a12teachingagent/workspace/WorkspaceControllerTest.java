@@ -203,6 +203,23 @@ class WorkspaceControllerTest {
     }
 
     @Test
+    void materialWorkspaceReportsWhetherSummaryGateIsSatisfied() throws Exception {
+        Project project = createProject("上传策略状态");
+
+        mockMvc.perform(get("/api/projects/{projectId}/materials/workspace", project.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.uploadPolicy.requiresConfirmedSummary", is(true)))
+                .andExpect(jsonPath("$.data.uploadPolicy.uploadEnabled", is(false)));
+
+        RequirementInput requirement = createRequirement(project, true);
+        createSummary(project, requirement, true);
+
+        mockMvc.perform(get("/api/projects/{projectId}/materials/workspace", project.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.uploadPolicy.uploadEnabled", is(true)));
+    }
+
+    @Test
     void materialAndKnowledgeWorkspacesExposeRealParseAndSourceData() throws Exception {
         Project project = createProject("机器学习中的过拟合");
         RequirementInput requirement = createRequirement(project, true);
@@ -214,6 +231,7 @@ class WorkspaceControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.uploadPolicy.maxFileSizeMb", is(20)))
                 .andExpect(jsonPath("$.data.uploadPolicy.supportedExtensions", hasItem("mp4")))
+                .andExpect(jsonPath("$.data.uploadPolicy.uploadEnabled", is(true)))
                 .andExpect(jsonPath("$.data.statistics.total", is(1)))
                 .andExpect(jsonPath("$.data.statistics.parsed", is(1)))
                 .andExpect(jsonPath("$.data.statistics.indexed", is(1)))

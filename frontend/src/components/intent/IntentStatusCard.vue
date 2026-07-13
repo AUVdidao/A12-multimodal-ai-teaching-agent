@@ -4,26 +4,41 @@
     <div class="intent-status-card__notice">
       <span class="intent-status-card__hourglass" aria-hidden="true" />
       <div>
-        <strong>待确认</strong>
-        <p>请确认以上信息以继续生成教学内容</p>
+        <strong>{{ statusLabel }}</strong>
+        <p>{{ description }}</p>
       </div>
     </div>
     <dl>
       <div>
         <dt>创建时间</dt>
-        <dd>2025-05-27 15:24</dd>
-      </div>
-      <div>
-        <dt>创建人</dt>
-        <dd>张老师</dd>
+        <dd>{{ formatFullDateTime(createdAt) }}</dd>
       </div>
       <div>
         <dt>最后更新</dt>
-        <dd>2025-05-27 15:24</dd>
+        <dd>{{ formatFullDateTime(updatedAt) }}</dd>
       </div>
     </dl>
   </section>
 </template>
+
+<script setup lang="ts">
+import { formatFullDateTime } from '@/utils/presentation';
+
+withDefaults(
+  defineProps<{
+    statusLabel?: string;
+    description?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }>(),
+  {
+    statusLabel: '待生成',
+    description: '完成前置步骤后即可生成并确认教学意图',
+    createdAt: '',
+    updatedAt: '',
+  },
+);
+</script>
 
 <style scoped>
 .intent-status-card {

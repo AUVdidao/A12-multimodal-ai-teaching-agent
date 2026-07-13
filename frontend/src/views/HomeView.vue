@@ -2,8 +2,8 @@
   <section class="page">
     <header class="page-hero">
       <div>
-        <h2>下午好，张老师</h2>
-        <p>今天是 2026年7月13日，优先处理仍处于需求澄清和资料解析阶段的教学项目。</p>
+        <h2>{{ greeting }}，教师</h2>
+        <p>今天是 {{ todayLabel }}，系统已根据真实项目进度整理下一步工作。</p>
       </div>
       <div class="page-actions">
         <el-button @click="checkHealth" :loading="checking">检查服务</el-button>
@@ -14,8 +14,8 @@
     <div class="grid cols-4 dashboard-metrics">
       <UiMetricCard
         label="教学项目"
-        :value="projects.length"
-        :note="`进行中 ${activeCount} · 已定稿 ${finishedCount}`"
+        :value="metrics.projectCount"
+        :note="`进行中 ${metrics.activeProjectCount} · 已定稿 ${finishedCount}`"
         tone="purple"
         icon="folder"
         variant="shortcut"
@@ -24,33 +24,33 @@
       />
       <UiMetricCard
         label="待完成任务"
-        :value="pendingTaskCount"
-        note="未完成任务实时统计"
+        :value="metrics.pendingTaskCount"
+        note="按项目当前阶段自动派生"
         tone="blue"
         icon="document"
         variant="shortcut"
         clickable
-        @click="router.push('/projects/1/requirements')"
+        @click="openFirstTask"
       />
       <UiMetricCard
         label="资料总数"
-        value="6"
-        note="前端演示数据，后续接资料接口"
+        :value="metrics.materialCount"
+        note="当前项目已上传资料"
         tone="green"
         icon="book"
         variant="shortcut"
         clickable
-        @click="router.push('/projects/1/materials')"
+        @click="openFirstProject('materials')"
       />
       <UiMetricCard
         label="教学意图"
-        value="1"
-        note="已确认 1 个项目"
+        :value="metrics.confirmedIntentCount"
+        note="已确认教学意图"
         tone="orange"
         icon="lightbulb"
         variant="shortcut"
         clickable
-        @click="router.push('/projects/1/intent')"
+        @click="openFirstProject('intent')"
       />
     </div>
 
@@ -83,27 +83,27 @@
             @keydown.space.prevent="openProject(project)"
           >
             <div class="project-list__identity" role="cell">
-              <UiSubjectIcon :icon="projectPresentation[project.id].icon" :tone="projectPresentation[project.id].tone" />
+              <UiSubjectIcon :icon="projectIcon(project.id)" :tone="projectTone(project.id)" />
               <div>
                 <strong>{{ project.projectName }}</strong>
-                <span>{{ projectPresentation[project.id].subtitle }}</span>
+                <span>{{ project.subtitle || project.chapterTitle }}</span>
               </div>
             </div>
 
             <div class="project-list__progress" role="cell" :aria-label="`进度 ${project.progress}%`">
               <span class="project-list__track">
-                <i :class="projectPresentation[project.id].tone" :style="{ width: `${project.progress}%` }" />
+                <i :class="projectTone(project.id)" :style="{ width: `${project.progress}%` }" />
               </span>
               <strong>{{ project.progress }}%</strong>
             </div>
 
             <div class="project-list__next" role="cell">
-              <i :class="projectPresentation[project.id].tone" aria-hidden="true" />
-              <span>{{ project.nextTask }}</span>
+              <i :class="projectTone(project.id)" aria-hidden="true" />
+              <span>{{ project.nextAction }}</span>
             </div>
 
             <time class="project-list__updated" role="cell" :datetime="project.updatedAt">
-              {{ projectPresentation[project.id].updatedLabel }}
+              {{ formatRelativeTime(project.updatedAt) }}
             </time>
 
             <div class="project-list__menu" role="cell" @click.stop @keydown.stop>
@@ -127,31 +127,33 @@
             </div>
           </div>
         </div>
+        <el-empty v-if="!loading && projects.length === 0" description="暂无进行中的教学项目" :image-size="72" />
       </section>
 
       <aside class="grid">
         <section class="panel">
           <div class="panel__header">
             <h3>今日待办</h3>
-            <el-button text type="primary" @click="router.push('/projects/1/requirements')">进入任务</el-button>
+            <el-button text type="primary" :disabled="pendingTasks.length === 0" @click="openFirstTask">进入任务</el-button>
           </div>
-          <div
-            v-for="task in pendingTasks"
-            :key="task.name"
-            :class="['today-task-row', { 'is-completed': task.completed }]"
+          <button
+            v-for="task in visiblePendingTasks"
+            :key="task.code"
+            class="today-task-row today-task-row--button"
+            type="button"
+            @click="router.push(task.actionPath)"
           >
-            <el-checkbox v-model="task.completed" class="today-task-checkbox" @change="persistTaskCompletion">
-              {{ task.name }}
-            </el-checkbox>
-            <span class="tag-soft" :class="task.type">{{ task.priority }}</span>
-          </div>
+            <span>{{ task.title }}</span>
+            <span class="tag-soft" :class="priorityClass(task.priority)">{{ priorityLabel(task.priority) }}</span>
+          </button>
+          <el-empty v-if="!loading && pendingTasks.length === 0" description="当前没有待办" :image-size="58" />
         </section>
 
         <UiAiSuggestionCard
-          title="优先完善《人工智能基础概念与应用》的教学需求"
-          description="需求澄清完成后，再进入资料解析与知识检索。"
-          action-label="去完善需求"
-          @action="router.push('/projects/1/requirements')"
+          :title="primarySuggestion?.title || '当前项目进展顺利'"
+          :description="primarySuggestion?.description || '创建新项目后，系统会在这里给出下一步建议。'"
+          :action-label="primarySuggestion ? '立即处理' : '新建项目'"
+          @action="router.push(primarySuggestion?.actionPath || '/projects/new')"
         />
       </aside>
     </div>
@@ -162,31 +164,43 @@
 
 <script setup lang="ts">
 import { checkBackendHealth } from '@/api/health';
+import { getTeacherWorkspace, type TeacherWorkspace } from '@/api/workspace';
 import UiAiSuggestionCard from '@/components/ui/UiAiSuggestionCard.vue';
 import UiMetricCard from '@/components/ui/UiMetricCard.vue';
 import UiSubjectIcon from '@/components/ui/UiSubjectIcon.vue';
-import { projectPresentation } from '@/mock/projectPresentation';
-import { demoProjects } from '@/mock/demo';
+import { formatRelativeTime, projectIcon, projectTone } from '@/utils/presentation';
 import { MoreFilled } from '@element-plus/icons-vue';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
-const projects = demoProjects;
+const workspace = ref<TeacherWorkspace>();
+const loading = ref(true);
 const checking = ref(false);
 const healthMessage = ref('');
 const healthType = ref<'success' | 'warning'>('success');
 
-const activeCount = computed(() => projects.filter((project) => project.status !== 'DRAFT_READY').length);
-const finishedCount = computed(() => projects.filter((project) => project.status === 'DRAFT_READY').length);
-const taskStorageKey = 'a12-home-completed-tasks';
-const completedTaskNames = readCompletedTaskNames();
-const pendingTasks = ref([
-  { name: '完善《人工智能基础概念与应用》的教学需求', priority: '高', type: '', completed: completedTaskNames.has('完善《人工智能基础概念与应用》的教学需求') },
-  { name: '上传《细胞的结构》课堂实录视频', priority: '中', type: 'warning', completed: completedTaskNames.has('上传《细胞的结构》课堂实录视频') },
-  { name: '审核教学意图证据来源', priority: '低', type: 'info', completed: completedTaskNames.has('审核教学意图证据来源') },
-]);
-const pendingTaskCount = computed(() => pendingTasks.value.filter((task) => !task.completed).length);
+const projects = computed(() => workspace.value?.continueProjects || []);
+const pendingTasks = computed(() => workspace.value?.pendingTasks || []);
+const visiblePendingTasks = computed(() => pendingTasks.value.slice(0, 5));
+const metrics = computed(() => workspace.value?.metrics || {
+  projectCount: 0,
+  activeProjectCount: 0,
+  pendingTaskCount: 0,
+  materialCount: 0,
+  confirmedIntentCount: 0,
+  generatedArtifactCount: 0,
+});
+const finishedCount = computed(() => Math.max(0, metrics.value.projectCount - metrics.value.activeProjectCount));
+const primarySuggestion = computed(() => workspace.value?.suggestions?.[0]);
+const todayLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
+const greeting = computed(() => {
+  const hour = new Date().getHours();
+  if (hour < 11) return '上午好';
+  if (hour < 14) return '中午好';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+});
 
 function openProject(row: { id: number }) {
   router.push(`/projects/${row.id}`);
@@ -201,19 +215,24 @@ function handleProjectCommand(command: string, projectId: number) {
   router.push(routes[command] || routes.overview);
 }
 
-function readCompletedTaskNames() {
-  if (typeof window === 'undefined') return new Set<string>();
-  try {
-    const value = JSON.parse(window.sessionStorage.getItem(taskStorageKey) || '[]');
-    return new Set<string>(Array.isArray(value) ? value : []);
-  } catch {
-    return new Set<string>();
-  }
+function openFirstTask() {
+  router.push(pendingTasks.value[0]?.actionPath || '/projects');
 }
 
-function persistTaskCompletion() {
-  const completed = pendingTasks.value.filter((task) => task.completed).map((task) => task.name);
-  window.sessionStorage.setItem(taskStorageKey, JSON.stringify(completed));
+function openFirstProject(section: 'materials' | 'intent') {
+  const project = projects.value[0];
+  router.push(project ? `/projects/${project.id}/${section}` : '/projects');
+}
+
+function priorityLabel(priority: string) {
+  const labels: Record<string, string> = { HIGH: '高', MEDIUM: '中', LOW: '低' };
+  return labels[priority] || priority;
+}
+
+function priorityClass(priority: string) {
+  if (priority === 'MEDIUM') return 'warning';
+  if (priority === 'LOW') return 'info';
+  return '';
 }
 
 async function checkHealth() {
@@ -225,11 +244,25 @@ async function checkHealth() {
     healthMessage.value = `后端状态：${result.data.status} / 服务：${result.data.service}`;
   } catch (error) {
     healthType.value = 'warning';
-    healthMessage.value = '当前以前端演示数据运行，后端合并后将接入真实健康检查。';
+    healthMessage.value = '后端服务暂不可用，请确认 Docker 或本地服务已启动。';
   } finally {
     checking.value = false;
   }
 }
+
+async function loadWorkspace() {
+  loading.value = true;
+  try {
+    workspace.value = await getTeacherWorkspace();
+  } catch {
+    healthType.value = 'warning';
+    healthMessage.value = '工作台数据加载失败，请检查后端服务。';
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(loadWorkspace);
 </script>
 
 <style scoped>
@@ -437,6 +470,22 @@ async function checkHealth() {
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--ui-border);
+}
+
+.today-task-row--button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+  background: transparent;
+  color: var(--ui-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.today-task-row--button:hover {
+  color: var(--ui-primary);
 }
 
 .today-task-row:last-child {

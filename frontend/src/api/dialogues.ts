@@ -42,3 +42,8 @@ export async function listSessionDialogues(sessionId: string) {
   const response = await http.get<ApiResponse<DialogueMessage[]>>(`/api/dialogues/${sessionId}`);
   return response.data.data;
 }
+
+export async function clearProjectDialogues(projectId: number | string) {
+  const response = await http.delete<ApiResponse<number>>(`/api/projects/${projectId}/dialogues`);
+  return response.data.data;
+}

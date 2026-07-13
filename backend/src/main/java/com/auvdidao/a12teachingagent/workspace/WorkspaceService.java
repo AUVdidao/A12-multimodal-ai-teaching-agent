@@ -309,7 +309,8 @@ public class WorkspaceService {
                 storageProperties.getMaxFileSize(),
                 storageProperties.getMaxFileSize() / (1024 * 1024),
                 SUPPORTED_EXTENSIONS,
-                true
+                true,
+                value.summary() != null && value.summary().getStatus() == RequirementSummaryStatus.CONFIRMED
         );
         return new MaterialWorkspaceResponse(projectBrief(value), policy, purposeOptions(), statistics, items);
     }
@@ -543,7 +544,7 @@ public class WorkspaceService {
                     isConfirmed(value.intent()) ? "INTENT_CONFIRMED" : "INTENT_DRAFTED",
                     project.getId(),
                     isConfirmed(value.intent()) ? "教学意图已确认" : "教学意图草稿已生成",
-                    abbreviate(value.intent().getGenerationGoal(), 80),
+                    intentGoalDescription(value.intent()),
                     firstNonNull(value.intent().getConfirmedAt(), value.intent().getUpdatedAt())
             ));
         }
@@ -891,6 +892,18 @@ public class WorkspaceService {
     private static String buildContentBasis(String primaryBasis, List<String> supplementalBasis) {
         if (supplementalBasis.isEmpty()) return primaryBasis;
         return primaryBasis + "；补充依据：" + String.join("、", supplementalBasis);
+    }
+
+    private static String intentGoalDescription(TeachingIntent intent) {
+        List<String> labels = intent.getGenerationGoals().stream()
+                .map(code -> GENERATION_GOAL_OPTIONS.stream()
+                        .filter(option -> option.code().equals(code))
+                        .map(IntentOption::label)
+                        .findFirst()
+                        .orElse(code))
+                .toList();
+        String value = labels.isEmpty() ? intent.getGenerationGoal() : String.join("；", labels);
+        return abbreviate(value, 80);
     }
 
     private static List<String> normalizeValues(List<String> values) {

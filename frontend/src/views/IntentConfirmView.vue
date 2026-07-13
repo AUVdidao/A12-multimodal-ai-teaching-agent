@@ -1,8 +1,8 @@
 <template>
-  <section class="intent-page" data-testid="teaching-intent-page">
+  <section class="intent-page" data-testid="teaching-intent-page" v-loading="loading">
     <IntentWorkflowStepper />
 
-    <div class="intent-page__content">
+    <div v-if="workspace" class="intent-page__content">
       <form class="intent-page__form" @submit.prevent="confirmIntent">
         <section class="intent-project-card">
           <span class="intent-project-card__icon">
@@ -11,13 +11,13 @@
           <div>
             <small>项目名称</small>
             <div class="intent-project-card__title">
-              <h2>人工智能基础概念与应用</h2>
+              <h2>{{ workspace.project.projectName }}</h2>
               <button type="button" aria-label="编辑项目名称">
                 <A12AssetIcon name="pencil" :size="20" />
               </button>
             </div>
           </div>
-          <p>面向大学本科一年级学生，理解人工智能的基本概念、发展历程与典型应用，建立初步的 AI 素养。</p>
+          <p>{{ workspace.project.subtitle || `${workspace.project.courseName} / ${workspace.project.chapterTitle}` }}</p>
         </section>
 
         <IntentFormSection
@@ -29,10 +29,10 @@
           <div class="intent-tag-grid">
             <IntentCheckTag
               v-for="goal in goalOptions"
-              :key="goal"
-              :label="goal"
-              :selected="goals.includes(goal)"
-              @toggle="toggleGoal(goal)"
+              :key="goal.code"
+              :label="goal.label"
+              :selected="goals.includes(goal.code)"
+              @toggle="toggleGoal(goal.code)"
             />
           </div>
         </IntentFormSection>
@@ -47,7 +47,7 @@
           <div class="intent-basis">
             <label class="intent-select intent-select--wide">
               <select v-model="basis" aria-label="教学内容的主要来源与依据">
-                <option v-for="item in basisOptions" :key="item.value" :value="item.value">
+                <option v-for="item in basisOptions" :key="item.code" :value="item.code">
                   {{ item.label }}
                 </option>
               </select>
@@ -56,7 +56,7 @@
             <small>补充依据（可选）</small>
             <div class="intent-basis__tags">
               <span v-for="(item, index) in supplementalBasis" :key="item">
-                {{ item }}
+                {{ optionLabel(item, basisOptions) }}
                 <button type="button" :aria-label="`删除${item}`" @click="removeBasis(index)">×</button>
               </span>
               <button class="intent-basis__add" type="button" @click="addBasis">
@@ -77,29 +77,20 @@
             <label>
               <span>面向对象</span>
               <span class="intent-select">
-                <select v-model="audience" aria-label="面向对象">
-                  <option value="u1">大学本科一年级</option>
-                  <option value="u2">大学本科二年级</option>
-                </select>
-                <i aria-hidden="true" />
+                <input v-model="audience" aria-label="面向对象" placeholder="例如：大学本科一年级" />
               </span>
             </label>
             <label>
               <span>总学时</span>
               <span class="intent-select">
-                <select v-model="hours" aria-label="总学时">
-                  <option value="16">16 学时</option>
-                  <option value="20">20 学时</option>
-                </select>
-                <i aria-hidden="true" />
+                <input v-model.number="hours" type="number" min="1" max="1000" aria-label="总学时" />
               </span>
             </label>
             <label>
               <span>教学形式</span>
               <span class="intent-select">
                 <select v-model="format" aria-label="教学形式">
-                  <option value="mix">线上线下混合式教学</option>
-                  <option value="offline">线下课堂教学</option>
+                  <option v-for="item in formatOptions" :key="item.code" :value="item.code">{{ item.label }}</option>
                 </select>
                 <i aria-hidden="true" />
               </span>
@@ -116,10 +107,10 @@
           <div class="intent-tag-grid">
             <IntentCheckTag
               v-for="output in outputOptions"
-              :key="output"
-              :label="output"
-              :selected="outputs.includes(output)"
-              @toggle="toggleOutput(output)"
+              :key="output.code"
+              :label="output.label"
+              :selected="outputs.includes(output.code)"
+              @toggle="toggleOutput(output.code)"
             />
           </div>
         </IntentFormSection>
@@ -143,19 +134,28 @@
         </IntentFormSection>
 
         <div class="intent-page__actions">
-          <button class="intent-button intent-button--secondary" type="button" @click="saveDraft">
+          <button v-if="workspace.intent" class="intent-button intent-button--secondary" type="button" :disabled="saving" @click="saveDraft">
             <A12AssetIcon name="document" :size="20" />
             保存草稿
           </button>
-          <button class="intent-button intent-button--primary" type="submit">
+          <button v-if="workspace.intent" class="intent-button intent-button--primary" type="submit" :disabled="!workspace.canConfirm || confirming">
             <A12AssetIcon name="check-circle" :size="20" />
             确认教学意图
+          </button>
+          <button v-else class="intent-button intent-button--primary" type="button" :disabled="!workspace.canGenerate || generating" @click="generateIntent">
+            <A12AssetIcon name="sparkle" :size="20" />
+            生成教学意图
           </button>
         </div>
       </form>
 
       <aside class="intent-page__aside">
-        <IntentStatusCard />
+        <IntentStatusCard
+          :status-label="statusLabel"
+          :description="statusDescription"
+          :created-at="workspace.intent?.createdAt"
+          :updated-at="workspace.intent?.updatedAt"
+        />
         <IntentEvidencePanel
           :items="evidence"
           @expand="showFeedback('已展开全部依据证据')"
@@ -171,111 +171,181 @@
 </template>
 
 <script setup lang="ts">
+import { confirmTeachingIntent, generateTeachingIntent } from '@/api/teachingIntents';
+import {
+  getTeachingIntentWorkspace,
+  updateTeachingIntentWorkspace,
+  type TeachingIntentWorkspace,
+} from '@/api/workspace';
 import IntentCheckTag from '@/components/intent/IntentCheckTag.vue';
 import IntentEvidencePanel from '@/components/intent/IntentEvidencePanel.vue';
 import IntentFormSection from '@/components/intent/IntentFormSection.vue';
 import IntentStatusCard from '@/components/intent/IntentStatusCard.vue';
 import IntentWorkflowStepper from '@/components/intent/IntentWorkflowStepper.vue';
 import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
-import { onBeforeUnmount, ref } from 'vue';
+import { ElMessage } from 'element-plus';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 const route = useRoute();
 const router = useRouter();
-const projectId = String(route.params.projectId || '1');
-
-const goalOptions = ['知识理解', '概念掌握', '应用能力', '思维提升', '价值塑造'];
-const outputOptions = ['教学大纲', '教学PPT', '课堂活动', '习题与测评', '案例库', '参考资料'];
-const goals = ref(['知识理解', '概念掌握', '应用能力']);
-const outputs = ref(['教学大纲', '教学PPT', '课堂活动', '习题与测评', '案例库']);
-const basis = ref('outline');
-const basisOptions = [
-  {
-    value: 'outline',
-    label: '教育部高等学校人工智能专业教学指导分委员会《人工智能导论》课程大纲（2023）',
-  },
-  { value: 'textbook', label: '《人工智能基础（第3版）》教材解析' },
-];
-const supplementalBasis = ref([
-  '中国新一代人工智能发展规划（2017）',
-  '斯坦福大学《AI 100》课程大纲',
-]);
-const audience = ref('u1');
-const hours = ref('16');
-const format = ref('mix');
+const projectId = computed(() => Number(route.params.projectId));
+const workspace = ref<TeachingIntentWorkspace>();
+const loading = ref(true);
+const saving = ref(false);
+const confirming = ref(false);
+const generating = ref(false);
+const goals = ref<string[]>([]);
+const outputs = ref<string[]>([]);
+const basis = ref('');
+const supplementalBasis = ref<string[]>([]);
+const audience = ref('');
+const hours = ref<number>();
+const format = ref('');
+const stylePreference = ref('');
 const notes = ref('');
 const feedback = ref('');
 let feedbackTimer: number | undefined;
 
-const evidence = [
-  {
-    title: '《人工智能导论》课程大纲（2023）',
-    type: '官方文件',
-    source: '教育部高等学校人工智能专业教学指导分委员会',
-    reason: '明确了人工智能基础概念、发展历程与应用场景为课程核心内容，与项目目标高度一致。',
-    fragment: '课程目标：使学生理解人工智能的基本概念、原理与方法，了...',
-    tone: 'purple' as const,
-  },
-  {
-    title: '中国新一代人工智能发展规划（2017）',
-    type: '政策文件',
-    source: '国务院',
-    reason: '提供了人工智能发展的国家战略背景与应用方向，支撑课程的价值塑造目标。',
-    fragment: '到2030年，我国人工智能理论、技术与应用总体达到世界领先...',
-    tone: 'blue' as const,
-  },
-  {
-    title: '斯坦福大学《AI 100》课程大纲',
-    type: '课程资料',
-    source: 'Stanford University',
-    reason: '国际知名高校通识课程，内容体系完整，可作为教学内容组织与案例设计的参考。',
-    fragment: 'This course provides a broad introduction to artificial intelligenc...',
-    tone: 'green' as const,
-  },
-];
+const goalOptions = computed(() => workspace.value?.options.generationGoals || []);
+const outputOptions = computed(() => workspace.value?.options.outputTypes || []);
+const basisOptions = computed(() => workspace.value?.options.contentBases || []);
+const formatOptions = computed(() => workspace.value?.options.teachingFormats || []);
+const statusLabel = computed(() => {
+  if (!workspace.value?.intent) return '待生成';
+  return workspace.value.intent.status === 'CONFIRMED' ? '已确认' : '待确认';
+});
+const statusDescription = computed(() => {
+  if (!workspace.value?.intent) return workspace.value?.canGenerate ? '前置条件已满足，可以生成教学意图' : '请先确认需求摘要并建立知识证据';
+  return workspace.value.intent.status === 'CONFIRMED' ? '教学意图已锁定，可进入内容生成阶段' : '请确认以上信息以继续生成教学内容';
+});
+const evidence = computed(() => (workspace.value?.intent?.evidenceItems || []).map((item, index) => ({
+  title: item.sourceFilename,
+  type: purposeLabel(item.usageTypes[0]),
+  source: item.sourceFilename,
+  reason: item.hitReason,
+  fragment: item.contentExcerpt,
+  tone: (['purple', 'blue', 'green'] as const)[index % 3],
+})));
+
+function purposeLabel(code?: string) {
+  const labels: Record<string, string> = {
+    TEXTBOOK_BASIS: '教材依据',
+    CASE_MATERIAL: '案例素材',
+    EXERCISE_SOURCE: '习题来源',
+    KNOWLEDGE_SUPPLEMENT: '知识补充',
+    IMAGE_ASSET: '图片素材',
+  };
+  return code ? labels[code] || code : '知识证据';
+}
+
+function syncForm() {
+  const intent = workspace.value?.intent;
+  goals.value = [...(intent?.generationGoals || [])];
+  outputs.value = [...(intent?.outputTypes || [])];
+  basis.value = intent?.primaryBasis || basisOptions.value[0]?.code || '';
+  supplementalBasis.value = [...(intent?.supplementalBasis || [])];
+  audience.value = intent?.targetAudience || workspace.value?.project.targetStudents || '';
+  hours.value = intent?.totalHours || Math.max(1, Math.ceil((workspace.value?.project.lessonDurationMinutes || 45) / 45));
+  format.value = intent?.teachingFormat || formatOptions.value[0]?.code || '';
+  stylePreference.value = intent?.stylePreference || '';
+  notes.value = intent?.notes || '';
+}
+
+async function loadWorkspace() {
+  loading.value = true;
+  try {
+    workspace.value = await getTeachingIntentWorkspace(projectId.value);
+    syncForm();
+  } finally {
+    loading.value = false;
+  }
+}
 
 function toggleGoal(value: string) {
-  goals.value = goals.value.includes(value)
-    ? goals.value.filter((item) => item !== value)
-    : [...goals.value, value];
+  goals.value = goals.value.includes(value) ? goals.value.filter((item) => item !== value) : [...goals.value, value];
 }
 
 function toggleOutput(value: string) {
-  outputs.value = outputs.value.includes(value)
-    ? outputs.value.filter((item) => item !== value)
-    : [...outputs.value, value];
+  outputs.value = outputs.value.includes(value) ? outputs.value.filter((item) => item !== value) : [...outputs.value, value];
 }
 
 function removeBasis(index: number) {
   supplementalBasis.value.splice(index, 1);
 }
 
+function optionLabel(code: string, options: Array<{ code: string; label: string }>) {
+  return options.find((item) => item.code === code)?.label || code;
+}
+
 function addBasis() {
-  const mockBasis = '人工智能通识教育教学指南';
-  if (!supplementalBasis.value.includes(mockBasis)) {
-    supplementalBasis.value.push(mockBasis);
-  }
+  const candidate = window.prompt('请输入补充依据名称');
+  if (candidate?.trim() && !supplementalBasis.value.includes(candidate.trim())) supplementalBasis.value.push(candidate.trim());
 }
 
 function showFeedback(message: string) {
   feedback.value = message;
   window.clearTimeout(feedbackTimer);
-  feedbackTimer = window.setTimeout(() => {
-    feedback.value = '';
-  }, 1800);
+  feedbackTimer = window.setTimeout(() => { feedback.value = ''; }, 1800);
 }
 
-function saveDraft() {
-  showFeedback('草稿已保存');
+function validate() {
+  if (!goals.value.length || !basis.value.trim() || !audience.value.trim() || !format.value.trim() || !outputs.value.length) {
+    ElMessage.warning('请完整填写生成目标、内容依据、授课对象、教学形式和输出类型');
+    return false;
+  }
+  return true;
 }
 
-function confirmIntent() {
-  showFeedback('教学意图已确认');
-  window.setTimeout(() => {
-    router.push(`/projects/${projectId}/plan`);
-  }, 300);
+async function saveDraft() {
+  const intentId = workspace.value?.intent?.id;
+  if (!intentId || !validate()) return;
+  saving.value = true;
+  try {
+    workspace.value = await updateTeachingIntentWorkspace(projectId.value, intentId, {
+      generationGoals: [...goals.value],
+      primaryBasis: basis.value,
+      supplementalBasis: [...supplementalBasis.value],
+      targetAudience: audience.value,
+      totalHours: hours.value,
+      teachingFormat: format.value,
+      outputTypes: [...outputs.value],
+      stylePreference: stylePreference.value,
+      notes: notes.value,
+    });
+    syncForm();
+    showFeedback('草稿已保存');
+  } finally {
+    saving.value = false;
+  }
 }
 
+async function generateIntent() {
+  generating.value = true;
+  try {
+    await generateTeachingIntent(projectId.value);
+    await loadWorkspace();
+    ElMessage.success('教学意图已生成');
+  } finally {
+    generating.value = false;
+  }
+}
+
+async function confirmIntent() {
+  const intentId = workspace.value?.intent?.id;
+  if (!intentId || !validate()) return;
+  confirming.value = true;
+  try {
+    await saveDraft();
+    await confirmTeachingIntent(projectId.value, intentId);
+    await loadWorkspace();
+    showFeedback('教学意图已确认');
+  } finally {
+    confirming.value = false;
+  }
+}
+
+onMounted(loadWorkspace);
 onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 </script>
 
@@ -442,7 +512,8 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
   width: 100%;
 }
 
-.intent-select select {
+.intent-select select,
+.intent-select input {
   width: 100%;
   height: 36px;
   padding: 0 34px 0 10px;
@@ -455,7 +526,8 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
   font-size: 11.5px;
 }
 
-.intent-select select:focus {
+.intent-select select:focus,
+.intent-select input:focus {
   border-color: #8f82fb;
   box-shadow: 0 0 0 2px rgba(98, 87, 246, 0.1);
 }

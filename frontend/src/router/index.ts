@@ -81,35 +81,35 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/requirements',
-    redirect: '/projects/1/requirements',
+    redirect: '/projects',
   },
   {
     path: '/dialog',
-    redirect: '/projects/1/requirements',
+    redirect: '/projects',
   },
   {
     path: '/summary',
-    redirect: '/projects/1/summary',
+    redirect: '/projects',
   },
   {
     path: '/materials',
-    redirect: '/projects/1/materials',
+    redirect: '/projects',
   },
   {
     path: '/intent',
-    redirect: '/projects/1/intent',
+    redirect: '/projects',
   },
   {
     path: '/plan',
-    redirect: '/projects/1/plan',
+    redirect: '/projects',
   },
   {
     path: '/preview',
-    redirect: '/projects/1/preview',
+    redirect: '/projects',
   },
   {
     path: '/export',
-    redirect: '/projects/1/export',
+    redirect: '/projects',
   },
   {
     path: '/:pathMatch(.*)*',

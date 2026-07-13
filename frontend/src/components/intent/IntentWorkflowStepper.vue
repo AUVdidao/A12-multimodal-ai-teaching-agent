@@ -113,4 +113,25 @@ const steps = [
     width: 62px;
   }
 }
+
+@media (max-width: 760px) {
+  .intent-stepper {
+    justify-content: flex-start;
+    gap: 22px;
+    padding: 0 8px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .intent-stepper__item {
+    min-width: max-content;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .intent-stepper__item::after {
+    right: -23px;
+    width: 24px;
+  }
+}
 </style>

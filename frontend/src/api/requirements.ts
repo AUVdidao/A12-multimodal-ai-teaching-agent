@@ -5,10 +5,13 @@ export interface TeachingRequirementPayload {
   gradeLevel?: string;
   subject?: string;
   topic?: string;
+  baselineLevel?: string;
   lessonDuration?: string;
   teachingGoals?: string;
   keyPoints?: string;
   difficultPoints?: string;
+  stylePreference?: string;
+  interactionType?: string;
   outputTypes: string[];
   rawRequirementText?: string;
 }

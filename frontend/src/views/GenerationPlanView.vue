@@ -1,12 +1,13 @@
 ﻿<template>
-  <section class="page">
+  <section class="page" v-loading="loading">
+    <template v-if="project">
     <ProjectContextHeader :project="project" />
     <ProjectWorkspaceNav :project-id="project.id" />
 
     <section class="page-hero">
       <div>
         <h2>教学内容生成</h2>
-        <p>M3 阶段页面已预留。当前前端只展示生成计划结构，不调用真实生成接口。</p>
+        <p>M3 内容生成接口尚未实现，当前页面明确保留阶段入口，不展示模拟成果。</p>
       </div>
       <div class="page-actions">
         <el-button @click="router.push(`/projects/${project.id}/intent`)">返回意图</el-button>
@@ -24,21 +25,33 @@
         <span class="tag-soft warning">后续接入</span>
       </section>
     </div>
+    </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
-import { getDemoProject } from '@/mock/demo';
+import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 const route = useRoute();
 const router = useRouter();
-const project = getDemoProject(route.params.projectId as string);
+const projectId = computed(() => Number(route.params.projectId));
+const project = ref<ProjectBrief>();
+const loading = ref(true);
 const blocks = [
   { title: 'PPT 课件', desc: '围绕课程导入、概念讲解、案例讨论和课堂总结组织页面。', items: ['课程导入', '核心概念', '典型案例', '课堂练习'] },
   { title: 'Word 教案', desc: '沉淀教学目标、教学流程、活动设计和评价方式。', items: ['教学目标', '重点难点', '教学流程', '评价标准'] },
   { title: '互动内容', desc: '为课堂问答、小组讨论和即时测评预留结构。', items: ['随堂问答', '小组讨论', '知识投票', '课后测评'] },
 ];
+
+onMounted(async () => {
+  try {
+    project.value = (await getProjectWorkspaceOverview(projectId.value)).project;
+  } finally {
+    loading.value = false;
+  }
+});
 </script>

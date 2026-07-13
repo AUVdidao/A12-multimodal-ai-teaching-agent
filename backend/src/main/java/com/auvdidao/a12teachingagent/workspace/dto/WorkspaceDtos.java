@@ -253,7 +253,8 @@ public final class WorkspaceDtos {
             long maxFileSizeBytes,
             long maxFileSizeMb,
             List<String> supportedExtensions,
-            boolean requiresConfirmedSummary
+            boolean requiresConfirmedSummary,
+            boolean uploadEnabled
     ) {
     }
 

@@ -1,24 +1,24 @@
 ﻿<template>
-  <section class="page">
-    <ProjectContextHeader :project="project" />
+  <section class="page" v-loading="loading">
+    <ProjectContextHeader v-if="project" :project="project" />
 
-    <section class="panel">
+    <section v-if="project" class="panel">
       <div class="panel__header">
         <div>
           <h3>选择生成模式</h3>
-          <p>该设置后续会影响 AI 工作流成本、速度和质量。当前为前端演示选择。</p>
+          <p>该设置会影响后续 AI 工作流的成本、速度和质量。</p>
         </div>
       </div>
 
       <el-radio-group v-model="mode" class="grid cols-3" style="width: 100%">
         <el-radio-button v-for="item in modes" :key="item.code" :label="item.code">
           <strong>{{ item.name }}</strong>
-          <span>{{ item.desc }}</span>
+          <span>{{ item.description }}</span>
         </el-radio-button>
       </el-radio-group>
 
       <div class="page-actions">
-        <el-button type="primary" @click="router.push(`/projects/${project.id}/requirements`)">保存并进入教学需求</el-button>
+        <el-button type="primary" :loading="saving" @click="saveMode">保存并进入教学需求</el-button>
         <el-button @click="router.push(`/projects/${project.id}`)">返回项目概览</el-button>
       </div>
     </section>
@@ -27,19 +27,45 @@
 
 <script setup lang="ts">
 import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
-import { getDemoProject } from '@/mock/demo';
-import { ref } from 'vue';
+import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
+import { listModelModes, saveProjectModelMode, type ModelModeOption } from '@/api/projects';
+import { ElMessage } from 'element-plus';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 const route = useRoute();
 const router = useRouter();
-const project = getDemoProject(route.params.projectId as string);
-const mode = ref('STANDARD');
-const modes = [
-  { code: 'STANDARD', name: '标准模式', desc: '平衡质量、速度与成本，适合常规备课。' },
-  { code: 'QUALITY', name: '质量优先', desc: '更重视内容完整度和证据质量。' },
-  { code: 'ECONOMY', name: '快速草稿', desc: '快速产出可编辑初稿。' },
-];
+const projectId = computed(() => Number(route.params.projectId));
+const project = ref<ProjectBrief>();
+const mode = ref<ModelModeOption['code']>('STANDARD');
+const modes = ref<ModelModeOption[]>([]);
+const loading = ref(true);
+const saving = ref(false);
+
+async function loadPage() {
+  loading.value = true;
+  try {
+    const [overview, options] = await Promise.all([getProjectWorkspaceOverview(projectId.value), listModelModes()]);
+    project.value = overview.project;
+    modes.value = options;
+    mode.value = (overview.project.modelMode as ModelModeOption['code']) || 'STANDARD';
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function saveMode() {
+  saving.value = true;
+  try {
+    await saveProjectModelMode(projectId.value, mode.value);
+    ElMessage.success('生成模式已保存');
+    router.push(`/projects/${projectId.value}/requirements`);
+  } finally {
+    saving.value = false;
+  }
+}
+
+onMounted(loadPage);
 </script>
 
 <style scoped>

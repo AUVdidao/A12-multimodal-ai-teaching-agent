@@ -182,7 +182,7 @@ outputTypes
 
 返回：
 
-- `uploadPolicy`：200 MB 上限、支持扩展名、是否要求先确认摘要。
+- `uploadPolicy`：200 MB 上限、支持扩展名、是否要求先确认摘要，以及当前项目是否已满足前置条件（`uploadEnabled`）。
 - `purposeOptions`：后端允许的用途及标签说明。
 - `statistics`：总数、解析中、解析成功、失败、已索引数量。
 - `materials`：资料元数据、用途、解析状态、下载地址和解析预览。
