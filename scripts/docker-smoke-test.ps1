@@ -30,7 +30,22 @@ function Invoke-A12Api {
             $parameters.Body = [System.Text.Encoding]::UTF8.GetBytes($json)
         }
 
-        $response = Invoke-RestMethod @parameters
+        # Windows PowerShell 5 may decode application/json without an explicit
+        # charset as Windows-1252. Read the response bytes as UTF-8 so Chinese
+        # plan content can be round-tripped without mojibake.
+        $webResponse = Invoke-WebRequest @parameters -UseBasicParsing
+        $webResponse.RawContentStream.Position = 0
+        $reader = New-Object System.IO.StreamReader(
+            $webResponse.RawContentStream,
+            [System.Text.Encoding]::UTF8,
+            $true
+        )
+        try {
+            $response = $reader.ReadToEnd() | ConvertFrom-Json
+        }
+        finally {
+            $reader.Dispose()
+        }
         if ($null -eq $response -or $response.code -ne 0) {
             throw "Unexpected API response code: $($response.code)"
         }
@@ -106,12 +121,12 @@ $null = Invoke-A12Api -Name "AI workflow status" -Method "GET" -Path "/api/ai-wo
 $null = Invoke-A12Api -Name "model modes" -Method "GET" -Path "/api/model-modes"
 
 $project = Invoke-A12Api -Name "project creation" -Method "POST" -Path "/api/projects" -Body @{
-    projectName = "M1 and M2 Docker smoke project"
+    projectName = "M1 to M3 Docker smoke project"
     courseName = "Biology"
     chapterTitle = "Photosynthesis"
     targetStudents = "Grade 8"
     lessonDuration = 45
-    description = "Dynamic M1 and M2 smoke data"
+    description = "Dynamic M1 to M3 smoke data"
 }
 if ($null -eq $project.id) {
     throw "Project creation did not return an id"
@@ -240,15 +255,27 @@ if ($summaryWorkspace.summary.id -ne $summary.id -or $summaryWorkspace.summary.s
     throw "Summary workspace did not restore the confirmed summary"
 }
 
-$temporaryMaterial = Join-Path ([System.IO.Path]::GetTempPath()) "a12-m2-smoke-$([Guid]::NewGuid().ToString('N')).png"
+$temporaryMaterial = Join-Path ([System.IO.Path]::GetTempPath()) "a12-m2-smoke-$([Guid]::NewGuid().ToString('N')).md"
 $materialId = $null
 $intentId = $null
+$planId = $null
+$versionId = $null
 try {
-    $pngBytes = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z5f8AAAAASUVORK5CYII=")
-    [System.IO.File]::WriteAllBytes($temporaryMaterial, $pngBytes)
+    $materialText = @"
+# Photosynthesis investigation evidence
 
-    $material = Invoke-A12Multipart -Name "M2 material upload" -Path "/api/projects/$projectId/materials" -FilePath $temporaryMaterial -ContentType "image/png" -Description "Non-sensitive generated smoke image"
-    if ($null -eq $material.id -or $material.originalFilename -notlike "a12-m2-smoke-*.png") {
+Photosynthesis converts light energy into chemical energy in chloroplasts.
+The inquiry compares light intensity, carbon dioxide availability, and oxygen production.
+Students predict variables, observe evidence, explain energy conversion, and complete a classroom quiz.
+"@
+    [System.IO.File]::WriteAllText(
+        $temporaryMaterial,
+        $materialText,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+
+    $material = Invoke-A12Multipart -Name "M2 material upload" -Path "/api/projects/$projectId/materials" -FilePath $temporaryMaterial -ContentType "text/markdown" -Description "Generated smoke-test teaching text"
+    if ($null -eq $material.id -or $material.originalFilename -notlike "a12-m2-smoke-*.md") {
         throw "Material upload did not return the generated smoke file metadata"
     }
     $materialId = [long]$material.id
@@ -259,8 +286,8 @@ try {
     }
 
     $usage = Invoke-A12Api -Name "M2 material usage binding" -Method "PUT" -Path "/api/projects/$projectId/materials/$materialId/usages" -Body @{
-        usageTypes = @("TEXTBOOK_BASIS", "IMAGE_ASSET")
-        note = "Use for concept explanation and visual observation"
+        usageTypes = @("TEXTBOOK_BASIS", "KNOWLEDGE_SUPPLEMENT")
+        note = "Use extracted text for concept explanation and inquiry evidence"
     }
     if ($usage.usageTypes.Count -ne 2) {
         throw "Material usages were not persisted"
@@ -269,6 +296,9 @@ try {
     $parse = Invoke-A12Api -Name "M2 prototype parsing" -Method "POST" -Path "/api/projects/$projectId/materials/$materialId/parse"
     if ($parse.parseStatus -ne "SUCCEEDED" -or [string]::IsNullOrWhiteSpace($parse.summary) -or $parse.keywords.Count -lt 3) {
         throw "Prototype parse result is incomplete"
+    }
+    if ($parse.summary -notmatch "Markdown UTF-8" -or $parse.summary -notmatch "Photosynthesis investigation evidence") {
+        throw "Prototype parse result did not use the uploaded document text"
     }
     $parseResult = Invoke-A12Api -Name "M2 parse result restore" -Method "GET" -Path "/api/projects/$projectId/materials/$materialId/parse-result"
     if ($parseResult.parseStatus -ne "SUCCEEDED" -or $parseResult.id -ne $parse.id) {
@@ -359,10 +389,80 @@ try {
     if ($projectWorkspace.project.id -ne $projectId -or $projectWorkspace.timeline.Count -lt 8) {
         throw "Project workspace overview is incomplete"
     }
+
+    $generationWorkspace = Invoke-A12Api -Name "M3 generation workspace readiness" -Method "GET" -Path "/api/projects/$projectId/generation/workspace"
+    if ($generationWorkspace.teachingIntent.status -ne "CONFIRMED" -or -not $generationWorkspace.capabilities.canCreatePlan) {
+        throw "Generation workspace did not expose the confirmed teaching intent"
+    }
+
+    $plan = Invoke-A12Api -Name "M3 generation plan creation" -Method "POST" -Path "/api/projects/$projectId/generation-plans"
+    if ($null -eq $plan.id -or $plan.confirmed -or $plan.provider -ne "MOCK") {
+        throw "Generation plan creation returned an invalid plan"
+    }
+    $planId = [long]$plan.id
+
+    $pptOutline = @($plan.pptOutline)
+    $docOutline = @($plan.docOutline)
+    $interactionPlan = @($plan.interactionPlan)
+    $pptOutline[0].title = "Photosynthesis learning journey"
+    $editedPlan = Invoke-A12Api -Name "M3 generation plan edit" -Method "PUT" -Path "/api/projects/$projectId/generation-plans/$planId" -Body @{
+        pptOutline = $pptOutline
+        docOutline = $docOutline
+        interactionPlan = $interactionPlan
+    }
+    if ($editedPlan.pptOutline[0].title -ne "Photosynthesis learning journey") {
+        throw "Generation plan edit was not persisted"
+    }
+    # Windows PowerShell 5 reads UTF-8 scripts without a BOM through the
+    # active ANSI code page. Build the expected Chinese title from code points
+    # so the assertion verifies the API round trip instead of the script parser.
+    $expectedSecondTitle = -join @([char]0x60C5, [char]0x5883, [char]0x5BFC, [char]0x5165)
+    if ($editedPlan.pptOutline[1].title -ne $expectedSecondTitle) {
+        throw "Generation plan UTF-8 content was corrupted during the edit round trip"
+    }
+
+    $confirmedPlan = Invoke-A12Api -Name "M3 generation plan confirmation" -Method "POST" -Path "/api/projects/$projectId/generation-plans/$planId/confirm"
+    if (-not $confirmedPlan.confirmed) {
+        throw "Generation plan confirmation was not persisted"
+    }
+
+    $artifacts = @(Invoke-A12Api -Name "M3 artifact generation" -Method "POST" -Path "/api/projects/$projectId/artifacts/generate" -Body @{
+        planId = $planId
+    })
+    if ($artifacts.Count -ne 3) {
+        throw "Artifact generation did not return all three artifact types"
+    }
+    $pptArtifact = $artifacts | Where-Object { $_.type -eq "PPT" } | Select-Object -First 1
+    $docArtifact = $artifacts | Where-Object { $_.type -eq "DOCX" } | Select-Object -First 1
+    $interactionArtifact = $artifacts | Where-Object { $_.type -eq "INTERACTION" } | Select-Object -First 1
+    if ($null -eq $pptArtifact -or @($pptArtifact.content.slides).Count -lt 7) {
+        throw "PPT artifact does not contain the required slide structure"
+    }
+    if ($null -eq $docArtifact -or @($docArtifact.content.sections).Count -lt 9) {
+        throw "Lesson-plan artifact does not contain the required sections"
+    }
+    if ($null -eq $interactionArtifact -or @($interactionArtifact.content.questions).Count -lt 3) {
+        throw "Interaction artifact does not contain the required questions"
+    }
+    $versionId = [long]$pptArtifact.versionId
+
+    $repeatedArtifacts = @(Invoke-A12Api -Name "M3 idempotent artifact generation" -Method "POST" -Path "/api/projects/$projectId/artifacts/generate" -Body @{
+        planId = $planId
+    })
+    $firstIds = @($artifacts | ForEach-Object { [long]$_.id }) -join ","
+    $repeatedIds = @($repeatedArtifacts | ForEach-Object { [long]$_.id }) -join ","
+    if ($firstIds -ne $repeatedIds) {
+        throw "Repeated artifact generation created different artifacts"
+    }
+
+    $generatedWorkspace = Invoke-A12Api -Name "M3 generated workspace restore" -Method "GET" -Path "/api/projects/$projectId/generation/workspace"
+    if ($generatedWorkspace.projectStatus -ne "GENERATED" -or -not $generatedWorkspace.capabilities.canPreview -or @($generatedWorkspace.artifacts).Count -ne 3) {
+        throw "Generated workspace did not restore the M3 result"
+    }
 }
 finally {
     Remove-Item -LiteralPath $temporaryMaterial -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "M1 and M2 Docker smoke test passed."
-Write-Host "projectId=$projectId requirementId=$($completeRequirement.id) summaryId=$($summary.id) materialId=$materialId intentId=$intentId sessionId=$sessionId"
+Write-Host "M1 to M3 Docker smoke test passed."
+Write-Host "projectId=$projectId requirementId=$($completeRequirement.id) summaryId=$($summary.id) materialId=$materialId intentId=$intentId planId=$planId versionId=$versionId sessionId=$sessionId"

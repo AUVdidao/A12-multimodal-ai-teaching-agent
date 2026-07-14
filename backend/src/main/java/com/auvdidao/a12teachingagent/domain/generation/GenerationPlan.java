@@ -11,6 +11,8 @@ import jakarta.persistence.Table;
 public class GenerationPlan extends BaseAuditableEntity {
 
     private Long projectId;
+    private Long teachingIntentId;
+    private String provider;
 
     @Lob
     @Column(columnDefinition = "TEXT")
@@ -32,6 +34,22 @@ public class GenerationPlan extends BaseAuditableEntity {
 
     public void setProjectId(Long projectId) {
         this.projectId = projectId;
+    }
+
+    public Long getTeachingIntentId() {
+        return teachingIntentId;
+    }
+
+    public void setTeachingIntentId(Long teachingIntentId) {
+        this.teachingIntentId = teachingIntentId;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setProvider(String provider) {
+        this.provider = provider;
     }
 
     public String getPptOutline() {

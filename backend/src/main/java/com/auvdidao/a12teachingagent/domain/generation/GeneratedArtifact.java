@@ -14,11 +14,15 @@ import jakarta.persistence.Table;
 public class GeneratedArtifact extends BaseCreatedEntity {
 
     private Long projectId;
+    private Long generationPlanId;
+    private Long versionId;
 
     @Enumerated(EnumType.STRING)
     private ArtifactType artifactType;
 
     private String title;
+
+    private Integer schemaVersion;
 
     @Lob
     @Column(columnDefinition = "TEXT")
@@ -32,6 +36,22 @@ public class GeneratedArtifact extends BaseCreatedEntity {
 
     public void setProjectId(Long projectId) {
         this.projectId = projectId;
+    }
+
+    public Long getGenerationPlanId() {
+        return generationPlanId;
+    }
+
+    public void setGenerationPlanId(Long generationPlanId) {
+        this.generationPlanId = generationPlanId;
+    }
+
+    public Long getVersionId() {
+        return versionId;
+    }
+
+    public void setVersionId(Long versionId) {
+        this.versionId = versionId;
     }
 
     public ArtifactType getArtifactType() {
@@ -48,6 +68,14 @@ public class GeneratedArtifact extends BaseCreatedEntity {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public Integer getSchemaVersion() {
+        return schemaVersion;
+    }
+
+    public void setSchemaVersion(Integer schemaVersion) {
+        this.schemaVersion = schemaVersion;
     }
 
     public String getContentJson() {

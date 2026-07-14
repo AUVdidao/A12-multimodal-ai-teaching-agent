@@ -8,9 +8,9 @@
 
 - 后端：Java 17+、Spring Boot、Maven
 - 前端：Vue 3 + Vite + TypeScript + Element Plus
-- AI 工作流：Dify 云端工作流，保留 Mock 模式兜底
-- 数据库：云数据库或本地开发数据库
-- 文件与产物：对象存储，支持 PPTX、DOCX 和 HTML 互动内容导出
+- AI 工作流：统一 `AIWorkflowGateway`，当前使用 Mock，预留 Dify Provider
+- 数据库：H2 文件数据库（本地与 Docker 原型），生产数据库待配置
+- 文件与产物：项目级资料存储、结构化 PPT/教案/互动成果；Office 与 ZIP 导出在 M4 实现
 - 部署：Docker、docker-compose、Nginx、云服务器部署
 
 ## 核心功能
@@ -22,8 +22,8 @@
 - 知识库增强与上下文检索
 - 生成方案确认、课件内容生成与进度查看
 - PPT、Word 和互动内容预览
-- 自然语言修改反馈与版本管理
-- PPTX、DOCX、HTML 互动内容文件导出
+- 自然语言修改反馈与版本管理（M4）
+- PPTX、DOCX、HTML 互动内容文件导出（M4）
 - Mock / Cloud 模式切换，避免演示时外部 AI 服务故障导致系统不可用
 
 ## 本地启动方式
@@ -136,11 +136,12 @@ docker compose logs backend --tail=100
 docker compose down
 ```
 
-本地上传默认写入 `./data/uploads`，默认/生产单文件上限为 200 MB（测试 profile 为 20 MB）。真实 Dify、向量数据库、对象存储和生产 HTTPS 尚未接入。
+本地上传默认写入 `./data/uploads`，上传单文件上限为 200 MB；当前正文解析为控制资源使用限制在 20 MB。真实 Dify、向量数据库、对象存储和生产 HTTPS 尚未接入。
 
 ## API 文档
 
 - [UI V6 后端接口契约](docs/api/ui-v6-backend-api.md)：覆盖教师工作台、项目列表、项目概览、需求澄清、需求摘要、资料工作台、知识检索和教学意图八个目标页面。
+- [M3 内容生成接口契约](docs/api/m3-generation-api.md)：覆盖生成工作区、方案编辑确认、PPT/教案/互动成果生成与预览。
 - [项目入口流程契约](docs/api/project-flow-contract.md)
 - [AI 工作流契约](docs/api/ai-workflow-contract.md)
 
@@ -166,16 +167,19 @@ docker compose down
 
 ## 当前开发状态
 
-当前阶段：M2 资料增强闭环。
+当前阶段：M3 内容生成闭环已实现并进入验收。
 
 已完成：
 
 - M1 项目创建、需求澄清、摘要确认和多轮对话
 - TA-011 资料上传、项目隔离存储和受控下载
 - TA-012 资料用途绑定与回显
-- TA-013 原型解析、关键词、教学环节和失败重试
+- TA-013 TXT/MD/PDF/DOCX/PPTX 正文提取、关键词、教学环节和失败重试；图片/视频诚实降级
 - TA-014 本地知识片段索引、可解释关键词检索和来源追踪
 - TA-015 教学意图生成、编辑、确认和刷新恢复
-- 本地 Docker Compose、M1/M2 smoke、浏览器验收证据
+- TA-016 生成方案创建、编辑、确认和刷新恢复
+- TA-017 至 TA-019 结构化 PPT、教案、互动问答生成与真实预览
+- TA-020 生成工作区、状态门禁、首版成果和幂等生成
+- 本地 Docker Compose、M1 至 M3 smoke、桌面与移动端浏览器验收证据
 
-尚未实现：真实 OCR、真实向量 RAG、真实 Dify、PPT/Word/互动内容生成、生产部署。
+尚未实现：真实 OCR/视频转写、真实向量 RAG、真实 Dify、自然语言修改与多版本恢复、真实 PPTX/DOCX/HTML/ZIP 导出、生产部署。

@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 public class ArtifactVersion extends BaseCreatedEntity {
 
     private Long projectId;
+    private Long generationPlanId;
     private Integer versionNumber;
     private String description;
     private Boolean finalVersion;
@@ -19,6 +20,14 @@ public class ArtifactVersion extends BaseCreatedEntity {
 
     public void setProjectId(Long projectId) {
         this.projectId = projectId;
+    }
+
+    public Long getGenerationPlanId() {
+        return generationPlanId;
+    }
+
+    public void setGenerationPlanId(Long generationPlanId) {
+        this.generationPlanId = generationPlanId;
     }
 
     public Integer getVersionNumber() {
