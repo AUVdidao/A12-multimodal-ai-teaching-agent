@@ -15,7 +15,7 @@ spring:
     password:
   h2:
     console:
-      enabled: true
+      enabled: ${H2_CONSOLE_ENABLED:false}
       path: /h2-console
   jpa:
     hibernate:
@@ -36,6 +36,15 @@ app:
     max-file-size: ${APP_MAX_UPLOAD_SIZE:209715200}
 
 a12:
+  security:
+    enabled: ${A12_SECURITY_ENABLED:true}
+    session-hours: ${A12_SESSION_HOURS:12}
+    demo-seed-enabled: ${A12_DEMO_SEED_ENABLED:false}
+    demo:
+      leader-password: ${A12_DEMO_LEADER_PASSWORD:}
+      teacher-password: ${A12_DEMO_TEACHER_PASSWORD:}
+      student-password: ${A12_DEMO_STUDENT_PASSWORD:}
+      multi-password: ${A12_DEMO_MULTI_PASSWORD:}
   ai:
     provider: MOCK
     fallback-to-mock: true

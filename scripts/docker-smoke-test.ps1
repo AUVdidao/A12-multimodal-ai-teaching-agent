@@ -7,6 +7,7 @@ $baseUrl = "http://localhost:$frontendPort"
 $readinessUrl = "http://localhost:$backendPort/api/health"
 $deadline = [DateTime]::UtcNow.AddSeconds(60)
 $lastReadinessError = "No response received"
+$script:authToken = $null
 
 function Invoke-A12Api {
     param(
@@ -23,6 +24,9 @@ function Invoke-A12Api {
             Uri = $url
             Method = $Method
             TimeoutSec = 20
+        }
+        if (-not [string]::IsNullOrWhiteSpace($script:authToken)) {
+            $parameters.Headers = @{ Authorization = "Bearer $script:authToken" }
         }
         if ($null -ne $Body) {
             $parameters.ContentType = "application/json; charset=utf-8"
@@ -69,7 +73,7 @@ function Invoke-A12Multipart {
 
     $url = "$baseUrl$Path"
     Write-Host "Checking $Name`: POST $url"
-    $raw = & curl.exe -sS --fail-with-body -X POST -F "file=@$FilePath;type=$ContentType" -F "description=$Description" $url 2>&1
+    $raw = & curl.exe -sS --fail-with-body -X POST -H "Authorization: Bearer $script:authToken" -F "file=@$FilePath;type=$ContentType" -F "description=$Description" $url 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Check failed: $Name at $url. curl exit code: $LASTEXITCODE. Response: $($raw -join ' ')"
     }
@@ -115,6 +119,53 @@ Write-Host "Checking frontend: $baseUrl/"
 $frontendResponse = Invoke-WebRequest -Uri "$baseUrl/" -UseBasicParsing -TimeoutSec 20
 if ($frontendResponse.StatusCode -lt 200 -or $frontendResponse.StatusCode -ge 300) {
     throw "Frontend check failed with HTTP $($frontendResponse.StatusCode)"
+}
+
+Write-Host "Checking unauthenticated teacher API rejection"
+try {
+    Invoke-WebRequest -Uri "$baseUrl/api/projects" -UseBasicParsing -TimeoutSec 20 | Out-Null
+    throw "Unauthenticated teacher API unexpectedly returned success"
+}
+catch {
+    $status = if ($null -ne $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+    if ($status -ne 401) {
+        throw "Unauthenticated teacher API should return 401 but returned $status"
+    }
+}
+
+$studentPassword = if ([string]::IsNullOrWhiteSpace($env:A12_DEMO_STUDENT_PASSWORD)) { "Student123!" } else { $env:A12_DEMO_STUDENT_PASSWORD }
+$studentSession = Invoke-A12Api -Name "student login" -Method "POST" -Path "/api/v1/auth/login" -Body @{
+    username = "student"
+    password = $studentPassword
+    activeRole = "STUDENT"
+}
+$script:authToken = $studentSession.token
+Write-Host "Checking student access rejection on teacher API"
+try {
+    Invoke-WebRequest -Uri "$baseUrl/api/projects" -Headers @{ Authorization = "Bearer $script:authToken" } -UseBasicParsing -TimeoutSec 20 | Out-Null
+    throw "Student token unexpectedly accessed the teacher project API"
+}
+catch {
+    $status = if ($null -ne $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+    if ($status -ne 403) {
+        throw "Student access to teacher API should return 403 but returned $status"
+    }
+}
+
+$script:authToken = $null
+$teacherPassword = if ([string]::IsNullOrWhiteSpace($env:A12_DEMO_TEACHER_PASSWORD)) { "Teacher123!" } else { $env:A12_DEMO_TEACHER_PASSWORD }
+$teacherSession = Invoke-A12Api -Name "teacher login" -Method "POST" -Path "/api/v1/auth/login" -Body @{
+    username = "teacher"
+    password = $teacherPassword
+    activeRole = "TEACHER"
+}
+if ([string]::IsNullOrWhiteSpace($teacherSession.token) -or $teacherSession.user.activeRole -ne "TEACHER") {
+    throw "Teacher login did not return a TEACHER session"
+}
+$script:authToken = $teacherSession.token
+$currentUser = Invoke-A12Api -Name "current authenticated user" -Method "GET" -Path "/api/v1/auth/me"
+if ($currentUser.username -ne "teacher" -or $currentUser.activeRole -ne "TEACHER") {
+    throw "Authenticated user profile does not match the teacher demo account"
 }
 
 $null = Invoke-A12Api -Name "AI workflow status" -Method "GET" -Path "/api/ai-workflow/status"

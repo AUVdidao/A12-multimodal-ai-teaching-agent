@@ -9,8 +9,11 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanRespons
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.PlanSection;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
+import com.auvdidao.a12teachingagent.security.TokenAuthenticationService;
+import com.auvdidao.a12teachingagent.security.A12SecurityProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
@@ -29,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AIWorkflowController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class AIWorkflowControllerTest {
 
     @Autowired
@@ -36,6 +40,12 @@ class AIWorkflowControllerTest {
 
     @MockBean
     private AIWorkflowGateway aiWorkflowGateway;
+
+    @MockBean
+    private TokenAuthenticationService tokenAuthenticationService;
+
+    @MockBean
+    private A12SecurityProperties securityProperties;
 
     @Test
     void statusReturnsActiveMockProvider() throws Exception {

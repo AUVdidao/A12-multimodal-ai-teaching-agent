@@ -1,6 +1,26 @@
+import type { UserRole } from '@/api/auth';
+import { useAuthStore } from '@/stores/auth';
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue'),
+    meta: { title: '登录', public: true },
+  },
+  {
+    path: '/leader',
+    name: 'leader-workspace',
+    component: () => import('@/views/RoleWorkspaceView.vue'),
+    meta: { title: '教研管理工作台' },
+  },
+  {
+    path: '/student',
+    name: 'student-workspace',
+    component: () => import('@/views/RoleWorkspaceView.vue'),
+    meta: { title: '学习空间' },
+  },
   {
     path: '/',
     name: 'home',
@@ -79,38 +99,14 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ExportView.vue'),
     meta: { title: '版本与导出' },
   },
-  {
-    path: '/requirements',
-    redirect: '/projects',
-  },
-  {
-    path: '/dialog',
-    redirect: '/projects',
-  },
-  {
-    path: '/summary',
-    redirect: '/projects',
-  },
-  {
-    path: '/materials',
-    redirect: '/projects',
-  },
-  {
-    path: '/intent',
-    redirect: '/projects',
-  },
-  {
-    path: '/plan',
-    redirect: '/projects',
-  },
-  {
-    path: '/preview',
-    redirect: '/projects',
-  },
-  {
-    path: '/export',
-    redirect: '/projects',
-  },
+  { path: '/requirements', redirect: '/projects' },
+  { path: '/dialog', redirect: '/projects' },
+  { path: '/summary', redirect: '/projects' },
+  { path: '/materials', redirect: '/projects' },
+  { path: '/intent', redirect: '/projects' },
+  { path: '/plan', redirect: '/projects' },
+  { path: '/preview', redirect: '/projects' },
+  { path: '/export', redirect: '/projects' },
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
@@ -119,7 +115,47 @@ const routes: RouteRecordRaw[] = [
   },
 ];
 
-export default createRouter({
+const router = createRouter({
   history: createWebHistory(),
   routes,
 });
+
+export function roleHome(role?: UserRole) {
+  if (role === 'LEADER') return '/leader';
+  if (role === 'STUDENT') return '/student';
+  return '/';
+}
+
+router.beforeEach(async (to) => {
+  const auth = useAuthStore();
+  if (to.meta.public) {
+    if (!auth.token) return true;
+    try {
+      await auth.ensureInitialized();
+      return roleHome(auth.activeRole);
+    } catch {
+      return true;
+    }
+  }
+
+  if (!auth.token) {
+    return { name: 'login', query: { redirect: to.fullPath } };
+  }
+  try {
+    await auth.ensureInitialized();
+  } catch {
+    return { name: 'login', query: { redirect: to.fullPath } };
+  }
+
+  const requiredRole: UserRole = to.path.startsWith('/leader')
+    ? 'LEADER'
+    : to.path.startsWith('/student')
+      ? 'STUDENT'
+      : 'TEACHER';
+  if (auth.activeRole !== requiredRole) {
+    return roleHome(auth.activeRole);
+  }
+  return true;
+});
+
+export default router;

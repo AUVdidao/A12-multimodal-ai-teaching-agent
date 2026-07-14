@@ -23,6 +23,9 @@ app:
     max-file-size: 20971520
 
 a12:
+  security:
+    enabled: false
+    demo-seed-enabled: false
   ai:
     provider: MOCK
     fallback-to-mock: true

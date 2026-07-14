@@ -1,8 +1,12 @@
 package com.auvdidao.a12teachingagent.health;
 
+import com.auvdidao.a12teachingagent.security.TokenAuthenticationService;
+import com.auvdidao.a12teachingagent.security.A12SecurityProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.is;
@@ -11,10 +15,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(HealthController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class HealthControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockBean
+    private TokenAuthenticationService tokenAuthenticationService;
+
+    @MockBean
+    private A12SecurityProperties securityProperties;
 
     @Test
     void healthReturnsUpStatus() throws Exception {

@@ -15,6 +15,13 @@ services:
       A12_AI_DIFY_API_KEY: ${DIFY_API_KEY:-}
       APP_UPLOAD_DIR: ${APP_UPLOAD_DIR:-/app/data/uploads}
       APP_MAX_UPLOAD_SIZE: ${APP_MAX_UPLOAD_SIZE:-209715200}
+      A12_SECURITY_ENABLED: ${A12_SECURITY_ENABLED:-true}
+      A12_SESSION_HOURS: ${A12_SESSION_HOURS:-12}
+      A12_DEMO_SEED_ENABLED: ${A12_DEMO_SEED_ENABLED:-true}
+      A12_DEMO_LEADER_PASSWORD: ${A12_DEMO_LEADER_PASSWORD:-Leader123!}
+      A12_DEMO_TEACHER_PASSWORD: ${A12_DEMO_TEACHER_PASSWORD:-Teacher123!}
+      A12_DEMO_STUDENT_PASSWORD: ${A12_DEMO_STUDENT_PASSWORD:-Student123!}
+      A12_DEMO_MULTI_PASSWORD: ${A12_DEMO_MULTI_PASSWORD:-Multi123!}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:
@@ -28,6 +35,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: /api
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-true}
     depends_on:
       - backend
     ports:

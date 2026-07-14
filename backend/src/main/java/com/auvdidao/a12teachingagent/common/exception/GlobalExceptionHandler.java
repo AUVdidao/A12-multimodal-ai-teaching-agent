@@ -83,6 +83,20 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.failure(HttpStatus.CONFLICT.value(), exception.getMessage()));
     }
 
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException exception) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.failure(HttpStatus.UNAUTHORIZED.value(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException exception) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.failure(HttpStatus.FORBIDDEN.value(), exception.getMessage()));
+    }
+
     @ExceptionHandler(PayloadTooLargeException.class)
     public ResponseEntity<ApiResponse<Void>> handlePayloadTooLarge(PayloadTooLargeException exception) {
         return ResponseEntity
