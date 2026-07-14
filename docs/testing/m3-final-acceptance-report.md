@@ -9,7 +9,7 @@
 | 开发分支 | `m3-content-generation-complete` |
 | 覆盖任务 | TA-016 至 TA-020，并包含 M2 正文解析加固 |
 | AI Provider | `MOCK`，未发起真实 Dify 网络请求 |
-| 当前状态 | 分支实现与本地验收完成，提交、PR 和 main 合并信息待完成后回填 |
+| 当前状态 | 实现提交 `6aacdc7` 已推送，PR #10 为 `MERGEABLE/CLEAN`；main 合并与合并后复验待完成 |
 
 ## 2. 验收范围
 
@@ -176,4 +176,4 @@ Windows PowerShell 5 曾错误解码未声明 charset 的 JSON 响应，导致�
 
 ## 11. 阶段结论
 
-M3 功能实现、完整测试、Docker 冒烟和桌面/移动端浏览器验收均已通过。当前分支满足提交和创建 PR 的技术条件；在 PR 合入 main 并进行主线复验前，不将其标记为“main 已完成”。
+M3 功能实现、完整测试、Docker 冒烟和桌面/移动端浏览器验收均已通过。实现提交为 `6aacdc7 feat: complete M3 content generation workflow`，审查入口为 [PR #10](https://github.com/AUVdidao/A12-multimodal-ai-teaching-agent/pull/10)。PR 当前无冲突且可合并；在合入 main 并进行主线复验前，不将其标记为“main 已完成”。
