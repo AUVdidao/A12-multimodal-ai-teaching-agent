@@ -7,5 +7,7 @@ import java.util.Optional;
 
 public interface GenerationPlanRepository extends JpaRepository<GenerationPlan, Long> {
 
-    Optional<GenerationPlan> findFirstByProjectIdOrderByCreatedAtDesc(Long projectId);
+    Optional<GenerationPlan> findFirstByProjectIdOrderByCreatedAtDescIdDesc(Long projectId);
+
+    Optional<GenerationPlan> findByIdAndProjectId(Long id, Long projectId);
 }

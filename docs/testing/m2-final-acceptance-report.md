@@ -74,6 +74,21 @@ POST /api/projects/{projectId}/materials/{materialId}/parse/retry
 POST /api/projects/{projectId}/materials/{materialId}/index
 ```
 
+### 4.1 2026-07-14 正文提取加固
+
+M3 开发前完成了一次向后兼容的 M2 加固，替代了“只根据文件名和元数据构造摘要”的旧原型解析器：
+
+- TXT、MD：严格按 UTF-8 读取，支持 BOM，非法编码返回受控失败。
+- PDF：使用 PDFBox 读取页面文本；加密、损坏、扫描件无正文时不伪造文本。
+- DOCX：使用 Apache POI XWPF 读取段落和表格。
+- PPTX：使用 Apache POI XSLF 读取幻灯片、表格和组合图形中的文本。
+- 图片：明确返回“未启用 OCR”，不生成推断正文。
+- 视频：明确返回“未启用转写”，不生成推断正文。
+- 安全限制：解析输入上限 20 MB、提取文本上限 200,000 字符、PDF 页数和 PPTX 页数上限、OOXML 条目数/单条目/总解压大小限制及路径穿越检查。
+- 解析摘要、关键词和后续知识片段均来自实际提取正文；课程主题只作为单独标明的上下文，不冒充文件内容。
+
+加固测试使用程序化生成的 TXT、MD、PDF、DOCX、PPTX、损坏文件、空文件、图片和视频样本，后端完整测试增加到 136 项并全部通过。Docker M1 至 M3 冒烟使用动态 Markdown 文件验证唯一正文可出现在解析摘要和知识检索结果中。
+
 ## 5. TA-014 知识片段与检索
 
 结果：通过。
@@ -217,7 +232,7 @@ Smoke 动态输出包含：`projectId`、`materialId`、`intentId`、`sessionId`
 
 ## 13. 已知限制与 M3 未完成能力
 
-以下能力不属于本次 M2：真实 OCR、真实视频/文档全文解析、真实向量 RAG、真实 Dify 工作流、PPT 生成、Word 教案生成、互动内容生成、版本导出、生产数据库、对象存储和生产部署。
+以下能力仍不属于 M2：图片 OCR、视频语音转写、旧版二进制 Word/PPT、XLSX 正文提取、真实向量 RAG、真实 Dify 工作流、版本导出、生产数据库、对象存储和生产部署。TXT、MD、PDF、DOCX、PPTX 正文提取已在 2026-07-14 加固中实现。
 
 ## 14. 最终验收结论
 
