@@ -2,11 +2,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $frontendPort = if ([string]::IsNullOrWhiteSpace($env:FRONTEND_PORT)) { "8081" } else { $env:FRONTEND_PORT }
-$backendPort = if ([string]::IsNullOrWhiteSpace($env:BACKEND_PORT)) { "8080" } else { $env:BACKEND_PORT }
 $baseUrl = "http://localhost:$frontendPort"
-$readinessUrl = "http://localhost:$backendPort/api/health"
+$readinessUrl = "$baseUrl/api/health"
 $deadline = [DateTime]::UtcNow.AddSeconds(60)
 $lastReadinessError = "No response received"
+$script:authToken = $null
 
 function Invoke-A12Api {
     param(
@@ -23,6 +23,9 @@ function Invoke-A12Api {
             Uri = $url
             Method = $Method
             TimeoutSec = 20
+        }
+        if (-not [string]::IsNullOrWhiteSpace($script:authToken)) {
+            $parameters.Headers = @{ Authorization = "Bearer $script:authToken" }
         }
         if ($null -ne $Body) {
             $parameters.ContentType = "application/json; charset=utf-8"
@@ -69,7 +72,7 @@ function Invoke-A12Multipart {
 
     $url = "$baseUrl$Path"
     Write-Host "Checking $Name`: POST $url"
-    $raw = & curl.exe -sS --fail-with-body -X POST -F "file=@$FilePath;type=$ContentType" -F "description=$Description" $url 2>&1
+    $raw = & curl.exe -sS --fail-with-body -X POST -H "Authorization: Bearer $script:authToken" -F "file=@$FilePath;type=$ContentType" -F "description=$Description" $url 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Check failed: $Name at $url. curl exit code: $LASTEXITCODE. Response: $($raw -join ' ')"
     }
@@ -85,7 +88,7 @@ function Invoke-A12Multipart {
     return $response.data
 }
 
-Write-Host "Waiting for backend readiness: $readinessUrl"
+Write-Host "Waiting for reverse-proxy API readiness: $readinessUrl"
 while ([DateTime]::UtcNow -lt $deadline) {
     try {
         $response = Invoke-WebRequest -Uri $readinessUrl -UseBasicParsing -TimeoutSec 5
@@ -106,15 +109,68 @@ if ($null -ne $lastReadinessError) {
     Write-Host "Backend readiness timed out after 60 seconds. Last error: $lastReadinessError"
     Write-Host "docker compose ps:"
     & docker compose ps
-    Write-Host "Last 100 backend log lines:"
-    & docker compose logs backend --tail=100
-    throw "Backend readiness check failed: $readinessUrl"
+    Write-Host "Last 100 reverse-proxy and backend-api log lines:"
+    & docker compose logs reverse-proxy backend-api --tail=100
+    throw "Reverse-proxy API readiness check failed: $readinessUrl"
+}
+
+Write-Host "Checking reverse-proxy health: $baseUrl/healthz"
+$proxyHealth = Invoke-WebRequest -Uri "$baseUrl/healthz" -UseBasicParsing -TimeoutSec 20
+if ($proxyHealth.StatusCode -ne 200) {
+    throw "Reverse-proxy health check failed with HTTP $($proxyHealth.StatusCode)"
 }
 
 Write-Host "Checking frontend: $baseUrl/"
 $frontendResponse = Invoke-WebRequest -Uri "$baseUrl/" -UseBasicParsing -TimeoutSec 20
 if ($frontendResponse.StatusCode -lt 200 -or $frontendResponse.StatusCode -ge 300) {
     throw "Frontend check failed with HTTP $($frontendResponse.StatusCode)"
+}
+
+Write-Host "Checking unauthenticated teacher API rejection"
+try {
+    Invoke-WebRequest -Uri "$baseUrl/api/projects" -UseBasicParsing -TimeoutSec 20 | Out-Null
+    throw "Unauthenticated teacher API unexpectedly returned success"
+}
+catch {
+    $status = if ($null -ne $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+    if ($status -ne 401) {
+        throw "Unauthenticated teacher API should return 401 but returned $status"
+    }
+}
+
+$studentPassword = if ([string]::IsNullOrWhiteSpace($env:A12_DEMO_STUDENT_PASSWORD)) { "Student123!" } else { $env:A12_DEMO_STUDENT_PASSWORD }
+$studentSession = Invoke-A12Api -Name "student login" -Method "POST" -Path "/api/v1/auth/login" -Body @{
+    username = "student"
+    password = $studentPassword
+    activeRole = "STUDENT"
+}
+$script:authToken = $studentSession.token
+Write-Host "Checking student access rejection on teacher API"
+try {
+    Invoke-WebRequest -Uri "$baseUrl/api/projects" -Headers @{ Authorization = "Bearer $script:authToken" } -UseBasicParsing -TimeoutSec 20 | Out-Null
+    throw "Student token unexpectedly accessed the teacher project API"
+}
+catch {
+    $status = if ($null -ne $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+    if ($status -ne 403) {
+        throw "Student access to teacher API should return 403 but returned $status"
+    }
+}
+
+$script:authToken = $null
+$teacherPassword = if ([string]::IsNullOrWhiteSpace($env:A12_DEMO_TEACHER_PASSWORD)) { "Teacher123!" } else { $env:A12_DEMO_TEACHER_PASSWORD }
+$teacherSession = Invoke-A12Api -Name "teacher login" -Method "POST" -Path "/api/v1/auth/login" -Body @{
+    username = "teacher"
+    password = $teacherPassword
+    activeRole = "TEACHER"
+}
+if ([string]::IsNullOrWhiteSpace($teacherSession.token) -or $teacherSession.user.activeRole -ne "TEACHER") {
+    throw "Teacher login did not return a TEACHER session"
+}
+$script:authToken = $teacherSession.token
+$currentUser = Invoke-A12Api -Name "current authenticated user" -Method "GET" -Path "/api/v1/auth/me"
+if ($currentUser.username -ne "teacher" -or $currentUser.activeRole -ne "TEACHER") {
+    throw "Authenticated user profile does not match the teacher demo account"
 }
 
 $null = Invoke-A12Api -Name "AI workflow status" -Method "GET" -Path "/api/ai-workflow/status"
@@ -383,6 +439,20 @@ Students predict variables, observe evidence, explain energy conversion, and com
     $intentWorkspace = Invoke-A12Api -Name "UI V6 teaching intent workspace" -Method "GET" -Path "/api/projects/$projectId/teaching-intents/workspace"
     if ($intentWorkspace.intent.id -ne $intentId -or $intentWorkspace.intent.status -ne "CONFIRMED") {
         throw "Teaching intent workspace did not restore the confirmed intent"
+    }
+
+    $intentRevision = Invoke-A12Api -Name "M2 confirmed teaching intent revision" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/$intentId/revisions"
+    if ($intentRevision.status -ne "DRAFT" -or $intentRevision.id -eq $intentId -or $intentRevision.evidenceItems.Count -lt 1) {
+        throw "Teaching intent revision did not create an independent evidence-backed draft"
+    }
+    $intentId = [long]$intentRevision.id
+    $revisionWorkspace = Invoke-A12Api -Name "UI V6 revised teaching intent workspace" -Method "GET" -Path "/api/projects/$projectId/teaching-intents/workspace"
+    if ($revisionWorkspace.intent.id -ne $intentId -or $revisionWorkspace.intent.status -ne "DRAFT") {
+        throw "Teaching intent workspace did not restore the revised draft"
+    }
+    $confirmedRevision = Invoke-A12Api -Name "M2 revised teaching intent confirmation" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/$intentId/confirm"
+    if ($confirmedRevision.status -ne "CONFIRMED" -or [string]::IsNullOrWhiteSpace($confirmedRevision.confirmedAt)) {
+        throw "Revised teaching intent could not be reconfirmed"
     }
 
     $projectWorkspace = Invoke-A12Api -Name "UI V6 project overview" -Method "GET" -Path "/api/projects/$projectId/workspace-overview"

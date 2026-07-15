@@ -7,6 +7,7 @@ import com.auvdidao.a12teachingagent.domain.knowledge.repository.KnowledgeChunkR
 import com.auvdidao.a12teachingagent.domain.material.repository.UploadedMaterialRepository;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
 import com.auvdidao.a12teachingagent.material.MaterialLabels;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import com.auvdidao.a12teachingagent.workspace.dto.WorkspaceDtos.KnowledgeWorkspaceHit;
 import com.auvdidao.a12teachingagent.workspace.dto.WorkspaceDtos.KnowledgeWorkspaceSearchRequest;
 import com.auvdidao.a12teachingagent.workspace.dto.WorkspaceDtos.KnowledgeWorkspaceSearchResponse;
@@ -25,15 +26,18 @@ public class KnowledgeWorkspaceService {
     private final ProjectRepository projectRepository;
     private final UploadedMaterialRepository materialRepository;
     private final KnowledgeChunkRepository chunkRepository;
+    private final ProjectAccessService projectAccessService;
 
     public KnowledgeWorkspaceService(
             ProjectRepository projectRepository,
             UploadedMaterialRepository materialRepository,
-            KnowledgeChunkRepository chunkRepository
+            KnowledgeChunkRepository chunkRepository,
+            ProjectAccessService projectAccessService
     ) {
         this.projectRepository = projectRepository;
         this.materialRepository = materialRepository;
         this.chunkRepository = chunkRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional(readOnly = true)
@@ -150,6 +154,7 @@ public class KnowledgeWorkspaceService {
         if (!projectRepository.existsById(projectId)) {
             throw new ResourceNotFoundException("Project not found: " + projectId);
         }
+        projectAccessService.requireAccess(projectId);
     }
 
     private static List<String> queryTerms(String query, String matchMode, boolean caseSensitive) {

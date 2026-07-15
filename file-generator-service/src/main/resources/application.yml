@@ -1,0 +1,11 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: file-generator-service
+  codec:
+    max-in-memory-size: 2MB
+a12:
+  generator:
+    max-content-json-bytes: ${A12_GENERATOR_MAX_CONTENT_JSON_BYTES:1048576}
+    max-package-entries: ${A12_GENERATOR_MAX_PACKAGE_ENTRIES:8}

@@ -55,4 +55,12 @@ public class TeachingIntentController {
     ) {
         return ApiResponse.success(teachingIntentService.confirm(projectId, intentId));
     }
+
+    @PostMapping("/{intentId}/revisions")
+    public ApiResponse<TeachingIntentResponse> revise(
+            @PathVariable @Positive(message = "projectId must be greater than 0") Long projectId,
+            @PathVariable @Positive(message = "intentId must be greater than 0") Long intentId
+    ) {
+        return ApiResponse.success(teachingIntentService.revise(projectId, intentId));
+    }
 }

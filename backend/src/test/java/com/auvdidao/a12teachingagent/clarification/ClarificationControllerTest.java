@@ -5,10 +5,14 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
+import com.auvdidao.a12teachingagent.security.A12SecurityProperties;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
+import com.auvdidao.a12teachingagent.security.TokenAuthenticationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
@@ -36,6 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ClarificationController.class)
 @Import(ClarificationService.class)
+@AutoConfigureMockMvc(addFilters = false)
 class ClarificationControllerTest {
 
     @Autowired
@@ -46,6 +51,15 @@ class ClarificationControllerTest {
 
     @MockBean
     private ProjectRepository projectRepository;
+
+    @MockBean
+    private ProjectAccessService projectAccessService;
+
+    @MockBean
+    private TokenAuthenticationService tokenAuthenticationService;
+
+    @MockBean
+    private A12SecurityProperties securityProperties;
 
     @BeforeEach
     void setUp() {

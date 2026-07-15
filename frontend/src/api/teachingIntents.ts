@@ -62,3 +62,10 @@ export async function confirmTeachingIntent(projectId: number, intentId: number)
   );
   return response.data.data;
 }
+
+export async function createTeachingIntentRevision(projectId: number, intentId: number) {
+  const response = await http.post<ApiResponse<TeachingIntent>>(
+    `/api/projects/${projectId}/teaching-intents/${intentId}/revisions`,
+  );
+  return response.data.data;
+}

@@ -1,12 +1,7 @@
 <template>
   <nav class="workspace-nav" aria-label="项目工作区导航">
     <template v-for="item in navItems" :key="item.path">
-      <span v-if="item.future" class="workspace-nav__item is-muted" aria-disabled="true">
-        <el-icon><component :is="item.icon" /></el-icon>
-        <span>{{ item.label }}</span>
-        <small>后续</small>
-      </span>
-      <RouterLink v-else class="workspace-nav__item" :to="item.path">
+      <RouterLink class="workspace-nav__item" :to="item.path">
         <el-icon><component :is="item.icon" /></el-icon>
         <span>{{ item.label }}</span>
       </RouterLink>
@@ -44,7 +39,7 @@ const navItems = computed(() => {
     { label: '教学意图', path: `${root}/intent`, icon: Aim },
     { label: '内容生成', path: `${root}/plan`, icon: Finished },
     { label: '成果预览', path: `${root}/preview`, icon: View },
-    { label: '成果导出', path: `${root}/export`, icon: Download, future: true },
+    { label: '成果导出', path: `${root}/export`, icon: Download },
   ];
 });
 </script>

@@ -35,7 +35,15 @@ public final class ProjectDtos {
             String modelMode,
             ProjectStatus status,
             LocalDateTime createdAt,
-            LocalDateTime updatedAt
+            LocalDateTime updatedAt,
+            LocalDateTime deletedAt
+    ) {
+    }
+
+    public record RecentProjectResponse(
+            ProjectResponse project,
+            LocalDateTime lastVisitedAt,
+            Integer visitCount
     ) {
     }
 }

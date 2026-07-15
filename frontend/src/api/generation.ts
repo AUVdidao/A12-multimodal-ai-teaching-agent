@@ -42,6 +42,36 @@ export interface Artifact {
   createdAt: string;
 }
 
+export interface EditRecord {
+  id: number;
+  projectId: number;
+  versionId: number;
+  instruction: string;
+  resultSummary: string;
+  createdAt: string;
+}
+
+export interface ArtifactRevisionResult {
+  version: {
+    id: number;
+    projectId: number;
+    generationPlanId?: number | null;
+    versionNumber: number;
+    description?: string | null;
+    finalVersion: boolean;
+    artifactCount: number;
+    createdAt: string;
+  };
+  artifacts: Artifact[];
+  changeSummary: string;
+  changedSections: string[];
+  requestedProvider: string;
+  activeProvider: string;
+  mockProvider: boolean;
+  providerMessage: string;
+  editRecord: EditRecord;
+}
+
 export interface GenerationTeachingIntent {
   id?: number;
   status?: string;
@@ -141,6 +171,25 @@ export async function getArtifacts(projectId: number | string) {
 export async function getArtifact(projectId: number | string, artifactId: number | string) {
   const response = await http.get<ApiResponse<Artifact>>(
     `/api/projects/${projectId}/artifacts/${artifactId}`,
+  );
+  return response.data.data;
+}
+
+export async function reviseArtifact(
+  projectId: number | string,
+  artifactId: number | string,
+  instruction: string,
+) {
+  const response = await http.post<ApiResponse<ArtifactRevisionResult>>(
+    `/api/v1/projects/${projectId}/artifacts/${artifactId}/revisions`,
+    { instruction },
+  );
+  return response.data.data;
+}
+
+export async function getEditRecords(projectId: number | string) {
+  const response = await http.get<ApiResponse<EditRecord[]>>(
+    `/api/v1/projects/${projectId}/edit-records`,
   );
   return response.data.data;
 }

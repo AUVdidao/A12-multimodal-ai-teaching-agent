@@ -22,6 +22,7 @@ import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.MaterialUsageResp
 import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.MaterialUsageUpdateRequest;
 import com.auvdidao.a12teachingagent.material.storage.FileStorageService;
 import com.auvdidao.a12teachingagent.material.storage.StorageProperties;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +59,7 @@ public class MaterialService {
     private final MaterialPurposeRepository purposeRepository;
     private final FileStorageService fileStorageService;
     private final StorageProperties storageProperties;
+    private final ProjectAccessService projectAccessService;
 
     public MaterialService(
             ProjectRepository projectRepository,
@@ -65,7 +67,8 @@ public class MaterialService {
             UploadedMaterialRepository materialRepository,
             MaterialPurposeRepository purposeRepository,
             FileStorageService fileStorageService,
-            StorageProperties storageProperties
+            StorageProperties storageProperties,
+            ProjectAccessService projectAccessService
     ) {
         this.projectRepository = projectRepository;
         this.requirementSummaryRepository = requirementSummaryRepository;
@@ -73,6 +76,7 @@ public class MaterialService {
         this.purposeRepository = purposeRepository;
         this.fileStorageService = fileStorageService;
         this.storageProperties = storageProperties;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional
@@ -181,8 +185,10 @@ public class MaterialService {
         if (projectId == null || projectId <= 0) {
             throw new BadRequestException("projectId must be greater than 0");
         }
-        return projectRepository.findById(projectId)
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        projectAccessService.requireAccess(project);
+        return project;
     }
 
     RequirementSummary requireConfirmedSummary(Long projectId) {

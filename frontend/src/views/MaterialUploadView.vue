@@ -4,14 +4,6 @@
       <ProjectContextHeader :project="workspace.project" />
       <ProjectWorkspaceNav :project-id="workspace.project.id" />
 
-      <div class="step-strip">
-        <span class="is-active">上传资料</span>
-        <span>标记用途</span>
-        <span>解析摘要</span>
-        <span>知识检索</span>
-        <span>意图确认</span>
-      </div>
-
       <div class="material-layout">
         <section class="grid material-main">
           <section class="panel">
@@ -34,10 +26,13 @@
 
           <section class="panel">
             <div class="panel__header">
-              <h3>资料列表（{{ workspace.statistics.total }}）</h3>
+              <div>
+                <h3>资料列表（{{ workspace.statistics.total }}）</h3>
+                <p class="material-status-summary">已解析 {{ workspace.statistics.parsed }} · 已索引 {{ workspace.statistics.indexed }}</p>
+              </div>
               <el-button :disabled="workspace.statistics.indexed === 0" @click="router.push(`/projects/${projectId}/knowledge`)">进入知识检索</el-button>
             </div>
-            <el-table :data="workspace.materials" highlight-current-row @current-change="selectMaterial">
+            <el-table class="material-table" :data="workspace.materials" highlight-current-row @current-change="selectMaterial">
               <el-table-column label="文件名称" min-width="230">
                 <template #default="{ row }">
                   <button class="material-name" type="button" @click="selectedMaterial = row">{{ row.originalFilename }}</button>
@@ -52,6 +47,7 @@
                     multiple
                     collapse-tags
                     placeholder="选择用途"
+                    :disabled="usageSavingId === row.id"
                     @change="saveUsage(row, $event)"
                   >
                     <el-option v-for="option in workspace.purposeOptions" :key="option.code" :label="option.label" :value="option.code" />
@@ -62,18 +58,38 @@
                 <template #default="{ row }"><span :class="['tag-soft', parseStatusClass(row.parseStatus)]">{{ parseStatusLabel(row.parseStatus) }}</span></template>
               </el-table-column>
               <el-table-column label="上传时间" width="110"><template #default="{ row }">{{ formatDateTime(row.uploadedAt) }}</template></el-table-column>
-              <el-table-column label="操作" width="190" fixed="right">
+              <el-table-column label="操作" width="290" fixed="right">
                 <template #default="{ row }">
-                  <el-button
-                    text
-                    type="primary"
-                    :disabled="row.parseStatus === 'PROCESSING' || row.parseStatus === 'SUCCEEDED'"
-                    @click="parseMaterial(row)"
-                  >
-                    {{ parseActionLabel(row.parseStatus) }}
-                  </el-button>
-                  <el-button text type="primary" :disabled="row.parseStatus !== 'SUCCEEDED'" @click="indexSelected(row)">索引</el-button>
-                  <el-button text @click="download(row)">下载</el-button>
+                  <div class="material-row-actions">
+                    <span v-if="row.parseStatus === 'SUCCEEDED'" class="tag-soft success">已解析</span>
+                    <span v-else-if="row.parseStatus === 'PROCESSING'" class="tag-soft info">解析中</span>
+                    <el-button
+                      v-else
+                      class="material-action-button"
+                      plain
+                      :icon="RefreshRight"
+                      :loading="parsingMaterialId === row.id"
+                      @click="parseMaterial(row)"
+                    >
+                      {{ parseActionLabel(row.parseStatus) }}
+                    </el-button>
+                    <el-button
+                      class="material-action-button"
+                      plain
+                      :icon="FolderChecked"
+                      :loading="indexingMaterialId === row.id"
+                      :disabled="row.parseStatus !== 'SUCCEEDED' || indexingMaterialId !== null"
+                      @click="indexSelected(row)"
+                    >索引</el-button>
+                    <el-button
+                      class="material-action-button material-action-button--neutral"
+                      plain
+                      :icon="Download"
+                      :loading="downloadingMaterialId === row.id"
+                      :disabled="downloadingMaterialId !== null"
+                      @click="download(row)"
+                    >下载</el-button>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -136,6 +152,7 @@ import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import UiUploadDropzone from '@/components/ui/UiUploadDropzone.vue';
 import { formatBytes, formatDateTime } from '@/utils/presentation';
+import { Download, FolderChecked, RefreshRight } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -148,6 +165,10 @@ const selectedMaterial = ref<MaterialWorkspaceItem>();
 const loading = ref(true);
 const uploading = ref(false);
 const uploadProgress = ref(0);
+const usageSavingId = ref<number | null>(null);
+const parsingMaterialId = ref<number | null>(null);
+const indexingMaterialId = ref<number | null>(null);
+const downloadingMaterialId = ref<number | null>(null);
 const acceptTypes = computed(() => workspace.value?.uploadPolicy.supportedExtensions.map((item) => `.${item.toLowerCase()}`).join(',') || '');
 
 async function loadWorkspace(preferredId?: number) {
@@ -177,33 +198,69 @@ async function handleUpload(file: File) {
     const uploaded = await uploadMaterial(projectId.value, file, '', (value) => { uploadProgress.value = value; });
     await loadWorkspace(uploaded.id);
     ElMessage.success('资料上传成功');
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '资料上传失败，请稍后重试'));
   } finally {
     uploading.value = false;
   }
 }
 
 async function saveUsage(row: MaterialWorkspaceItem, values: MaterialUsageType[]) {
-  await updateMaterialUsages(projectId.value, row.id, values, row.usageNote || '');
-  await loadWorkspace(row.id);
-  ElMessage.success('资料用途已更新');
+  usageSavingId.value = row.id;
+  try {
+    await updateMaterialUsages(projectId.value, row.id, values, row.usageNote || '');
+    await loadWorkspace(row.id);
+    ElMessage.success('资料用途已更新');
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '资料用途更新失败，请稍后重试'));
+  } finally {
+    usageSavingId.value = null;
+  }
 }
 
 async function parseMaterial(row: MaterialWorkspaceItem) {
   if (row.parseStatus === 'PROCESSING' || row.parseStatus === 'SUCCEEDED') return;
-  if (row.parseStatus === 'FAILED') await retryMaterialParse(projectId.value, row.id);
-  else await startMaterialParse(projectId.value, row.id);
-  await loadWorkspace(row.id);
-  ElMessage.success('资料解析已完成');
+  parsingMaterialId.value = row.id;
+  try {
+    if (row.parseStatus === 'FAILED') await retryMaterialParse(projectId.value, row.id);
+    else await startMaterialParse(projectId.value, row.id);
+    await loadWorkspace(row.id);
+    ElMessage.success('已提交资料解析');
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '资料解析失败，请稍后重试'));
+  } finally {
+    parsingMaterialId.value = null;
+  }
 }
 
 async function indexSelected(row: MaterialWorkspaceItem) {
-  await indexMaterial(projectId.value, row.id);
-  await loadWorkspace(row.id);
-  ElMessage.success('知识索引已建立');
+  if (row.parseStatus !== 'SUCCEEDED') return;
+  indexingMaterialId.value = row.id;
+  try {
+    await indexMaterial(projectId.value, row.id);
+    await loadWorkspace(row.id);
+    ElMessage.success('知识索引已建立');
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '建立知识索引失败，请稍后重试'));
+  } finally {
+    indexingMaterialId.value = null;
+  }
 }
 
 async function download(row: MaterialWorkspaceItem) {
-  await downloadMaterialById(projectId.value, row.id, row.originalFilename);
+  downloadingMaterialId.value = row.id;
+  try {
+    await downloadMaterialById(projectId.value, row.id, row.originalFilename);
+    ElMessage.success('已开始下载资料');
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '资料下载失败，请稍后重试'));
+  } finally {
+    downloadingMaterialId.value = null;
+  }
+}
+
+function actionErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function parseStatusLabel(status: MaterialParseStatus) {
@@ -241,6 +298,9 @@ onMounted(loadWorkspace);
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.75fr);
   gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .material-main,
@@ -251,8 +311,17 @@ onMounted(loadWorkspace);
 
 .material-main > .panel,
 .material-aside > .panel {
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
+}
+
+.material-table {
+  max-width: 100%;
+}
+
+.material-table :deep(.el-scrollbar__wrap) {
+  overflow-x: auto;
 }
 
 .material-name {
@@ -270,6 +339,48 @@ onMounted(loadWorkspace);
 }
 
 .material-name:hover {
+  color: var(--ui-primary);
+}
+
+.material-status-summary {
+  margin: 4px 0 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
+.material-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.material-row-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+.material-action-button.el-button {
+  min-width: 64px;
+  border-color: #c9bcff;
+  background: #fff;
+  color: var(--ui-primary);
+}
+
+.material-action-button.el-button:hover,
+.material-action-button.el-button:focus-visible {
+  border-color: #5b45f6;
+  background: var(--ui-primary-soft);
+  color: #4e3aef;
+}
+
+.material-action-button--neutral.el-button {
+  border-color: #d7ddea;
+  color: var(--ui-text-secondary);
+}
+
+.material-action-button--neutral.el-button:hover,
+.material-action-button--neutral.el-button:focus-visible {
+  border-color: #a99dfd;
   color: var(--ui-primary);
 }
 

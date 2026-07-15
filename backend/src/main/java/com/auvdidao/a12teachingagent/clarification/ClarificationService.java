@@ -8,6 +8,7 @@ import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,10 +36,16 @@ public class ClarificationService {
 
     private final AIWorkflowGateway aiWorkflowGateway;
     private final ProjectRepository projectRepository;
+    private final ProjectAccessService projectAccessService;
 
-    public ClarificationService(AIWorkflowGateway aiWorkflowGateway, ProjectRepository projectRepository) {
+    public ClarificationService(
+            AIWorkflowGateway aiWorkflowGateway,
+            ProjectRepository projectRepository,
+            ProjectAccessService projectAccessService
+    ) {
         this.aiWorkflowGateway = aiWorkflowGateway;
         this.projectRepository = projectRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional(readOnly = true)
@@ -145,6 +152,7 @@ public class ClarificationService {
         if (!projectRepository.existsById(projectId)) {
             throw new ResourceNotFoundException("Project not found: " + projectId);
         }
+        projectAccessService.requireAccess(projectId);
     }
 
     private static String normalizedRawRequirement(ClarificationCheckRequest request) {
