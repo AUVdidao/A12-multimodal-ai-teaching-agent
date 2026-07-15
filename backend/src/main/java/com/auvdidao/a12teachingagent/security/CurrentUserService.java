@@ -8,16 +8,21 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
+import java.util.Optional;
 
 @Service
 public class CurrentUserService {
 
-    public AuthenticatedUser requireUser() {
+    public Optional<AuthenticatedUser> currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedUser principal)) {
-            throw new UnauthorizedException("Authentication is required");
+            return Optional.empty();
         }
-        return principal;
+        return Optional.of(principal);
+    }
+
+    public AuthenticatedUser requireUser() {
+        return currentUser().orElseThrow(() -> new UnauthorizedException("Authentication is required"));
     }
 
     public AuthenticatedUser requireRole(UserRole... roles) {

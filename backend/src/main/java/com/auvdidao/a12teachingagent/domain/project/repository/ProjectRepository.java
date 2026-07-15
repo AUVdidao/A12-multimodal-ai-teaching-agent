@@ -11,4 +11,12 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     List<Project> findByStatus(ProjectStatus status);
 
     List<Project> findAllByOrderByUpdatedAtDescCreatedAtDesc();
+
+    List<Project> findByOwnerUserIdOrderByUpdatedAtDescCreatedAtDesc(Long ownerUserId);
+
+    List<Project> findAllByDeletedAtIsNullOrderByUpdatedAtDescCreatedAtDesc();
+
+    List<Project> findByOwnerUserIdAndDeletedAtIsNullOrderByUpdatedAtDescCreatedAtDesc(Long ownerUserId);
+
+    List<Project> findByOwnerUserIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(Long ownerUserId);
 }

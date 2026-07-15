@@ -5,7 +5,7 @@
         <h2>依据证据（{{ items.length }}）</h2>
         <A12AssetIcon name="info" :size="17" />
       </div>
-      <button type="button" @click="$emit('expand')">全部展开 <span>›</span></button>
+      <button type="button" @click="toggleAll">{{ expandedAll ? '收起全部' : '全部展开' }} <span>›</span></button>
     </header>
 
     <div class="intent-evidence-panel__scroll">
@@ -18,8 +18,8 @@
         <p><b>来源：</b>{{ item.source }}</p>
         <p><b>匹配理由：</b>{{ item.reason }}</p>
         <div class="intent-evidence-item__fragment">
-          <p><b>匹配片段：</b>{{ item.fragment }}</p>
-          <button type="button">查看更多 <span>→</span></button>
+          <p :class="{ 'is-expanded': isExpanded(index) }"><b>匹配片段：</b>{{ item.fragment }}</p>
+          <button type="button" @click="toggleItem(index)">{{ isExpanded(index) ? '收起' : '查看更多' }} <span>→</span></button>
         </div>
       </article>
     </div>
@@ -36,9 +36,9 @@
 
 <script setup lang="ts">
 import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
+import { ref } from 'vue';
 
 defineEmits<{
-  expand: [];
   search: [];
 }>();
 
@@ -52,6 +52,24 @@ defineProps<{
     tone: 'purple' | 'blue' | 'green';
   }>;
 }>();
+
+const expandedAll = ref(false);
+const expandedItems = ref<number[]>([]);
+
+function isExpanded(index: number) {
+  return expandedAll.value || expandedItems.value.includes(index);
+}
+
+function toggleItem(index: number) {
+  expandedItems.value = expandedItems.value.includes(index)
+    ? expandedItems.value.filter((item) => item !== index)
+    : [...expandedItems.value, index];
+}
+
+function toggleAll() {
+  expandedAll.value = !expandedAll.value;
+  if (!expandedAll.value) expandedItems.value = [];
+}
 </script>
 
 <style scoped>
@@ -208,6 +226,12 @@ defineProps<{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.intent-evidence-item__fragment p.is-expanded {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .intent-evidence-item__fragment button {

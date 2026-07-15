@@ -120,11 +120,16 @@ http://localhost:5173
 
 当前已提供本地 Docker Compose 原型部署：
 
-- 前端：Nginx 托管 Vue 生产构建，并将 `/api/` 反向代理到后端
-- 后端：Spring Boot，默认使用 Mock AI Workflow 和 H2 文件数据库
+- 单一入口：`reverse-proxy` 默认仅绑定 `127.0.0.1:8081`，将 SPA 请求转发至内部 `frontend-web`，将 `/api/` 转发至内部 `backend-api`
+- 前端：`frontend-web` 使用 Nginx 托管 Vue 生产构建，不直接暴露宿主机端口
+- 后端：`backend-api` 运行 Spring Boot，默认使用 Mock AI Workflow 和 H2 文件数据库，不直接暴露宿主机端口
+- 文件解析：`file-parser-service` 在 Compose 内网提供 PDF、DOCX、PPTX、TXT、MD 的真实文本提取
+- 文件生成：`file-generator-service` 在 Compose 内网生成真实 PPTX、DOCX、互动 HTML 与 ZIP
+- 日志查看：`monitor-log` 默认仅绑定 `127.0.0.1:8082`，访问地址为 `http://localhost:8082`
 - 上传持久化：Docker named volume `backend-data` 挂载到 `/app/data`
 - 前端地址：`http://localhost:8081`
-- 后端健康检查：`http://localhost:8080/api/health`
+- 反向代理健康检查：`http://localhost:8081/healthz`
+- 后端健康检查（经反向代理）：`http://localhost:8081/api/health`
 
 启动与停止：
 
@@ -132,11 +137,11 @@ http://localhost:5173
 docker compose config
 docker compose up -d --build
 powershell -ExecutionPolicy Bypass -File scripts/docker-smoke-test.ps1
-docker compose logs backend --tail=100
+docker compose logs backend-api file-parser-service file-generator-service reverse-proxy --tail=100
 docker compose down
 ```
 
-本地上传默认写入 `./data/uploads`，上传单文件上限为 200 MB；当前正文解析为控制资源使用限制在 20 MB。真实 Dify、向量数据库、对象存储和生产 HTTPS 尚未接入。
+演示验收后可保持容器运行，无需执行 `docker compose down`。本地上传默认写入持久卷中的 `/app/data/uploads`，上传单文件上限为 200 MB；当前正文解析为控制资源使用限制在 20 MB。`VITE_DEMO_MODE=true`、`A12_DEMO_SEED_ENABLED=true` 与固定演示凭据仅限本地演示；生产必须将两项设为 `false`，并覆盖所有演示密码或禁用演示账号。真实 Dify、向量数据库、对象存储、生产数据库和生产 HTTPS 尚未接入。
 
 ## API 文档
 
@@ -182,4 +187,4 @@ docker compose down
 - TA-020 生成工作区、状态门禁、首版成果和幂等生成
 - 本地 Docker Compose、M1 至 M3 smoke、桌面与移动端浏览器验收证据
 
-尚未实现：真实 OCR/视频转写、真实向量 RAG、真实 Dify、自然语言修改与多版本恢复、真实 PPTX/DOCX/HTML/ZIP 导出、生产部署。
+尚未实现：真实 OCR/视频转写、真实向量 RAG、真实 Dify、自然语言修改与多版本恢复、生产部署。当前 Compose 内网的 `file-parser-service` 已真实提取 TXT/MD/PDF/DOCX/PPTX 文本，`file-generator-service` 已真实生成 PPTX/DOCX/互动 HTML/ZIP。

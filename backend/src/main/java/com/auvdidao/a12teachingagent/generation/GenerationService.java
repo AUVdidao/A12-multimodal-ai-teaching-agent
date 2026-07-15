@@ -27,6 +27,7 @@ import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.GenerationPla
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.GenerationWorkspaceResponse;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.PlanSection;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.TeachingIntentSummary;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -64,6 +65,7 @@ public class GenerationService {
     private final AIWorkflowGateway aiWorkflowGateway;
     private final MockArtifactContentFactory contentFactory;
     private final ObjectMapper objectMapper;
+    private final ProjectAccessService projectAccessService;
 
     public GenerationService(
             ProjectRepository projectRepository,
@@ -73,7 +75,8 @@ public class GenerationService {
             ArtifactVersionRepository versionRepository,
             AIWorkflowGateway aiWorkflowGateway,
             MockArtifactContentFactory contentFactory,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            ProjectAccessService projectAccessService
     ) {
         this.projectRepository = projectRepository;
         this.intentRepository = intentRepository;
@@ -83,6 +86,7 @@ public class GenerationService {
         this.aiWorkflowGateway = aiWorkflowGateway;
         this.contentFactory = contentFactory;
         this.objectMapper = objectMapper;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional
@@ -350,8 +354,10 @@ public class GenerationService {
         if (projectId == null || projectId <= 0) {
             throw new BadRequestException("projectId must be greater than 0");
         }
-        return projectRepository.findById(projectId)
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        projectAccessService.requireAccess(project);
+        return project;
     }
 
     private GenerationPlan requirePlan(Long projectId, Long planId) {

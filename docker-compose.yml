@@ -1,5 +1,5 @@
 services:
-  backend:
+  backend-api:
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -22,24 +22,94 @@ services:
       A12_DEMO_TEACHER_PASSWORD: ${A12_DEMO_TEACHER_PASSWORD:-Teacher123!}
       A12_DEMO_STUDENT_PASSWORD: ${A12_DEMO_STUDENT_PASSWORD:-Student123!}
       A12_DEMO_MULTI_PASSWORD: ${A12_DEMO_MULTI_PASSWORD:-Multi123!}
-    ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      A12_MATERIAL_PARSER_MODE: ${A12_MATERIAL_PARSER_MODE:-remote}
+      A12_MATERIAL_PARSER_BASE_URL: ${A12_MATERIAL_PARSER_BASE_URL:-http://file-parser-service:8080}
+      A12_MATERIAL_PARSER_TIMEOUT_MS: ${A12_MATERIAL_PARSER_TIMEOUT_MS:-10000}
+      A12_ARTIFACT_GENERATOR_MODE: ${A12_ARTIFACT_GENERATOR_MODE:-remote}
+      A12_ARTIFACT_GENERATOR_BASE_URL: ${A12_ARTIFACT_GENERATOR_BASE_URL:-http://file-generator-service:8080}
+      A12_ARTIFACT_GENERATOR_TIMEOUT_MS: ${A12_ARTIFACT_GENERATOR_TIMEOUT_MS:-15000}
     volumes:
       - backend-data:/app/data
     networks:
       - a12-local-net
+    depends_on:
+      file-parser-service:
+        condition: service_healthy
+      file-generator-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
-  frontend:
+  file-parser-service:
+    build:
+      context: ./file-parser-service
+      dockerfile: Dockerfile
+    networks:
+      - a12-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/internal/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  file-generator-service:
+    build:
+      context: ./file-generator-service
+      dockerfile: Dockerfile
+    networks:
+      - a12-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/internal/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  frontend-web:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: /api
         VITE_DEMO_MODE: ${VITE_DEMO_MODE:-true}
+    networks:
+      - a12-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  reverse-proxy:
+    build:
+      context: ./infra/reverse-proxy
+      dockerfile: Dockerfile
     depends_on:
-      - backend
+      backend-api:
+        condition: service_healthy
+      frontend-web:
+        condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-8081}:80"
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8081}:80"
+    networks:
+      - a12-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  monitor-log:
+    image: amir20/dozzle:v10.6.9
+    ports:
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${MONITOR_PORT:-8082}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - a12-local-net
 

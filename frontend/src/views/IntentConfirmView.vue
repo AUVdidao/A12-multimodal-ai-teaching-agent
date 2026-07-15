@@ -12,12 +12,14 @@
             <small>项目名称</small>
             <div class="intent-project-card__title">
               <h2>{{ workspace.project.projectName }}</h2>
-              <button type="button" aria-label="编辑项目名称">
-                <A12AssetIcon name="pencil" :size="20" />
-              </button>
             </div>
           </div>
           <p>{{ workspace.project.subtitle || `${workspace.project.courseName} / ${workspace.project.chapterTitle}` }}</p>
+        </section>
+
+        <section v-if="isConfirmed" class="intent-lock-notice" role="status">
+          <A12AssetIcon name="document" :size="18" />
+          <span>该教学意图已确认并锁定。创建修订稿后，将基于当前内容生成一份可编辑草稿。</span>
         </section>
 
         <IntentFormSection
@@ -32,6 +34,7 @@
               :key="goal.code"
               :label="goal.label"
               :selected="goals.includes(goal.code)"
+              :disabled="!isEditable"
               @toggle="toggleGoal(goal.code)"
             />
           </div>
@@ -46,7 +49,7 @@
         >
           <div class="intent-basis">
             <label class="intent-select intent-select--wide">
-              <select v-model="basis" aria-label="教学内容的主要来源与依据">
+              <select v-model="basis" :disabled="!isEditable" aria-label="教学内容的主要来源与依据">
                 <option v-for="item in basisOptions" :key="item.code" :value="item.code">
                   {{ item.label }}
                 </option>
@@ -57,9 +60,9 @@
             <div class="intent-basis__tags">
               <span v-for="(item, index) in supplementalBasis" :key="item">
                 {{ optionLabel(item, basisOptions) }}
-                <button type="button" :aria-label="`删除${item}`" @click="removeBasis(index)">×</button>
+                <button type="button" :disabled="!isEditable" :aria-label="`删除${item}`" @click="removeBasis(index)">×</button>
               </span>
-              <button class="intent-basis__add" type="button" @click="addBasis">
+              <button class="intent-basis__add" type="button" :disabled="!isEditable" @click="addBasis">
                 <A12AssetIcon name="plus-circle" :size="17" />
                 添加依据
               </button>
@@ -77,19 +80,19 @@
             <label>
               <span>面向对象</span>
               <span class="intent-select">
-                <input v-model="audience" aria-label="面向对象" placeholder="例如：大学本科一年级" />
+                <input v-model="audience" :disabled="!isEditable" aria-label="面向对象" placeholder="例如：大学本科一年级" />
               </span>
             </label>
             <label>
               <span>总学时</span>
               <span class="intent-select">
-                <input v-model.number="hours" type="number" min="1" max="1000" aria-label="总学时" />
+                <input v-model.number="hours" :disabled="!isEditable" type="number" min="1" max="1000" aria-label="总学时" />
               </span>
             </label>
             <label>
               <span>教学形式</span>
               <span class="intent-select">
-                <select v-model="format" aria-label="教学形式">
+                <select v-model="format" :disabled="!isEditable" aria-label="教学形式">
                   <option v-for="item in formatOptions" :key="item.code" :value="item.code">{{ item.label }}</option>
                 </select>
                 <i aria-hidden="true" />
@@ -110,6 +113,7 @@
               :key="output.code"
               :label="output.label"
               :selected="outputs.includes(output.code)"
+              :disabled="!isEditable"
               @toggle="toggleOutput(output.code)"
             />
           </div>
@@ -125,6 +129,7 @@
           <div class="intent-notes">
             <textarea
               v-model="notes"
+              :disabled="!isEditable"
               maxlength="200"
               aria-label="备注说明"
               placeholder="请输入补充说明，如教学重点、使用限制等（200字以内）"
@@ -134,17 +139,25 @@
         </IntentFormSection>
 
         <div class="intent-page__actions">
-          <button v-if="workspace.intent" class="intent-button intent-button--secondary" type="button" :disabled="saving" @click="saveDraft">
+          <button v-if="workspace.intent && !isConfirmed" class="intent-button intent-button--secondary" type="button" :disabled="!isEditable || saving" @click="saveDraft">
             <A12AssetIcon name="document" :size="20" />
             保存草稿
           </button>
-          <button v-if="workspace.intent" class="intent-button intent-button--primary" type="submit" :disabled="!workspace.canConfirm || confirming">
+          <button v-if="workspace.intent && !isConfirmed" class="intent-button intent-button--primary" type="submit" :disabled="!isEditable || !workspace.canConfirm || confirming">
             <A12AssetIcon name="check-circle" :size="20" />
             确认教学意图
           </button>
-          <button v-else class="intent-button intent-button--primary" type="button" :disabled="!workspace.canGenerate || generating" @click="generateIntent">
+          <button v-else-if="!workspace.intent" class="intent-button intent-button--primary" type="button" :disabled="!workspace.canGenerate || generating" @click="generateIntent">
             <A12AssetIcon name="sparkle" :size="20" />
             生成教学意图
+          </button>
+          <button v-if="isConfirmed" class="intent-button intent-button--secondary" type="button" :disabled="revisioning" @click="createRevision">
+            <A12AssetIcon name="document" :size="20" />
+            创建修订稿
+          </button>
+          <button class="intent-button intent-button--secondary" type="button" :disabled="!isConfirmed" @click="router.push(`/projects/${projectId}/plan`)">
+            <A12AssetIcon name="sparkle" :size="20" />
+            进入内容生成
           </button>
         </div>
       </form>
@@ -158,7 +171,6 @@
         />
         <IntentEvidencePanel
           :items="evidence"
-          @expand="showFeedback('已展开全部依据证据')"
           @search="router.push(`/projects/${projectId}/knowledge`)"
         />
       </aside>
@@ -171,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { confirmTeachingIntent, generateTeachingIntent } from '@/api/teachingIntents';
+import { confirmTeachingIntent, createTeachingIntentRevision, generateTeachingIntent } from '@/api/teachingIntents';
 import {
   getTeachingIntentWorkspace,
   updateTeachingIntentWorkspace,
@@ -195,6 +207,7 @@ const loading = ref(true);
 const saving = ref(false);
 const confirming = ref(false);
 const generating = ref(false);
+const revisioning = ref(false);
 const goals = ref<string[]>([]);
 const outputs = ref<string[]>([]);
 const basis = ref('');
@@ -211,6 +224,12 @@ const goalOptions = computed(() => workspace.value?.options.generationGoals || [
 const outputOptions = computed(() => workspace.value?.options.outputTypes || []);
 const basisOptions = computed(() => workspace.value?.options.contentBases || []);
 const formatOptions = computed(() => workspace.value?.options.teachingFormats || []);
+const isConfirmed = computed(() => workspace.value?.intent?.status === 'CONFIRMED');
+const isEditable = computed(() => Boolean(
+  workspace.value?.intent
+  && workspace.value.intent.status === 'DRAFT'
+  && workspace.value.canEdit,
+));
 const statusLabel = computed(() => {
   if (!workspace.value?.intent) return '待生成';
   return workspace.value.intent.status === 'CONFIRMED' ? '已确认' : '待确认';
@@ -263,14 +282,17 @@ async function loadWorkspace() {
 }
 
 function toggleGoal(value: string) {
+  if (!isEditable.value) return;
   goals.value = goals.value.includes(value) ? goals.value.filter((item) => item !== value) : [...goals.value, value];
 }
 
 function toggleOutput(value: string) {
+  if (!isEditable.value) return;
   outputs.value = outputs.value.includes(value) ? outputs.value.filter((item) => item !== value) : [...outputs.value, value];
 }
 
 function removeBasis(index: number) {
+  if (!isEditable.value) return;
   supplementalBasis.value.splice(index, 1);
 }
 
@@ -279,6 +301,7 @@ function optionLabel(code: string, options: Array<{ code: string; label: string 
 }
 
 function addBasis() {
+  if (!isEditable.value) return;
   const candidate = window.prompt('请输入补充依据名称');
   if (candidate?.trim() && !supplementalBasis.value.includes(candidate.trim())) supplementalBasis.value.push(candidate.trim());
 }
@@ -299,7 +322,7 @@ function validate() {
 
 async function saveDraft() {
   const intentId = workspace.value?.intent?.id;
-  if (!intentId || !validate()) return;
+  if (!intentId || !isEditable.value || !validate()) return;
   saving.value = true;
   try {
     workspace.value = await updateTeachingIntentWorkspace(projectId.value, intentId, {
@@ -333,7 +356,7 @@ async function generateIntent() {
 
 async function confirmIntent() {
   const intentId = workspace.value?.intent?.id;
-  if (!intentId || !validate()) return;
+  if (!intentId || !isEditable.value || !validate()) return;
   confirming.value = true;
   try {
     await saveDraft();
@@ -345,6 +368,25 @@ async function confirmIntent() {
   }
 }
 
+async function createRevision() {
+  const intentId = workspace.value?.intent?.id;
+  if (!intentId || !isConfirmed.value) return;
+  revisioning.value = true;
+  try {
+    await createTeachingIntentRevision(projectId.value, intentId);
+    await loadWorkspace();
+    if (workspace.value?.intent?.status !== 'DRAFT') {
+      ElMessage.warning('修订稿已创建，但当前工作区尚未返回可编辑草稿');
+      return;
+    }
+    ElMessage.success('已创建修订稿，可继续编辑');
+  } catch (error) {
+    ElMessage.error(error instanceof Error && error.message ? error.message : '创建修订稿失败，请稍后重试');
+  } finally {
+    revisioning.value = false;
+  }
+}
+
 onMounted(loadWorkspace);
 onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 </script>
@@ -353,8 +395,11 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 .intent-page {
   position: relative;
   display: flex;
-  min-width: 1160px;
-  height: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 100%;
+  height: auto;
+  padding-bottom: 12px;
   flex-direction: column;
   color: #171b2c;
 }
@@ -367,14 +412,16 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 .intent-page__content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(440px, 38%, 510px);
-  min-height: 0;
+  min-height: auto;
+  align-items: start;
   flex: 1;
   gap: 13px;
 }
 
 .intent-page__form {
   display: grid;
-  grid-template-rows: 104px 102px 162px 90px 90px 104px 44px;
+  grid-template-rows: none;
+  align-content: start;
   min-width: 0;
   min-height: 0;
   gap: 10px;
@@ -434,6 +481,20 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
   line-height: 1.45;
 }
 
+.intent-lock-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid #ddd7ff;
+  border-radius: 8px;
+  background: #faf9ff;
+  color: #5a4ac8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .intent-tag-grid {
   display: flex;
   flex-wrap: wrap;
@@ -486,6 +547,12 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
   cursor: pointer;
 }
 
+.intent-basis__tags button:disabled,
+.intent-basis__add:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .intent-basis__add {
   display: inline-flex;
   align-items: center;
@@ -530,6 +597,14 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 .intent-select input:focus {
   border-color: #8f82fb;
   box-shadow: 0 0 0 2px rgba(98, 87, 246, 0.1);
+}
+
+.intent-select select:disabled,
+.intent-select input:disabled,
+.intent-notes textarea:disabled {
+  cursor: not-allowed;
+  background: #f7f8fb;
+  color: #7a849a;
 }
 
 .intent-select > span,
@@ -597,12 +672,16 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 }
 
 .intent-page__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  padding-right: 23px;
-  transform: translateY(-1px);
+  padding: 10px 23px 10px 0;
+  border-top: 1px solid #edf0f5;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .intent-button {
@@ -620,17 +699,28 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 
 .intent-button--secondary {
   min-width: 150px;
-  border: 1px solid #d9dfe9;
+  border: 1px solid #c9bcff;
   background: #fff;
-  color: #58647d;
+  color: #5b45f6;
+}
+
+.intent-button--secondary:hover:not(:disabled),
+.intent-button--secondary:focus-visible:not(:disabled) {
+  border-color: #5b45f6;
+  background: #f4f1ff;
 }
 
 .intent-button--primary {
   min-width: 166px;
   border: 1px solid #5b45f6;
-  background: linear-gradient(135deg, #735eff, #5438ef);
+  background: #5b45f6;
   box-shadow: 0 5px 12px rgba(91, 69, 246, 0.2);
   color: #fff;
+}
+
+.intent-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
 }
 
 .intent-button--primary :deep(.a12-asset-icon) {
@@ -700,6 +790,60 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
 
   .intent-page__aside {
     grid-template-rows: 224px 540px;
+  }
+}
+
+@media (max-width: 760px) {
+  .intent-page,
+  .intent-page__content,
+  .intent-page__form,
+  .intent-page__aside {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .intent-organization {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .intent-page__actions {
+    justify-content: stretch;
+    flex-wrap: wrap;
+    padding-right: 0;
+  }
+
+  .intent-button {
+    min-width: 0;
+    flex: 1 1 calc(50% - 6px);
+  }
+
+  .intent-page__aside {
+    grid-template-rows: auto auto;
+    gap: 12px;
+  }
+
+  .intent-page__aside > * {
+    min-width: 0;
+    height: auto;
+  }
+
+  .intent-page__aside :deep(.intent-evidence-panel) {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 440px) {
+  .intent-button {
+    flex-basis: 100%;
+  }
+
+  .intent-project-card {
+    padding: 12px;
+  }
+
+  .intent-project-card h2 {
+    font-size: 18px;
   }
 }
 </style>

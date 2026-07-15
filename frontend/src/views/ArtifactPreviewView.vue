@@ -121,20 +121,43 @@
             <span><el-icon><EditPen /></el-icon></span>
             <div>
               <h3>版本修改</h3>
-              <p>版本修改将在下一阶段开放</p>
+              <p>仅修改当前成果并生成新的非定稿版本</p>
             </div>
-            <UiStatusPill label="下一阶段" tone="gray" />
+            <UiStatusPill :label="providerLabel" tone="purple" dot />
           </div>
+          <el-alert
+            v-if="revisionError"
+            :title="revisionError"
+            type="error"
+            show-icon
+            :closable="false"
+          />
+          <el-alert
+            v-if="revisionSuccess"
+            :title="revisionSuccess"
+            type="success"
+            show-icon
+            :closable="false"
+          />
           <el-input
+            v-model="revisionInstruction"
             type="textarea"
             :rows="3"
-            disabled
-            placeholder="版本修改将在下一阶段开放"
-            aria-label="版本修改意见，下一阶段开放"
+            maxlength="4000"
+            show-word-limit
+            :disabled="revisionSubmitting || !activeSummary"
+            placeholder="请输入需要调整的教学内容或表达方式"
+            aria-label="版本修改意见"
           />
           <div class="revision-panel__footer">
-            <span><el-icon><Lock /></el-icon>当前阶段仅支持成果预览</span>
-            <el-button type="primary" :icon="EditPen" disabled>提交修改</el-button>
+            <span>当前提供方：{{ providerLabel }}<template v-if="workspace?.provider?.toUpperCase().includes('MOCK')">（Mock，不代表真实模型）</template></span>
+            <el-button
+              type="primary"
+              :icon="EditPen"
+              :loading="revisionSubmitting"
+              :disabled="!activeSummary || !revisionInstruction.trim()"
+              @click="submitRevision"
+            >提交修改</el-button>
           </div>
         </section>
       </template>
@@ -150,6 +173,7 @@ import {
   type Artifact,
   type ArtifactType,
   type GenerationWorkspace,
+  reviseArtifact,
 } from '@/api/generation';
 import DocxArtifactPreview from '@/components/generation/DocxArtifactPreview.vue';
 import InteractionArtifactPreview from '@/components/generation/InteractionArtifactPreview.vue';
@@ -158,7 +182,8 @@ import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 import { formatDateTime } from '@/utils/presentation';
-import { Back, ChatDotRound, DataBoard, Document, EditPen, Files, Lock, Refresh, View } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
+import { Back, ChatDotRound, DataBoard, Document, EditPen, Files, Refresh, View } from '@element-plus/icons-vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -175,6 +200,10 @@ const activeType = ref<ArtifactType>('PPT');
 const details = reactive<Record<number, Artifact>>({});
 const detailLoading = reactive<Record<number, boolean>>({});
 const detailErrors = reactive<Record<number, string>>({});
+const revisionInstruction = ref('');
+const revisionSubmitting = ref(false);
+const revisionError = ref('');
+const revisionSuccess = ref('');
 
 const artifactTabs = [
   { type: 'PPT' as const, label: 'PPT 课件', icon: DataBoard },
@@ -253,6 +282,31 @@ async function loadArtifactList() {
       : '成果列表读取失败，请稍后重试。');
     chooseInitialType();
     if (fallback.length) await loadArtifactDetail(activeType.value);
+  }
+}
+
+async function submitRevision() {
+  const source = activeSummary.value;
+  const instruction = revisionInstruction.value.trim();
+  if (!source || !instruction) {
+    ElMessage.warning('请选择已有成果并填写修改说明');
+    return;
+  }
+
+  revisionSubmitting.value = true;
+  revisionError.value = '';
+  revisionSuccess.value = '';
+  try {
+    const result = await reviseArtifact(projectId.value, source.id, instruction);
+    revisionSuccess.value = `已创建 v${result.version.versionNumber}，${result.changeSummary}`
+      + (result.mockProvider ? ' 当前使用 Mock provider。' : '');
+    revisionInstruction.value = '';
+    await loadArtifactList();
+  } catch (error) {
+    revisionError.value = resolveError(error, '成果修改失败，请检查当前版本状态后重试。');
+    ElMessage.error(revisionError.value);
+  } finally {
+    revisionSubmitting.value = false;
   }
 }
 

@@ -9,6 +9,7 @@ import com.auvdidao.a12teachingagent.domain.common.DialogRole;
 import com.auvdidao.a12teachingagent.domain.dialog.DialogMessage;
 import com.auvdidao.a12teachingagent.domain.dialog.repository.DialogMessageRepository;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,13 +21,16 @@ public class DialogService {
 
     private final DialogMessageRepository dialogMessageRepository;
     private final ProjectRepository projectRepository;
+    private final ProjectAccessService projectAccessService;
 
     public DialogService(
             DialogMessageRepository dialogMessageRepository,
-            ProjectRepository projectRepository
+            ProjectRepository projectRepository,
+            ProjectAccessService projectAccessService
     ) {
         this.dialogMessageRepository = dialogMessageRepository;
         this.projectRepository = projectRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional
@@ -56,9 +60,13 @@ public class DialogService {
     @Transactional(readOnly = true)
     public List<DialogMessageResponse> listSessionMessages(String sessionId) {
         String normalizedSessionId = trimToRequired(sessionId, "sessionId");
-
-        return dialogMessageRepository.findBySessionIdOrderByCreatedAtAscIdAsc(normalizedSessionId)
-                .stream()
+        List<DialogMessage> messages = dialogMessageRepository
+                .findBySessionIdOrderByCreatedAtAscIdAsc(normalizedSessionId);
+        messages.stream()
+                .map(DialogMessage::getProjectId)
+                .distinct()
+                .forEach(projectAccessService::requireAccess);
+        return messages.stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -73,6 +81,7 @@ public class DialogService {
         if (projectId == null || !projectRepository.existsById(projectId)) {
             throw new ResourceNotFoundException("Project not found: " + projectId);
         }
+        projectAccessService.requireAccess(projectId);
     }
 
     private DialogRole parseSender(String sender) {

@@ -50,9 +50,9 @@
             <article class="summary-block">
               <div><strong>输出内容</strong><p>期望生成的教学资源</p></div>
               <el-checkbox-group v-model="form.outputTypes" :disabled="!workspace.editable">
-                <el-checkbox label="PPT">教学 PPT</el-checkbox>
-                <el-checkbox label="DOCX">Word 教案</el-checkbox>
-                <el-checkbox label="INTERACTION">互动内容</el-checkbox>
+                <el-checkbox value="PPT">教学 PPT</el-checkbox>
+                <el-checkbox value="DOCX">Word 教案</el-checkbox>
+                <el-checkbox value="INTERACTION">互动内容</el-checkbox>
               </el-checkbox-group>
             </article>
           </template>

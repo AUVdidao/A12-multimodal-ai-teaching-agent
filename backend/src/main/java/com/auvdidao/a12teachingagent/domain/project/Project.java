@@ -8,6 +8,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "projects")
 public class Project extends BaseAuditableEntity {
@@ -18,6 +20,8 @@ public class Project extends BaseAuditableEntity {
     private String targetAudience;
     private Integer lessonDurationMinutes;
     private String projectDescription;
+    private Long ownerUserId;
+    private LocalDateTime deletedAt;
 
     @Enumerated(EnumType.STRING)
     private GenerationMode generationMode;
@@ -71,6 +75,22 @@ public class Project extends BaseAuditableEntity {
 
     public void setProjectDescription(String projectDescription) {
         this.projectDescription = projectDescription;
+    }
+
+    public Long getOwnerUserId() {
+        return ownerUserId;
+    }
+
+    public void setOwnerUserId(Long ownerUserId) {
+        this.ownerUserId = ownerUserId;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 
     public GenerationMode getGenerationMode() {

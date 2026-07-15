@@ -13,10 +13,12 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.core.annotation.Order;
 
 import java.util.List;
 
 @Component
+@Order(10)
 public class DemoIdentitySeeder implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DemoIdentitySeeder.class);

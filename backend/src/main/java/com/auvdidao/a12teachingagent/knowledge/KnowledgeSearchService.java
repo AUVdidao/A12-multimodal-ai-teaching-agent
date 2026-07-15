@@ -10,6 +10,7 @@ import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeHitRes
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeOverviewResponse;
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeSearchResponse;
 import com.auvdidao.a12teachingagent.material.MaterialLabels;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,10 +25,16 @@ public class KnowledgeSearchService {
 
     private final ProjectRepository projectRepository;
     private final KnowledgeChunkRepository chunkRepository;
+    private final ProjectAccessService projectAccessService;
 
-    public KnowledgeSearchService(ProjectRepository projectRepository, KnowledgeChunkRepository chunkRepository) {
+    public KnowledgeSearchService(
+            ProjectRepository projectRepository,
+            KnowledgeChunkRepository chunkRepository,
+            ProjectAccessService projectAccessService
+    ) {
         this.projectRepository = projectRepository;
         this.chunkRepository = chunkRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional(readOnly = true)
@@ -126,6 +133,7 @@ public class KnowledgeSearchService {
         if (!projectRepository.existsById(projectId)) {
             throw new ResourceNotFoundException("Project not found: " + projectId);
         }
+        projectAccessService.requireAccess(projectId);
     }
 
     private static String normalizeQuery(String query) {

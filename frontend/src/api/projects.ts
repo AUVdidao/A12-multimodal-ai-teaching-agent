@@ -21,6 +21,13 @@ export interface TeachingProject {
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface RecentProject {
+  project: TeachingProject;
+  lastVisitedAt: string;
+  visitCount: number;
 }
 
 export interface ProjectPayload {
@@ -57,6 +64,25 @@ export async function createProject(payload: ProjectPayload) {
 
 export async function getProject(projectId: number | string) {
   const response = await http.get<ApiResponse<TeachingProject>>(`/api/projects/${projectId}`);
+  return response.data.data;
+}
+
+export async function listRecentProjects() {
+  const response = await http.get<ApiResponse<RecentProject[]>>('/api/projects/recent');
+  return response.data.data;
+}
+
+export async function listRecycleBinProjects() {
+  const response = await http.get<ApiResponse<TeachingProject[]>>('/api/projects/recycle-bin');
+  return response.data.data;
+}
+
+export async function deleteProject(projectId: number | string) {
+  await http.delete<ApiResponse<void>>(`/api/projects/${projectId}`);
+}
+
+export async function restoreProject(projectId: number | string) {
+  const response = await http.post<ApiResponse<TeachingProject>>(`/api/projects/${projectId}/restore`);
   return response.data.data;
 }
 

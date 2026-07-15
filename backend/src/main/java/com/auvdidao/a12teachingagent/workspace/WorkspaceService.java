@@ -37,6 +37,7 @@ import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementIn
 import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementSummaryRepository;
 import com.auvdidao.a12teachingagent.material.MaterialLabels;
 import com.auvdidao.a12teachingagent.material.storage.StorageProperties;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import com.auvdidao.a12teachingagent.workspace.dto.WorkspaceDtos.Activity;
 import com.auvdidao.a12teachingagent.workspace.dto.WorkspaceDtos.DialogMessageView;
 import com.auvdidao.a12teachingagent.workspace.dto.WorkspaceDtos.IntentEvidenceView;
@@ -128,6 +129,7 @@ public class WorkspaceService {
     private final ArtifactVersionRepository versionRepository;
     private final ExportRecordRepository exportRepository;
     private final StorageProperties storageProperties;
+    private final ProjectAccessService projectAccessService;
 
     public WorkspaceService(
             ProjectRepository projectRepository,
@@ -142,7 +144,8 @@ public class WorkspaceService {
             GeneratedArtifactRepository artifactRepository,
             ArtifactVersionRepository versionRepository,
             ExportRecordRepository exportRepository,
-            StorageProperties storageProperties
+            StorageProperties storageProperties,
+            ProjectAccessService projectAccessService
     ) {
         this.projectRepository = projectRepository;
         this.requirementRepository = requirementRepository;
@@ -157,11 +160,14 @@ public class WorkspaceService {
         this.versionRepository = versionRepository;
         this.exportRepository = exportRepository;
         this.storageProperties = storageProperties;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional(readOnly = true)
     public TeacherWorkspaceResponse teacherWorkspace() {
-        List<Snapshot> snapshots = projectRepository.findAllByOrderByUpdatedAtDescCreatedAtDesc().stream()
+        List<Snapshot> snapshots = projectAccessService.filterAccessibleProjects(
+                        projectRepository.findAllByDeletedAtIsNullOrderByUpdatedAtDescCreatedAtDesc()
+                ).stream()
                 .map(this::snapshot)
                 .toList();
         List<ProjectBrief> projects = snapshots.stream().map(this::projectBrief).toList();
@@ -209,7 +215,7 @@ public class WorkspaceService {
         String normalizedSort = normalizeSort(sort);
         Comparator<ProjectBrief> comparator = projectComparator(normalizedSort);
 
-        List<ProjectBrief> filtered = projectRepository.findAll().stream()
+        List<ProjectBrief> filtered = projectAccessService.filterAccessibleProjects(projectRepository.findAll()).stream()
                 .map(this::snapshot)
                 .map(this::projectBrief)
                 .filter(project -> matchesQuery(project, normalizedQuery))
@@ -401,8 +407,10 @@ public class WorkspaceService {
         if (projectId == null || projectId <= 0) {
             throw new BadRequestException("projectId must be greater than 0");
         }
-        return projectRepository.findById(projectId)
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        projectAccessService.requireAccess(project);
+        return project;
     }
 
     private ProjectBrief projectBrief(Snapshot value) {

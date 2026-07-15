@@ -12,5 +12,7 @@ public interface GeneratedArtifactRepository extends JpaRepository<GeneratedArti
 
     List<GeneratedArtifact> findByProjectIdAndGenerationPlanIdOrderByCreatedAtAsc(Long projectId, Long generationPlanId);
 
+    List<GeneratedArtifact> findByProjectIdAndVersionIdOrderByCreatedAtAsc(Long projectId, Long versionId);
+
     Optional<GeneratedArtifact> findByIdAndProjectId(Long id, Long projectId);
 }

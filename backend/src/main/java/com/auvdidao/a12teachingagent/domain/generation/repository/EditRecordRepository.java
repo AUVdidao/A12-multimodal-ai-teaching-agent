@@ -8,4 +8,6 @@ import java.util.List;
 public interface EditRecordRepository extends JpaRepository<EditRecord, Long> {
 
     List<EditRecord> findByProjectIdOrderByCreatedAtAsc(Long projectId);
+
+    List<EditRecord> findByProjectIdOrderByCreatedAtDesc(Long projectId);
 }

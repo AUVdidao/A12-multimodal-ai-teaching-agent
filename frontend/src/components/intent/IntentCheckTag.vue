@@ -3,6 +3,7 @@
     :class="['intent-check-tag', { 'is-selected': selected }]"
     type="button"
     :aria-pressed="selected"
+    :disabled="disabled"
     @click="$emit('toggle')"
   >
     <span class="intent-check-tag__box">{{ selected ? '✓' : '' }}</span>
@@ -18,6 +19,7 @@ defineEmits<{
 defineProps<{
   label: string;
   selected: boolean;
+  disabled?: boolean;
 }>();
 </script>
 
@@ -41,6 +43,15 @@ defineProps<{
 
 .intent-check-tag:hover {
   border-color: #a99dfd;
+}
+
+.intent-check-tag:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.intent-check-tag:disabled:hover {
+  border-color: #dfe4ed;
 }
 
 .intent-check-tag__box {

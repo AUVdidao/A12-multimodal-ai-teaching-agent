@@ -4,16 +4,26 @@ import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.domain.common.ProjectStatus;
+import com.auvdidao.a12teachingagent.domain.common.UserRole;
 import com.auvdidao.a12teachingagent.domain.project.Project;
+import com.auvdidao.a12teachingagent.domain.project.ProjectVisit;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
+import com.auvdidao.a12teachingagent.domain.project.repository.ProjectVisitRepository;
 import com.auvdidao.a12teachingagent.modelmode.dto.ModelModeDtos.ModelModeOption;
 import com.auvdidao.a12teachingagent.modelmode.dto.ModelModeDtos.ProjectModelModeResponse;
 import com.auvdidao.a12teachingagent.project.dto.ProjectDtos.ProjectRequest;
 import com.auvdidao.a12teachingagent.project.dto.ProjectDtos.ProjectResponse;
+import com.auvdidao.a12teachingagent.project.dto.ProjectDtos.RecentProjectResponse;
+import com.auvdidao.a12teachingagent.security.AuthenticatedUser;
+import com.auvdidao.a12teachingagent.security.CurrentUserService;
+import com.auvdidao.a12teachingagent.common.exception.ForbiddenException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.time.LocalDateTime;
 
 @Service
 public class ProjectService {
@@ -25,9 +35,17 @@ public class ProjectService {
     );
 
     private final ProjectRepository projectRepository;
+    private final ProjectVisitRepository projectVisitRepository;
+    private final CurrentUserService currentUserService;
 
-    public ProjectService(ProjectRepository projectRepository) {
+    public ProjectService(
+            ProjectRepository projectRepository,
+            ProjectVisitRepository projectVisitRepository,
+            CurrentUserService currentUserService
+    ) {
         this.projectRepository = projectRepository;
+        this.projectVisitRepository = projectVisitRepository;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional
@@ -37,21 +55,77 @@ public class ProjectService {
         project.setProjectName(resolveProjectName(request));
         project.setStatus(ProjectStatus.CREATED);
         project.setGenerationMode(GenerationMode.STANDARD);
+        currentUserService.currentUser().ifPresent(user -> project.setOwnerUserId(user.userId()));
 
         return toProjectResponse(projectRepository.save(project));
     }
 
     @Transactional(readOnly = true)
     public List<ProjectResponse> list() {
-        return projectRepository.findAllByOrderByUpdatedAtDescCreatedAtDesc()
+        List<Project> projects = currentUserService.currentUser()
+                .map(user -> projectRepository.findByOwnerUserIdAndDeletedAtIsNullOrderByUpdatedAtDescCreatedAtDesc(user.userId()))
+                .orElseGet(projectRepository::findAllByDeletedAtIsNullOrderByUpdatedAtDescCreatedAtDesc);
+        return projects
                 .stream()
                 .map(this::toProjectResponse)
                 .toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ProjectResponse get(Long projectId) {
-        return toProjectResponse(findProject(projectId));
+        Project project = findProject(projectId);
+        currentUserService.currentUser().ifPresent(user -> recordVisit(user.userId(), projectId));
+        return toProjectResponse(project);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RecentProjectResponse> listRecent() {
+        AuthenticatedUser teacher = currentUserService.requireRole(UserRole.TEACHER);
+        List<ProjectVisit> visits = projectVisitRepository.findTop20ByUserIdOrderByLastVisitedAtDesc(teacher.userId());
+        Map<Long, Project> projects = new LinkedHashMap<>();
+        projectRepository.findAllById(visits.stream().map(ProjectVisit::getProjectId).toList())
+                .forEach(project -> projects.put(project.getId(), project));
+        return visits.stream()
+                .filter(visit -> {
+                    Project project = projects.get(visit.getProjectId());
+                    return project != null
+                            && project.getDeletedAt() == null
+                            && teacher.userId().equals(project.getOwnerUserId());
+                })
+                .map(visit -> new RecentProjectResponse(
+                        toProjectResponse(projects.get(visit.getProjectId())),
+                        visit.getLastVisitedAt(),
+                        visit.getVisitCount()
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProjectResponse> listDeleted() {
+        AuthenticatedUser teacher = currentUserService.requireRole(UserRole.TEACHER);
+        return projectRepository.findByOwnerUserIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(teacher.userId()).stream()
+                .map(this::toProjectResponse)
+                .toList();
+    }
+
+    @Transactional
+    public void softDelete(Long projectId) {
+        Project project = findProject(projectId);
+        project.setDeletedAt(LocalDateTime.now());
+        projectRepository.save(project);
+    }
+
+    @Transactional
+    public ProjectResponse restore(Long projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        AuthenticatedUser teacher = currentUserService.requireRole(UserRole.TEACHER);
+        requireOwner(teacher, project);
+        if (project.getDeletedAt() == null) {
+            throw new BadRequestException("Project is not in the recycle bin");
+        }
+        project.setDeletedAt(null);
+        return toProjectResponse(projectRepository.save(project));
     }
 
     @Transactional
@@ -82,8 +156,33 @@ public class ProjectService {
     }
 
     private Project findProject(Long projectId) {
-        return projectRepository.findById(projectId)
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        currentUserService.currentUser().ifPresent(user -> requireOwner(user, project));
+        if (project.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Project not found: " + projectId);
+        }
+        return project;
+    }
+
+    private void recordVisit(Long userId, Long projectId) {
+        ProjectVisit visit = projectVisitRepository.findByUserIdAndProjectId(userId, projectId)
+                .orElseGet(() -> {
+                    ProjectVisit created = new ProjectVisit();
+                    created.setUserId(userId);
+                    created.setProjectId(projectId);
+                    created.setVisitCount(0);
+                    return created;
+                });
+        visit.setLastVisitedAt(LocalDateTime.now());
+        visit.setVisitCount(visit.getVisitCount() + 1);
+        projectVisitRepository.save(visit);
+    }
+
+    private void requireOwner(AuthenticatedUser user, Project project) {
+        if (project.getOwnerUserId() == null || !project.getOwnerUserId().equals(user.userId())) {
+            throw new ForbiddenException("This project belongs to another teacher");
+        }
     }
 
     private void applyProjectFields(Project project, ProjectRequest request) {
@@ -114,7 +213,8 @@ public class ProjectService {
                 normalizeMode(project.getGenerationMode()),
                 project.getStatus(),
                 project.getCreatedAt(),
-                project.getUpdatedAt()
+                project.getUpdatedAt(),
+                project.getDeletedAt()
         );
     }
 

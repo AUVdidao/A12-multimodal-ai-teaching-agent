@@ -10,5 +10,7 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
 
     List<UserRoleAssignment> findByUserIdOrderByRoleAsc(Long userId);
 
+    List<UserRoleAssignment> findByRoleOrderByUserIdAsc(UserRole role);
+
     boolean existsByUserIdAndRole(Long userId, UserRole role);
 }

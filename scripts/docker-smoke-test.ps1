@@ -2,9 +2,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $frontendPort = if ([string]::IsNullOrWhiteSpace($env:FRONTEND_PORT)) { "8081" } else { $env:FRONTEND_PORT }
-$backendPort = if ([string]::IsNullOrWhiteSpace($env:BACKEND_PORT)) { "8080" } else { $env:BACKEND_PORT }
 $baseUrl = "http://localhost:$frontendPort"
-$readinessUrl = "http://localhost:$backendPort/api/health"
+$readinessUrl = "$baseUrl/api/health"
 $deadline = [DateTime]::UtcNow.AddSeconds(60)
 $lastReadinessError = "No response received"
 $script:authToken = $null
@@ -89,7 +88,7 @@ function Invoke-A12Multipart {
     return $response.data
 }
 
-Write-Host "Waiting for backend readiness: $readinessUrl"
+Write-Host "Waiting for reverse-proxy API readiness: $readinessUrl"
 while ([DateTime]::UtcNow -lt $deadline) {
     try {
         $response = Invoke-WebRequest -Uri $readinessUrl -UseBasicParsing -TimeoutSec 5
@@ -110,9 +109,15 @@ if ($null -ne $lastReadinessError) {
     Write-Host "Backend readiness timed out after 60 seconds. Last error: $lastReadinessError"
     Write-Host "docker compose ps:"
     & docker compose ps
-    Write-Host "Last 100 backend log lines:"
-    & docker compose logs backend --tail=100
-    throw "Backend readiness check failed: $readinessUrl"
+    Write-Host "Last 100 reverse-proxy and backend-api log lines:"
+    & docker compose logs reverse-proxy backend-api --tail=100
+    throw "Reverse-proxy API readiness check failed: $readinessUrl"
+}
+
+Write-Host "Checking reverse-proxy health: $baseUrl/healthz"
+$proxyHealth = Invoke-WebRequest -Uri "$baseUrl/healthz" -UseBasicParsing -TimeoutSec 20
+if ($proxyHealth.StatusCode -ne 200) {
+    throw "Reverse-proxy health check failed with HTTP $($proxyHealth.StatusCode)"
 }
 
 Write-Host "Checking frontend: $baseUrl/"
@@ -434,6 +439,20 @@ Students predict variables, observe evidence, explain energy conversion, and com
     $intentWorkspace = Invoke-A12Api -Name "UI V6 teaching intent workspace" -Method "GET" -Path "/api/projects/$projectId/teaching-intents/workspace"
     if ($intentWorkspace.intent.id -ne $intentId -or $intentWorkspace.intent.status -ne "CONFIRMED") {
         throw "Teaching intent workspace did not restore the confirmed intent"
+    }
+
+    $intentRevision = Invoke-A12Api -Name "M2 confirmed teaching intent revision" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/$intentId/revisions"
+    if ($intentRevision.status -ne "DRAFT" -or $intentRevision.id -eq $intentId -or $intentRevision.evidenceItems.Count -lt 1) {
+        throw "Teaching intent revision did not create an independent evidence-backed draft"
+    }
+    $intentId = [long]$intentRevision.id
+    $revisionWorkspace = Invoke-A12Api -Name "UI V6 revised teaching intent workspace" -Method "GET" -Path "/api/projects/$projectId/teaching-intents/workspace"
+    if ($revisionWorkspace.intent.id -ne $intentId -or $revisionWorkspace.intent.status -ne "DRAFT") {
+        throw "Teaching intent workspace did not restore the revised draft"
+    }
+    $confirmedRevision = Invoke-A12Api -Name "M2 revised teaching intent confirmation" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/$intentId/confirm"
+    if ($confirmedRevision.status -ne "CONFIRMED" -or [string]::IsNullOrWhiteSpace($confirmedRevision.confirmedAt)) {
+        throw "Revised teaching intent could not be reconfirmed"
     }
 
     $projectWorkspace = Invoke-A12Api -Name "UI V6 project overview" -Method "GET" -Path "/api/projects/$projectId/workspace-overview"

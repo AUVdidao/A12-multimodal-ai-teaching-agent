@@ -26,6 +26,7 @@ import com.auvdidao.a12teachingagent.intent.dto.TeachingIntentDtos.TeachingInten
 import com.auvdidao.a12teachingagent.knowledge.KnowledgeSearchService;
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeHitResponse;
 import com.auvdidao.a12teachingagent.material.MaterialLabels;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +47,7 @@ public class TeachingIntentService {
     private final KnowledgeChunkRepository chunkRepository;
     private final TeachingIntentRepository intentRepository;
     private final KnowledgeSearchService searchService;
+    private final ProjectAccessService projectAccessService;
 
     public TeachingIntentService(
             ProjectRepository projectRepository,
@@ -54,7 +56,8 @@ public class TeachingIntentService {
             MaterialPurposeRepository purposeRepository,
             KnowledgeChunkRepository chunkRepository,
             TeachingIntentRepository intentRepository,
-            KnowledgeSearchService searchService
+            KnowledgeSearchService searchService,
+            ProjectAccessService projectAccessService
     ) {
         this.projectRepository = projectRepository;
         this.summaryRepository = summaryRepository;
@@ -63,6 +66,7 @@ public class TeachingIntentService {
         this.chunkRepository = chunkRepository;
         this.intentRepository = intentRepository;
         this.searchService = searchService;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional
@@ -170,12 +174,29 @@ public class TeachingIntentService {
         return toResponse(intentRepository.save(intent));
     }
 
+    @Transactional
+    public TeachingIntentResponse revise(Long projectId, Long intentId) {
+        requireProject(projectId);
+        TeachingIntent source = requireIntent(projectId, intentId);
+        if (source.getStatus() == TeachingIntentStatus.DRAFT) {
+            return toResponse(source);
+        }
+        if (source.getStatus() != TeachingIntentStatus.CONFIRMED) {
+            throw new ConflictException("Teaching intent cannot be revised from status: " + source.getStatus());
+        }
+
+        TeachingIntent draft = cloneAsDraft(source);
+        return toResponse(intentRepository.save(draft));
+    }
+
     private Project requireProject(Long projectId) {
         if (projectId == null || projectId <= 0) {
             throw new BadRequestException("projectId must be greater than 0");
         }
-        return projectRepository.findById(projectId)
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        projectAccessService.requireAccess(project);
+        return project;
     }
 
     private RequirementSummary requireConfirmedSummary(Long projectId) {
@@ -197,6 +218,42 @@ public class TeachingIntentService {
             throw new ResourceNotFoundException("Teaching intent does not belong to project: " + projectId);
         }
         return intent;
+    }
+
+    private TeachingIntent cloneAsDraft(TeachingIntent source) {
+        TeachingIntent draft = new TeachingIntent();
+        draft.setProjectId(source.getProjectId());
+        draft.setRequirementSummaryId(source.getRequirementSummaryId());
+        draft.setGenerationGoal(source.getGenerationGoal());
+        draft.setGenerationGoals(source.getGenerationGoals());
+        draft.setContentBasis(source.getContentBasis());
+        draft.setPrimaryBasis(source.getPrimaryBasis());
+        draft.setSupplementalBasis(source.getSupplementalBasis());
+        draft.setTeachingApproach(source.getTeachingApproach());
+        draft.setInteractionMode(source.getInteractionMode());
+        draft.setTargetAudience(source.getTargetAudience());
+        draft.setTotalHours(source.getTotalHours());
+        draft.setTeachingFormat(source.getTeachingFormat());
+        draft.setOutputTypes(source.getOutputTypes());
+        draft.setStylePreference(source.getStylePreference());
+        draft.setNotes(source.getNotes());
+        draft.setEvidenceItems(source.getEvidenceItems().stream()
+                .map(TeachingIntentService::cloneEvidence)
+                .toList());
+        draft.setStatus(TeachingIntentStatus.DRAFT);
+        draft.setConfirmedAt(null);
+        return draft;
+    }
+
+    private static TeachingIntentEvidence cloneEvidence(TeachingIntentEvidence source) {
+        TeachingIntentEvidence evidence = new TeachingIntentEvidence();
+        evidence.setMaterialId(source.getMaterialId());
+        evidence.setKnowledgeChunkId(source.getKnowledgeChunkId());
+        evidence.setSourceFilename(source.getSourceFilename());
+        evidence.setUsageTypes(source.getUsageTypes());
+        evidence.setHitReason(source.getHitReason());
+        evidence.setContentExcerpt(source.getContentExcerpt());
+        return evidence;
     }
 
     private static TeachingIntentEvidence toEvidence(KnowledgeHitResponse hit) {

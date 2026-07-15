@@ -17,6 +17,7 @@ import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementIn
 import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementSummaryRepository;
 import com.auvdidao.a12teachingagent.summary.dto.RequirementSummaryDtos.RequirementSummaryResponse;
 import com.auvdidao.a12teachingagent.summary.dto.RequirementSummaryDtos.RequirementSummaryUpdateRequest;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,17 +36,20 @@ public class RequirementSummaryService {
     private final RequirementInputRepository requirementInputRepository;
     private final RequirementSummaryRepository requirementSummaryRepository;
     private final DialogMessageRepository dialogMessageRepository;
+    private final ProjectAccessService projectAccessService;
 
     public RequirementSummaryService(
             ProjectRepository projectRepository,
             RequirementInputRepository requirementInputRepository,
             RequirementSummaryRepository requirementSummaryRepository,
-            DialogMessageRepository dialogMessageRepository
+            DialogMessageRepository dialogMessageRepository,
+            ProjectAccessService projectAccessService
     ) {
         this.projectRepository = projectRepository;
         this.requirementInputRepository = requirementInputRepository;
         this.requirementSummaryRepository = requirementSummaryRepository;
         this.dialogMessageRepository = dialogMessageRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional
@@ -146,8 +150,10 @@ public class RequirementSummaryService {
         if (projectId == null || projectId <= 0) {
             throw new BadRequestException("projectId must be greater than 0");
         }
-        return projectRepository.findById(projectId)
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        projectAccessService.requireAccess(project);
+        return project;
     }
 
     private RequirementSummary requireSummary(Long projectId, Long summaryId) {

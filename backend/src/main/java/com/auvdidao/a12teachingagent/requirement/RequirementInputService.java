@@ -8,6 +8,7 @@ import com.auvdidao.a12teachingagent.domain.requirement.RequirementInput;
 import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementInputRepository;
 import com.auvdidao.a12teachingagent.requirement.dto.RequirementInputDtos.RequirementInputRequest;
 import com.auvdidao.a12teachingagent.requirement.dto.RequirementInputDtos.RequirementInputResponse;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,13 +20,16 @@ public class RequirementInputService {
 
     private final ProjectRepository projectRepository;
     private final RequirementInputRepository requirementInputRepository;
+    private final ProjectAccessService projectAccessService;
 
     public RequirementInputService(
             ProjectRepository projectRepository,
-            RequirementInputRepository requirementInputRepository
+            RequirementInputRepository requirementInputRepository,
+            ProjectAccessService projectAccessService
     ) {
         this.projectRepository = projectRepository;
         this.requirementInputRepository = requirementInputRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional
@@ -70,6 +74,7 @@ public class RequirementInputService {
         if (!projectRepository.existsById(projectId)) {
             throw new ResourceNotFoundException("Project not found: " + projectId);
         }
+        projectAccessService.requireAccess(projectId);
     }
 
     private RequirementInputResponse toResponse(RequirementInput requirement) {

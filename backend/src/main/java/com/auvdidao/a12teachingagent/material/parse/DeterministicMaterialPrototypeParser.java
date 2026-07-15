@@ -5,6 +5,7 @@ import com.auvdidao.a12teachingagent.domain.material.UploadedMaterial;
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummary;
 import com.auvdidao.a12teachingagent.material.MaterialLabels;
 import com.auvdidao.a12teachingagent.material.storage.FileStorageService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashSet;
@@ -14,6 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Component
+@ConditionalOnProperty(name = "a12.material-parser.mode", havingValue = "local", matchIfMissing = true)
 public class DeterministicMaterialPrototypeParser implements MaterialPrototypeParser {
 
     private static final int SUMMARY_TEXT_LIMIT = 600;

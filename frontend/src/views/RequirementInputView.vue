@@ -91,9 +91,9 @@
           <el-form-item label="互动设计"><el-input v-model="form.interactionType" /></el-form-item>
           <el-form-item label="输出类型">
             <el-checkbox-group v-model="form.outputTypes">
-              <el-checkbox label="PPT">教学 PPT</el-checkbox>
-              <el-checkbox label="DOCX">Word 教案</el-checkbox>
-              <el-checkbox label="INTERACTION">互动内容</el-checkbox>
+              <el-checkbox value="PPT">教学 PPT</el-checkbox>
+              <el-checkbox value="DOCX">Word 教案</el-checkbox>
+              <el-checkbox value="INTERACTION">互动内容</el-checkbox>
             </el-checkbox-group>
           </el-form-item>
           <el-form-item class="requirement-form__wide" label="原始需求"><el-input v-model="form.rawRequirementText" type="textarea" :rows="3" /></el-form-item>

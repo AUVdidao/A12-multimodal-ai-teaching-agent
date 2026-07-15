@@ -20,6 +20,11 @@ export interface DialogueMessagePayload {
   roundNo: number;
 }
 
+export interface DialogueClearResult {
+  projectId: number;
+  deletedCount: number;
+}
+
 export async function saveDialogueMessage(
   projectId: number | string,
   payload: DialogueMessagePayload,
@@ -44,6 +49,8 @@ export async function listSessionDialogues(sessionId: string) {
 }
 
 export async function clearProjectDialogues(projectId: number | string) {
-  const response = await http.delete<ApiResponse<number>>(`/api/projects/${projectId}/dialogues`);
+  const response = await http.delete<ApiResponse<DialogueClearResult>>(
+    `/api/projects/${projectId}/dialogues`,
+  );
   return response.data.data;
 }

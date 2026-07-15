@@ -17,6 +17,7 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
+import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,9 +30,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AIWorkflowController {
 
     private final AIWorkflowGateway aiWorkflowGateway;
+    private final ProjectAccessService projectAccessService;
 
-    public AIWorkflowController(AIWorkflowGateway aiWorkflowGateway) {
+    public AIWorkflowController(AIWorkflowGateway aiWorkflowGateway, ProjectAccessService projectAccessService) {
         this.aiWorkflowGateway = aiWorkflowGateway;
+        this.projectAccessService = projectAccessService;
     }
 
     @GetMapping("/status")
@@ -43,6 +46,7 @@ public class AIWorkflowController {
     public ApiResponse<ClarificationResponse> clarifyRequirement(
             @Valid @RequestBody ClarificationRequest request
     ) {
+        projectAccessService.requireAccess(request.projectId());
         return ApiResponse.success(aiWorkflowGateway.clarifyRequirement(request));
     }
 
@@ -50,6 +54,7 @@ public class AIWorkflowController {
     public ApiResponse<RequirementSummaryResponse> summarizeRequirement(
             @Valid @RequestBody RequirementSummaryRequest request
     ) {
+        projectAccessService.requireAccess(request.projectId());
         return ApiResponse.success(aiWorkflowGateway.summarizeRequirement(request));
     }
 
@@ -57,6 +62,7 @@ public class AIWorkflowController {
     public ApiResponse<MaterialAnalysisResponse> analyzeMaterial(
             @Valid @RequestBody MaterialAnalysisRequest request
     ) {
+        projectAccessService.requireAccess(request.projectId());
         return ApiResponse.success(aiWorkflowGateway.analyzeMaterial(request));
     }
 
@@ -64,6 +70,7 @@ public class AIWorkflowController {
     public ApiResponse<KnowledgeRetrievalResponse> retrieveKnowledge(
             @Valid @RequestBody KnowledgeRetrievalRequest request
     ) {
+        projectAccessService.requireAccess(request.projectId());
         return ApiResponse.success(aiWorkflowGateway.retrieveKnowledge(request));
     }
 
@@ -71,6 +78,7 @@ public class AIWorkflowController {
     public ApiResponse<TeachingIntentResponse> buildTeachingIntent(
             @Valid @RequestBody TeachingIntentRequest request
     ) {
+        projectAccessService.requireAccess(request.projectId());
         return ApiResponse.success(aiWorkflowGateway.buildTeachingIntent(request));
     }
 
@@ -78,6 +86,7 @@ public class AIWorkflowController {
     public ApiResponse<GenerationPlanResponse> createGenerationPlan(
             @Valid @RequestBody GenerationPlanRequest request
     ) {
+        projectAccessService.requireAccess(request.projectId());
         return ApiResponse.success(aiWorkflowGateway.createGenerationPlan(request));
     }
 
@@ -85,6 +94,7 @@ public class AIWorkflowController {
     public ApiResponse<RevisionResponse> reviseArtifact(
             @Valid @RequestBody RevisionRequest request
     ) {
+        projectAccessService.requireAccess(request.projectId());
         return ApiResponse.success(aiWorkflowGateway.reviseArtifact(request));
     }
 }
