@@ -1,5 +1,10 @@
 package com.auvdidao.a12teachingagent.intent;
 
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeSnippet;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
+import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
+import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
@@ -48,6 +53,7 @@ public class TeachingIntentService {
     private final TeachingIntentRepository intentRepository;
     private final KnowledgeSearchService searchService;
     private final ProjectAccessService projectAccessService;
+    private final AIWorkflowGateway aiWorkflowGateway;
 
     public TeachingIntentService(
             ProjectRepository projectRepository,
@@ -57,7 +63,8 @@ public class TeachingIntentService {
             KnowledgeChunkRepository chunkRepository,
             TeachingIntentRepository intentRepository,
             KnowledgeSearchService searchService,
-            ProjectAccessService projectAccessService
+            ProjectAccessService projectAccessService,
+            AIWorkflowGateway aiWorkflowGateway
     ) {
         this.projectRepository = projectRepository;
         this.summaryRepository = summaryRepository;
@@ -67,6 +74,7 @@ public class TeachingIntentService {
         this.intentRepository = intentRepository;
         this.searchService = searchService;
         this.projectAccessService = projectAccessService;
+        this.aiWorkflowGateway = aiWorkflowGateway;
     }
 
     @Transactional
@@ -95,7 +103,10 @@ public class TeachingIntentService {
         }
 
         List<KnowledgeHitResponse> hits = searchService.search(projectId, summary.getTopic(), 5).hits();
-        if (hits.isEmpty()) {
+        List<KnowledgeHitResponse> groundedHits = hits.stream()
+                .filter(TeachingIntentService::isGroundedHit)
+                .toList();
+        if (groundedHits.isEmpty()) {
             throw new ConflictException("At least one knowledge search hit is required before teaching intent generation");
         }
 
@@ -108,22 +119,34 @@ public class TeachingIntentService {
                 .map(UploadedMaterial::getOriginalFileName)
                 .collect(Collectors.joining("、"));
 
+        var aiResponse = requireValidAiIntent(aiWorkflowGateway.buildTeachingIntent(new TeachingIntentRequest(
+                projectId,
+                toAiSummary(summary, project),
+                groundedHits.stream().map(TeachingIntentService::toKnowledgeSnippet).toList()
+        )));
+        List<String> generationGoals = mergeValues(splitValues(summary.getTeachingGoals()), aiResponse.generationGoals());
+        List<String> contentBasis = normalizeValues(aiResponse.contentBasis());
+        List<String> interactionIdeas = normalizeValues(aiResponse.interactionIdeas());
+        List<String> outputTypes = mergeValues(summary.getOutputTypes(), aiResponse.outputTypes());
+
         TeachingIntent intent = new TeachingIntent();
         intent.setProjectId(projectId);
         intent.setRequirementSummaryId(summary.getId());
-        intent.setGenerationGoal(summary.getTeachingGoals());
-        intent.setGenerationGoals(hasText(summary.getTeachingGoals()) ? List.of(summary.getTeachingGoals()) : List.of());
-        intent.setContentBasis("以教师已确认需求为主，结合资料「" + sources + "」的用途、原型摘要与本地知识片段作为增强依据。资料不会覆盖教师明确要求。");
-        intent.setPrimaryBasis("已确认教学需求与本地知识库");
+        intent.setGenerationGoal(String.join("；", generationGoals));
+        intent.setGenerationGoals(generationGoals);
+        intent.setContentBasis("以教师已确认需求为主，结合知识检索依据：" + String.join("；", contentBasis)
+                + "。资料来源：" + sources + "。资料不会覆盖教师明确要求。");
+        intent.setPrimaryBasis(contentBasis.get(0));
         intent.setSupplementalBasis(parsedMaterials.stream().map(UploadedMaterial::getOriginalFileName).toList());
         intent.setTargetAudience(firstNonBlank(summary.getGradeLevel(), project.getTargetAudience()));
         intent.setTotalHours(resolveTotalHours(summary.getLessonDuration(), project.getLessonDurationMinutes()));
         intent.setTeachingApproach(resolveApproach(usages));
-        intent.setInteractionMode(resolveInteraction(usages));
+        intent.setInteractionMode(String.join("；", interactionIdeas));
         intent.setTeachingFormat(intent.getInteractionMode());
-        intent.setOutputTypes(summary.getOutputTypes());
+        intent.setOutputTypes(outputTypes);
         intent.setStylePreference(summary.getStylePreference());
-        intent.setEvidenceItems(hits.stream().map(TeachingIntentService::toEvidence).toList());
+        intent.setNotes(aiResponse.confirmationPrompt().trim());
+        intent.setEvidenceItems(groundedHits.stream().map(TeachingIntentService::toEvidence).toList());
         intent.setStatus(TeachingIntentStatus.DRAFT);
 
         return toResponse(intentRepository.save(intent));
@@ -267,6 +290,54 @@ public class TeachingIntentService {
         return evidence;
     }
 
+    private static boolean isGroundedHit(KnowledgeHitResponse hit) {
+        return hit != null
+                && hit.materialId() != null
+                && hit.chunkId() != null
+                && hasText(hit.sourceFilename())
+                && hasText(hit.content());
+    }
+
+    private static KnowledgeSnippet toKnowledgeSnippet(KnowledgeHitResponse hit) {
+        return new KnowledgeSnippet(
+                firstNonBlank(hit.title(), hit.sourceFilename()),
+                hit.sourceFilename().trim(),
+                hit.content().trim(),
+                hit.score()
+        );
+    }
+
+    private static RequirementSummaryData toAiSummary(RequirementSummary summary, Project project) {
+        return new RequirementSummaryData(
+                firstNonBlank(summary.getSubject(), project.getCourseName()),
+                firstNonBlank(summary.getTopic(), project.getChapterTopic()),
+                firstNonBlank(summary.getGradeLevel(), project.getTargetAudience()),
+                resolveLessonDurationMinutes(summary.getLessonDuration(), project.getLessonDurationMinutes()),
+                splitValues(summary.getTeachingGoals()),
+                mergeValues(splitValues(summary.getKeyPoints()), splitValues(summary.getDifficultPoints())),
+                normalizeValues(summary.getOutputTypes()),
+                trimToNull(summary.getStylePreference()),
+                trimToNull(summary.getInteractionType())
+        );
+    }
+
+    private static com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse requireValidAiIntent(
+            com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse response
+    ) {
+        if (response == null) {
+            throw new AiWorkflowUnavailableException("WF-04 returned no teaching intent");
+        }
+        if (!hasText(response.intentId())
+                || normalizeValues(response.generationGoals()).isEmpty()
+                || normalizeValues(response.contentBasis()).isEmpty()
+                || normalizeValues(response.interactionIdeas()).isEmpty()
+                || normalizeValues(response.outputTypes()).isEmpty()
+                || !hasText(response.confirmationPrompt())) {
+            throw new AiWorkflowUnavailableException("WF-04 returned an incomplete teaching intent");
+        }
+        return response;
+    }
+
     private static String resolveApproach(List<PurposeType> usages) {
         LinkedHashSet<String> approaches = new LinkedHashSet<>();
         if (usages.contains(PurposeType.TEXTBOOK_BASIS)) approaches.add("概念讲解");
@@ -276,16 +347,6 @@ public class TeachingIntentService {
         if (usages.contains(PurposeType.IMAGE_ASSET)) approaches.add("图像观察");
         if (approaches.isEmpty()) approaches.add("问题导向教学");
         return String.join(" + ", approaches);
-    }
-
-    private static String resolveInteraction(List<PurposeType> usages) {
-        if (usages.contains(PurposeType.CASE_MATERIAL) || usages.contains(PurposeType.IMAGE_ASSET)) {
-            return "教师引导、学生观察讨论与证据表达";
-        }
-        if (usages.contains(PurposeType.EXERCISE_SOURCE)) {
-            return "即时练习、同伴互评与教师反馈";
-        }
-        return "教师提问、学生思考与课堂反馈";
     }
 
     private static void validateComplete(TeachingIntent intent) {
@@ -344,6 +405,20 @@ public class TeachingIntentService {
         return List.copyOf(normalized);
     }
 
+    private static List<String> mergeValues(List<String> first, List<String> second) {
+        LinkedHashSet<String> values = new LinkedHashSet<>(normalizeValues(first));
+        values.addAll(normalizeValues(second));
+        return List.copyOf(values);
+    }
+
+    private static List<String> splitValues(String value) {
+        String normalized = trimToNull(value);
+        if (normalized == null) {
+            return List.of();
+        }
+        return normalizeValues(Arrays.asList(normalized.split("[,，;；\\r\\n]+")));
+    }
+
     private static String trimToNull(String value) {
         if (value == null) return null;
         String trimmed = value.trim();
@@ -382,6 +457,26 @@ public class TeachingIntentService {
             return null;
         }
         return (int) Math.ceil(lessonDurationMinutes / 45.0);
+    }
+
+    private static Integer resolveLessonDurationMinutes(String lessonDuration, Integer fallbackMinutes) {
+        if (hasText(lessonDuration)) {
+            java.util.regex.Matcher minutes = java.util.regex.Pattern
+                    .compile("(\\d+)\\s*分钟")
+                    .matcher(lessonDuration);
+            if (minutes.find()) return Integer.parseInt(minutes.group(1));
+
+            java.util.regex.Matcher periods = java.util.regex.Pattern
+                    .compile("(\\d+)\\s*(?:课时|学时)")
+                    .matcher(lessonDuration);
+            if (periods.find()) return Integer.parseInt(periods.group(1)) * 45;
+
+            java.util.regex.Matcher hours = java.util.regex.Pattern
+                    .compile("(\\d+)\\s*小时")
+                    .matcher(lessonDuration);
+            if (hours.find()) return Integer.parseInt(hours.group(1)) * 60;
+        }
+        return fallbackMinutes != null && fallbackMinutes > 0 ? fallbackMinutes : null;
     }
 
     private static String abbreviate(String value, int limit) {

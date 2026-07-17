@@ -1,5 +1,8 @@
 package com.auvdidao.a12teachingagent.material;
 
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisResponse;
+import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
 import com.auvdidao.a12teachingagent.domain.common.PurposeType;
@@ -19,16 +22,30 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Service
 public class MaterialParseService {
+
+    private static final Set<String> SUCCESSFUL_ANALYSIS_STATUSES = Set.of(
+            "PARSED",
+            "SUCCESS",
+            "SUCCEEDED",
+            "COMPLETED"
+    );
+    private static final int MAX_AI_SUMMARY_LENGTH = 8_000;
+    private static final int MAX_AI_LIST_ITEMS = 20;
+    private static final int MAX_AI_LIST_ITEM_LENGTH = 200;
 
     private final MaterialService materialService;
     private final UploadedMaterialRepository materialRepository;
     private final MaterialPurposeRepository purposeRepository;
     private final ParseResultRepository parseResultRepository;
     private final MaterialPrototypeParser prototypeParser;
+    private final AIWorkflowGateway aiWorkflowGateway;
     private final KnowledgeIndexService knowledgeIndexService;
 
     public MaterialParseService(
@@ -37,6 +54,7 @@ public class MaterialParseService {
             MaterialPurposeRepository purposeRepository,
             ParseResultRepository parseResultRepository,
             MaterialPrototypeParser prototypeParser,
+            AIWorkflowGateway aiWorkflowGateway,
             KnowledgeIndexService knowledgeIndexService
     ) {
         this.materialService = materialService;
@@ -44,6 +62,7 @@ public class MaterialParseService {
         this.purposeRepository = purposeRepository;
         this.parseResultRepository = parseResultRepository;
         this.prototypeParser = prototypeParser;
+        this.aiWorkflowGateway = aiWorkflowGateway;
         this.knowledgeIndexService = knowledgeIndexService;
     }
 
@@ -78,9 +97,16 @@ public class MaterialParseService {
 
         try {
             MaterialPrototypeParser.ParsedContent parsed = prototypeParser.parse(material, usages, summary);
-            result.setSummary(parsed.summary());
-            result.setKeywords(parsed.keywords());
-            result.setApplicableTeachingStages(parsed.teachingStages());
+            MaterialAnalysisResponse analysis = aiWorkflowGateway.analyzeMaterial(new MaterialAnalysisRequest(
+                    projectId,
+                    analysisFileName(material),
+                    analysisMaterialType(material),
+                    analysisPurpose(usages)
+            ));
+            EnrichedContent enriched = mergeAnalysis(parsed, analysis);
+            result.setSummary(enriched.summary());
+            result.setKeywords(enriched.keywords());
+            result.setApplicableTeachingStages(enriched.teachingStages());
             result.setParseStatus(MaterialParseStatus.SUCCEEDED);
             result.setFailureReason(null);
             result.setParsedAt(LocalDateTime.now());
@@ -152,6 +178,112 @@ public class MaterialParseService {
                 .toList();
     }
 
+    private static EnrichedContent mergeAnalysis(
+            MaterialPrototypeParser.ParsedContent parsed,
+            MaterialAnalysisResponse analysis
+    ) {
+        if (parsed == null) {
+            throw new IllegalStateException("Material parser returned no result");
+        }
+        if (analysis == null || !isSuccessfulStatus(analysis.status())) {
+            throw new IllegalStateException("Material AI analysis did not complete successfully");
+        }
+
+        String aiSummary = sanitizeExternalText(analysis.summary(), MAX_AI_SUMMARY_LENGTH);
+        List<String> aiKeywords = sanitizeExternalList(analysis.keywords());
+        List<String> aiTeachingUses = sanitizeExternalList(analysis.teachingUses());
+        if (aiSummary == null && aiKeywords.isEmpty() && aiTeachingUses.isEmpty()) {
+            throw new IllegalStateException("Material AI analysis returned no usable fields");
+        }
+
+        return new EnrichedContent(
+                mergeSummary(parsed.summary(), aiSummary),
+                mergeTrustedAndExternal(parsed.keywords(), aiKeywords),
+                mergeTrustedAndExternal(parsed.teachingStages(), aiTeachingUses)
+        );
+    }
+
+    private static boolean isSuccessfulStatus(String status) {
+        return status != null
+                && SUCCESSFUL_ANALYSIS_STATUSES.contains(status.strip().toUpperCase(Locale.ROOT));
+    }
+
+    private static String mergeSummary(String parsedSummary, String aiSummary) {
+        String local = parsedSummary == null ? "" : parsedSummary.strip();
+        if (aiSummary == null || aiSummary.equals(local)) {
+            return local;
+        }
+        if (local.isEmpty()) {
+            return aiSummary;
+        }
+        return local + "\n\nAI 教学分析：" + aiSummary;
+    }
+
+    private static List<String> mergeTrustedAndExternal(List<String> trusted, List<String> external) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>();
+        if (trusted != null) {
+            trusted.stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(String::strip)
+                    .forEach(merged::add);
+        }
+        external.forEach(merged::add);
+        return List.copyOf(merged);
+    }
+
+    private static List<String> sanitizeExternalList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> sanitized = new LinkedHashSet<>();
+        for (String value : values) {
+            String normalized = sanitizeExternalText(value, MAX_AI_LIST_ITEM_LENGTH);
+            if (normalized != null) {
+                sanitized.add(normalized);
+            }
+            if (sanitized.size() >= MAX_AI_LIST_ITEMS) {
+                break;
+            }
+        }
+        return List.copyOf(sanitized);
+    }
+
+    private static String sanitizeExternalText(String value, int maxLength) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.strip();
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
+    }
+
+    private static String analysisFileName(UploadedMaterial material) {
+        if (material.getOriginalFileName() != null && !material.getOriginalFileName().isBlank()) {
+            return material.getOriginalFileName().strip();
+        }
+        if (material.getFileName() != null && !material.getFileName().isBlank()) {
+            return material.getFileName().strip();
+        }
+        return "material-" + material.getId();
+    }
+
+    private static String analysisMaterialType(UploadedMaterial material) {
+        if (material.getFileType() != null) {
+            return material.getFileType().name();
+        }
+        if (material.getFileExtension() != null && !material.getFileExtension().isBlank()) {
+            return material.getFileExtension().strip().toUpperCase(Locale.ROOT);
+        }
+        return "UNKNOWN";
+    }
+
+    private static String analysisPurpose(List<PurposeType> usages) {
+        return usages.stream()
+                .map(MaterialLabels::usageLabel)
+                .distinct()
+                .reduce((left, right) -> left + "、" + right)
+                .orElse("教学知识补充");
+    }
+
     public static ParseResultResponse toResponse(ParseResult result) {
         return new ParseResultResponse(
                 result.getId(),
@@ -164,5 +296,8 @@ public class MaterialParseService {
                 result.getParsedAt(),
                 true
         );
+    }
+
+    private record EnrichedContent(String summary, List<String> keywords, List<String> teachingStages) {
     }
 }

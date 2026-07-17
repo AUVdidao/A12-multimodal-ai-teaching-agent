@@ -276,6 +276,11 @@ class WorkspaceControllerTest {
                 .andExpect(jsonPath("$.data.metrics.pptCount", is(1)))
                 .andExpect(jsonPath("$.data.metrics.versionCount", is(1)))
                 .andExpect(jsonPath("$.data.timeline", hasSize(8)))
+                .andExpect(jsonPath("$.data.timeline[5].code", is("INTENT_CONFIRMED")))
+                .andExpect(jsonPath("$.data.timeline[5].state", is("CURRENT")))
+                .andExpect(jsonPath("$.data.timeline[6].code", is("CONTENT_GENERATED")))
+                .andExpect(jsonPath("$.data.timeline[6].state", is("PENDING")))
+                .andExpect(jsonPath("$.data.timeline[6].completedAt").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.data.quickActions[3].enabled", is(true)));
 
         mockMvc.perform(get("/api/projects/{projectId}/teaching-intents/workspace", project.getId()))

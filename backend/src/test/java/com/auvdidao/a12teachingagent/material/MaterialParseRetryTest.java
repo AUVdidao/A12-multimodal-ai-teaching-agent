@@ -93,7 +93,8 @@ class MaterialParseRetryTest {
                 ))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.parseStatus", is("SUCCEEDED")))
-                .andExpect(jsonPath("$.data.summary", is("重试后的确定性原型摘要")));
+                .andExpect(jsonPath("$.data.summary", containsString("重试后的确定性原型摘要")))
+                .andExpect(jsonPath("$.data.summary", containsString("AI 教学分析")));
 
         mockMvc.perform(get("/api/projects/{projectId}/knowledge/overview", fixture.projectId()))
                 .andExpect(status().isOk())

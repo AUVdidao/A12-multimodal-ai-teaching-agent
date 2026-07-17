@@ -31,10 +31,10 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 
-import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
@@ -124,7 +124,12 @@ class M2WorkflowControllerTest {
                 .andExpect(jsonPath("$.data.summary", containsString("确定性原型摘要")))
                 .andExpect(jsonPath("$.data.summary", containsString("光合作用")))
                 .andExpect(jsonPath("$.data.keywords.length()", greaterThan(2)))
-                .andExpect(jsonPath("$.data.applicableTeachingStages", contains("概念讲解", "课堂导入", "案例分析")));
+                .andExpect(jsonPath("$.data.applicableTeachingStages", hasItems(
+                        "概念讲解",
+                        "课堂导入",
+                        "案例分析",
+                        "作为导入案例"
+                )));
 
         mockMvc.perform(get("/api/projects/{projectId}/knowledge/overview", pipeline.projectId()))
                 .andExpect(status().isOk())

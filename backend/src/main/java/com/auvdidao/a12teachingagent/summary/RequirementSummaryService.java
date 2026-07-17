@@ -1,5 +1,10 @@
 package com.auvdidao.a12teachingagent.summary;
 
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.DialogTurn;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryRequest;
+import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
+import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
@@ -22,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 
@@ -37,19 +43,22 @@ public class RequirementSummaryService {
     private final RequirementSummaryRepository requirementSummaryRepository;
     private final DialogMessageRepository dialogMessageRepository;
     private final ProjectAccessService projectAccessService;
+    private final AIWorkflowGateway aiWorkflowGateway;
 
     public RequirementSummaryService(
             ProjectRepository projectRepository,
             RequirementInputRepository requirementInputRepository,
             RequirementSummaryRepository requirementSummaryRepository,
             DialogMessageRepository dialogMessageRepository,
-            ProjectAccessService projectAccessService
+            ProjectAccessService projectAccessService,
+            AIWorkflowGateway aiWorkflowGateway
     ) {
         this.projectRepository = projectRepository;
         this.requirementInputRepository = requirementInputRepository;
         this.requirementSummaryRepository = requirementSummaryRepository;
         this.dialogMessageRepository = dialogMessageRepository;
         this.projectAccessService = projectAccessService;
+        this.aiWorkflowGateway = aiWorkflowGateway;
     }
 
     @Transactional
@@ -67,21 +76,41 @@ public class RequirementSummaryService {
             return toResponse(existing);
         }
 
+        GenerationMode generationMode = project.getGenerationMode() == null
+                ? GenerationMode.STANDARD
+                : project.getGenerationMode();
+        List<DialogMessage> messages = dialogMessageRepository.findByProjectIdOrderByCreatedAtAscIdAsc(projectId);
+        var aiResponse = aiWorkflowGateway.summarizeRequirement(new RequirementSummaryRequest(
+                projectId,
+                buildRawRequirement(requirement, project),
+                toDialogTurns(messages),
+                generationMode
+        ));
+        RequirementSummaryData aiSummary = requireValidAiSummary(aiResponse);
+        boolean hasNarrativeInput = hasText(requirement.getRawRequirementText()) || hasText(requirement.getContent());
+
         RequirementSummary summary = new RequirementSummary();
         summary.setProjectId(projectId);
         summary.setSourceRequirementId(requirement.getId());
-        summary.setGradeLevel(requirement.getGradeLevel());
-        summary.setSubject(requirement.getSubject());
-        summary.setTopic(requirement.getTopic());
+        summary.setGradeLevel(preferStructuredValue(requirement.getGradeLevel(), aiSummary.targetAudience(), hasNarrativeInput));
+        summary.setSubject(preferStructuredValue(requirement.getSubject(), aiSummary.courseName(), hasNarrativeInput));
+        summary.setTopic(preferStructuredValue(requirement.getTopic(), aiSummary.chapterTopic(), hasNarrativeInput));
         summary.setBaselineLevel(requirement.getBaselineLevel());
-        summary.setLessonDuration(requirement.getLessonDuration());
-        summary.setTeachingGoals(requirement.getTeachingGoals());
+        summary.setLessonDuration(preferStructuredValue(
+                requirement.getLessonDuration(),
+                aiSummary.lessonDurationMinutes() + "分钟",
+                hasNarrativeInput
+        ));
+        summary.setTeachingGoals(mergeText(requirement.getTeachingGoals(), aiSummary.teachingGoals()));
         summary.setKeyPoints(requirement.getKeyPoints());
-        summary.setDifficultPoints(requirement.getDifficultPoints());
-        summary.setOutputTypes(requirement.getOutputTypes());
-        summary.setStylePreference(firstNonBlank(requirement.getStylePreference(), resolveStylePreference(projectId)));
-        summary.setInteractionType(requirement.getInteractionType());
-        summary.setGenerationMode(project.getGenerationMode() == null ? GenerationMode.STANDARD : project.getGenerationMode());
+        summary.setDifficultPoints(mergeText(requirement.getDifficultPoints(), aiSummary.keyDifficulties()));
+        summary.setOutputTypes(resolveOutputTypes(requirement.getOutputTypes(), aiSummary.outputTypes(), hasNarrativeInput));
+        summary.setStylePreference(firstNonBlank(
+                requirement.getStylePreference(),
+                firstNonBlank(resolveStylePreference(messages), aiSummary.coursewareStyle())
+        ));
+        summary.setInteractionType(firstNonBlank(requirement.getInteractionType(), aiSummary.interactionType()));
+        summary.setGenerationMode(generationMode);
         summary.setStatus(RequirementSummaryStatus.DRAFT);
 
         return toResponse(requirementSummaryRepository.save(summary));
@@ -165,8 +194,7 @@ public class RequirementSummaryService {
         return summary;
     }
 
-    private String resolveStylePreference(Long projectId) {
-        List<DialogMessage> messages = dialogMessageRepository.findByProjectIdOrderByCreatedAtAscIdAsc(projectId);
+    private String resolveStylePreference(List<DialogMessage> messages) {
         for (int index = messages.size() - 1; index >= 0; index--) {
             DialogMessage message = messages.get(index);
             if (message.getRole() != DialogRole.TEACHER || !hasText(message.getContent())) {
@@ -179,6 +207,108 @@ public class RequirementSummaryService {
             }
         }
         return null;
+    }
+
+    private static RequirementSummaryData requireValidAiSummary(
+            com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryResponse response
+    ) {
+        if (response == null || response.summary() == null) {
+            throw new AiWorkflowUnavailableException("WF-02 returned no requirement summary");
+        }
+        RequirementSummaryData summary = response.summary();
+        if (!hasText(summary.courseName())
+                || !hasText(summary.chapterTopic())
+                || !hasText(summary.targetAudience())
+                || summary.lessonDurationMinutes() == null
+                || summary.lessonDurationMinutes() <= 0
+                || normalizeValues(summary.teachingGoals()).isEmpty()
+                || normalizeValues(summary.keyDifficulties()).isEmpty()
+                || normalizeOutputTypes(summary.outputTypes()).isEmpty()
+                || !hasText(summary.coursewareStyle())
+                || !hasText(summary.interactionType())) {
+            throw new AiWorkflowUnavailableException("WF-02 returned an incomplete requirement summary");
+        }
+        return summary;
+    }
+
+    private static List<DialogTurn> toDialogTurns(List<DialogMessage> messages) {
+        if (messages == null) {
+            return List.of();
+        }
+        return messages.stream()
+                .filter(message -> message.getRole() != null && hasText(message.getContent()))
+                .map(message -> new DialogTurn(message.getRole().name(), message.getContent().trim()))
+                .toList();
+    }
+
+    private static String buildRawRequirement(RequirementInput requirement, Project project) {
+        List<String> parts = new ArrayList<>();
+        addPart(parts, requirement.getRawRequirementText());
+        if (!sameText(requirement.getRawRequirementText(), requirement.getContent())) {
+            addPart(parts, requirement.getContent());
+        }
+        addLabeledPart(parts, "课程", requirement.getSubject());
+        addLabeledPart(parts, "课题", requirement.getTopic());
+        addLabeledPart(parts, "对象", requirement.getGradeLevel());
+        addLabeledPart(parts, "课时", requirement.getLessonDuration());
+        addLabeledPart(parts, "教学目标", requirement.getTeachingGoals());
+        addLabeledPart(parts, "教学重点", requirement.getKeyPoints());
+        addLabeledPart(parts, "教学难点", requirement.getDifficultPoints());
+        if (!requirement.getOutputTypes().isEmpty()) {
+            parts.add("输出类型：" + String.join("、", requirement.getOutputTypes()));
+        }
+        if (parts.isEmpty()) {
+            addLabeledPart(parts, "课程", project.getCourseName());
+            addLabeledPart(parts, "课题", project.getChapterTopic());
+        }
+        if (parts.isEmpty()) {
+            throw new BadRequestException("The teaching requirement has no usable content");
+        }
+        return String.join("\n", parts);
+    }
+
+    private static void addLabeledPart(List<String> parts, String label, String value) {
+        String normalized = trimToNull(value);
+        if (normalized != null) {
+            parts.add(label + "：" + normalized);
+        }
+    }
+
+    private static void addPart(List<String> parts, String value) {
+        String normalized = trimToNull(value);
+        if (normalized != null) {
+            parts.add(normalized);
+        }
+    }
+
+    private static boolean sameText(String first, String second) {
+        String normalizedFirst = trimToNull(first);
+        String normalizedSecond = trimToNull(second);
+        return normalizedFirst != null && normalizedFirst.equals(normalizedSecond);
+    }
+
+    private static String preferStructuredValue(String structured, String aiValue, boolean hasNarrativeInput) {
+        String normalized = trimToNull(structured);
+        return normalized != null || !hasNarrativeInput ? normalized : trimToNull(aiValue);
+    }
+
+    private static List<String> resolveOutputTypes(
+            List<String> structured,
+            List<String> aiValues,
+            boolean hasNarrativeInput
+    ) {
+        List<String> normalized = normalizeOutputTypes(structured);
+        return !normalized.isEmpty() || !hasNarrativeInput ? normalized : normalizeOutputTypes(aiValues);
+    }
+
+    private static String mergeText(String structured, List<String> aiValues) {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        String normalizedStructured = trimToNull(structured);
+        if (normalizedStructured != null) {
+            values.add(normalizedStructured);
+        }
+        values.addAll(normalizeValues(aiValues));
+        return values.isEmpty() ? null : String.join("；", values);
     }
 
     private static void validateComplete(RequirementSummary summary) {
@@ -225,6 +355,20 @@ public class RequirementSummaryService {
             String value = trimToNull(outputType);
             if (value != null) {
                 normalized.add(value);
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    private static List<String> normalizeValues(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String value : values) {
+            String trimmed = trimToNull(value);
+            if (trimmed != null) {
+                normalized.add(trimmed);
             }
         }
         return List.copyOf(normalized);

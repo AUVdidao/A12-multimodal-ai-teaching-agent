@@ -618,8 +618,12 @@ public class WorkspaceService {
         List<TimelineStep> result = new ArrayList<>();
         for (int index = 0; index < steps.size(); index++) {
             StepValue step = steps.get(index);
-            String state = step.completed() ? "COMPLETED" : index == firstIncomplete ? "CURRENT" : "PENDING";
-            result.add(new TimelineStep(step.code(), step.label(), state, step.completedAt()));
+            boolean completedPrefix = firstIncomplete < 0 || index < firstIncomplete;
+            String state = completedPrefix && step.completed()
+                    ? "COMPLETED"
+                    : index == firstIncomplete ? "CURRENT" : "PENDING";
+            LocalDateTime completedAt = "COMPLETED".equals(state) ? step.completedAt() : null;
+            result.add(new TimelineStep(step.code(), step.label(), state, completedAt));
         }
         return List.copyOf(result);
     }
