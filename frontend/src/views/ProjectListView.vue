@@ -66,19 +66,43 @@
             <time :datetime="row.updatedAt">{{ formatDateTime(row.updatedAt) }}</time>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="202" fixed="right">
+        <el-table-column label="操作" width="136" fixed="right">
           <template #default="{ row }">
             <div class="project-row-actions">
-              <el-button class="project-row-actions__continue" type="primary" plain @click.stop="openProject(row)">继续项目</el-button>
               <el-button
-                class="project-row-actions__recycle"
-                type="danger"
-                plain
-                :loading="deletingProjectId === row.id"
-                @click.stop="moveToRecycleBin(row)"
+                class="project-row-actions__continue"
+                type="primary"
+                size="small"
+                :icon="ArrowRight"
+                @click.stop="openProject(row)"
               >
-                移入回收站
+                继续
               </el-button>
+              <el-dropdown
+                trigger="click"
+                :disabled="deletingProjectId === row.id"
+                @click.stop
+                @command="handleProjectCommand($event, row)"
+              >
+                <button
+                  class="project-row-menu-button"
+                  type="button"
+                  title="更多操作"
+                  :aria-label="`${row.projectName}的更多操作`"
+                  :disabled="deletingProjectId === row.id"
+                  @click.stop
+                >
+                  <el-icon v-if="deletingProjectId === row.id" class="is-loading"><Loading /></el-icon>
+                  <el-icon v-else><MoreFilled /></el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="recycle">
+                      <span class="project-recycle-command">移入回收站</span>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>
@@ -118,8 +142,37 @@
             <strong>{{ project.progress }}%</strong>
           </div>
           <div class="project-mobile-card__actions">
-            <el-button class="project-row-actions__continue" type="primary" plain @click="openProject(project)">继续项目</el-button>
-            <el-button class="project-row-actions__recycle" type="danger" plain :loading="deletingProjectId === project.id" @click="moveToRecycleBin(project)">移入回收站</el-button>
+            <el-button
+              class="project-row-actions__continue"
+              type="primary"
+              :icon="ArrowRight"
+              @click="openProject(project)"
+            >
+              继续
+            </el-button>
+            <el-dropdown
+              trigger="click"
+              :disabled="deletingProjectId === project.id"
+              @command="handleProjectCommand($event, project)"
+            >
+              <button
+                class="project-row-menu-button project-row-menu-button--mobile"
+                type="button"
+                title="更多操作"
+                :aria-label="`${project.projectName}的更多操作`"
+                :disabled="deletingProjectId === project.id"
+              >
+                <el-icon v-if="deletingProjectId === project.id" class="is-loading"><Loading /></el-icon>
+                <el-icon v-else><MoreFilled /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="recycle">
+                    <span class="project-recycle-command">移入回收站</span>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </article>
       </section>
@@ -144,6 +197,7 @@ import { getWorkspaceProjects, type ProjectBrief } from '@/api/workspace';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 import UiSubjectIcon from '@/components/ui/UiSubjectIcon.vue';
 import { formatDateTime, projectIcon, projectTone, stageTone } from '@/utils/presentation';
+import { ArrowRight, Loading, MoreFilled } from '@element-plus/icons-vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -195,6 +249,12 @@ function openProject(project: ProjectBrief) {
 function toggleSort() {
   sortDesc.value = !sortDesc.value;
   loadProjects();
+}
+
+function handleProjectCommand(command: string, project: ProjectBrief) {
+  if (command === 'recycle') {
+    void moveToRecycleBin(project);
+  }
 }
 
 async function moveToRecycleBin(project: ProjectBrief) {
@@ -252,6 +312,13 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateViewportWidth))
 </script>
 
 <style scoped>
+.page,
+.panel,
+.project-list-toolbar,
+.project-list-toolbar > * {
+  min-width: 0;
+}
+
 .project-list-toolbar {
   flex-wrap: wrap;
 }
@@ -385,44 +452,65 @@ time {
 
 .project-row-actions {
   display: flex;
+  min-width: 0;
+  align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .project-row-actions .el-button + .el-button {
   margin-left: 0;
 }
 
-.project-row-actions__continue.el-button--primary.is-plain {
-  border-color: #c9bcff;
-  background: transparent;
-  color: var(--ui-primary);
+.project-row-actions__continue.el-button {
+  min-width: 76px;
+  height: 32px;
+  padding: 0 10px;
 }
 
-.project-row-actions__continue.el-button--primary.is-plain:hover,
-.project-row-actions__continue.el-button--primary.is-plain:focus-visible {
-  border-color: #4e3aef;
-  background: var(--ui-primary-soft);
+.project-row-menu-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid #dfe3ec;
+  border-radius: 6px;
+  background: transparent;
+  color: #59637a;
+  cursor: pointer;
+}
+
+.project-row-menu-button:hover,
+.project-row-menu-button:focus-visible {
+  border-color: #bfb4f6;
+  background: #f5f3ff;
   color: #4e3aef;
+  outline: none;
 }
 
-.project-row-actions__continue.el-button--primary.is-plain:active {
-  border-color: #3f2ad8;
-  background: #e4deff;
-  color: #3f2ad8;
+.project-row-menu-button:active {
+  border-color: #6d58f1;
+  background: #e9e4ff;
 }
 
-.project-row-actions__recycle.el-button--danger.is-plain {
-  border-color: #f1c6cb;
-  background: transparent;
-  color: #c94754;
+.project-row-menu-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
-.project-row-actions__recycle.el-button--danger.is-plain:hover,
-.project-row-actions__recycle.el-button--danger.is-plain:focus-visible {
-  border-color: var(--ui-danger);
-  background: #fff0f1;
+.project-recycle-command {
   color: #b63c47;
+}
+
+.is-loading {
+  animation: project-action-spin 900ms linear infinite;
+}
+
+@keyframes project-action-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .project-mobile-list {
@@ -548,21 +636,36 @@ time {
 
 .project-mobile-card__actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   min-width: 0;
 }
 
-.project-mobile-card__actions .el-button {
+.project-mobile-card__actions > .el-button {
   width: 100%;
   min-width: 0;
   margin: 0;
 }
 
+.project-row-menu-button--mobile {
+  width: 40px;
+  height: 40px;
+}
+
 @media (max-width: 760px) {
+  .page-hero .el-button {
+    width: 100%;
+    margin: 0;
+  }
+
   .project-list-toolbar > :first-child,
   .project-list-toolbar .inline-actions {
     flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .project-list-toolbar > :first-child {
+    max-width: none !important;
   }
 
   .project-list-toolbar .inline-actions {
@@ -574,6 +677,15 @@ time {
   .project-list-toolbar .el-radio-group {
     min-width: 0;
     width: 100%;
+  }
+
+  .project-mobile-card__heading,
+  .project-mobile-card__identity,
+  .project-mobile-card__facts,
+  .project-mobile-card__progress,
+  .project-mobile-card__actions {
+    max-width: 100%;
+    min-width: 0;
   }
 
   .project-list-footer {

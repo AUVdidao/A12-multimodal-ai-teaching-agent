@@ -14,23 +14,6 @@
     </StatePanel>
 
     <template v-else>
-      <ProjectWorkspaceNav :project-id="projectId" />
-
-      <header class="preview-hero">
-        <div class="preview-hero__main">
-          <span><el-icon><View /></el-icon></span>
-          <div>
-            <small>{{ workspace?.projectName || '教学成果' }}</small>
-            <h2>成果预览</h2>
-            <p>{{ artifacts.length ? `共 ${artifacts.length} 项生成成果` : '尚未生成教学成果' }}</p>
-          </div>
-        </div>
-        <div class="preview-hero__actions">
-          <UiStatusPill v-if="workspace" :label="providerLabel" tone="purple" dot />
-          <el-button :icon="Back" @click="router.push(`/projects/${projectId}/plan`)">返回内容生成</el-button>
-        </div>
-      </header>
-
       <div v-if="workspaceError" class="preview-notice">
         <el-alert :title="workspaceError" type="warning" show-icon :closable="false" />
         <el-button text type="primary" :icon="Refresh" @click="loadWorkspace">重试</el-button>
@@ -45,7 +28,6 @@
         <span><el-icon><Files /></el-icon></span>
         <h3>尚未生成教学成果</h3>
         <p>确认生成方案并完成内容生成后，成果会显示在这里。</p>
-        <el-button type="primary" :icon="Back" @click="router.push(`/projects/${projectId}/plan`)">返回内容生成</el-button>
       </section>
 
       <StatePanel
@@ -178,17 +160,15 @@ import {
 import DocxArtifactPreview from '@/components/generation/DocxArtifactPreview.vue';
 import InteractionArtifactPreview from '@/components/generation/InteractionArtifactPreview.vue';
 import PptArtifactPreview from '@/components/generation/PptArtifactPreview.vue';
-import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 import { formatDateTime } from '@/utils/presentation';
 import { ElMessage } from 'element-plus';
-import { Back, ChatDotRound, DataBoard, Document, EditPen, Files, Refresh, View } from '@element-plus/icons-vue';
+import { ChatDotRound, DataBoard, Document, EditPen, Files, Refresh } from '@element-plus/icons-vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 const route = useRoute();
-const router = useRouter();
 const projectId = computed(() => Number(route.params.projectId));
 const workspace = ref<GenerationWorkspace>();
 const artifacts = ref<Artifact[]>([]);
@@ -347,7 +327,6 @@ onMounted(loadPreview);
   margin: 0 auto;
 }
 
-.preview-hero,
 .artifact-panel,
 .preview-empty,
 .revision-panel {
@@ -357,9 +336,6 @@ onMounted(loadPreview);
   box-shadow: var(--shadow-panel);
 }
 
-.preview-hero,
-.preview-hero__main,
-.preview-hero__actions,
 .artifact-panel__header,
 .artifact-meta,
 .revision-panel__heading,
@@ -369,70 +345,12 @@ onMounted(loadPreview);
   align-items: center;
 }
 
-.preview-hero {
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-}
-
-.preview-hero__main {
-  min-width: 0;
-  gap: 14px;
-}
-
-.preview-hero__main > span {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--ui-primary-soft);
-  color: var(--ui-primary);
-  font-size: 24px;
-}
-
-.preview-hero__main > div {
-  min-width: 0;
-}
-
-.preview-hero small {
-  display: block;
-  max-width: min(620px, 60vw);
-  overflow: hidden;
-  color: var(--ui-muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.preview-hero h2,
-.preview-hero p,
 .artifact-panel__header h3,
 .preview-empty h3,
 .preview-empty p,
 .revision-panel h3,
 .revision-panel p {
   margin: 0;
-}
-
-.preview-hero h2 {
-  margin-top: 2px;
-  font-size: 21px;
-}
-
-.preview-hero p {
-  margin-top: 3px;
-  color: var(--ui-muted);
-  font-size: 12px;
-}
-
-.preview-hero__actions {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 .preview-notice {
@@ -661,25 +579,6 @@ onMounted(loadPreview);
 }
 
 @media (max-width: 640px) {
-  .preview-hero {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 16px;
-  }
-
-  .preview-hero small {
-    max-width: calc(100vw - 120px);
-  }
-
-  .preview-hero__actions,
-  .preview-hero__actions .el-button {
-    width: 100%;
-  }
-
-  .preview-hero__actions :deep(.ui-status-pill) {
-    width: auto;
-  }
-
   .preview-notice {
     flex-direction: column;
   }

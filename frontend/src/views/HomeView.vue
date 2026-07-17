@@ -25,12 +25,12 @@
       <UiMetricCard
         label="待完成任务"
         :value="metrics.pendingTaskCount"
-        note="按项目当前阶段自动派生"
+        :note="pendingTaskNote"
         tone="blue"
         icon="document"
         variant="shortcut"
-        clickable
-        @click="openFirstTask"
+        :clickable="hasActionableTasks"
+        @click="openTaskCenter"
       />
       <UiMetricCard
         label="资料总数"
@@ -54,7 +54,7 @@
       />
     </div>
 
-    <div class="grid cols-2" style="margin-top: 16px">
+    <div class="grid cols-2 dashboard-body" style="margin-top: 16px">
       <section class="panel project-continuation-panel">
         <div class="panel__header project-list-heading">
           <h3>继续你的项目</h3>
@@ -134,27 +134,41 @@
         <section class="panel">
           <div class="panel__header">
             <h3>今日待办</h3>
-            <el-button text type="primary" :disabled="pendingTasks.length === 0" @click="openFirstTask">进入任务</el-button>
+            <el-button
+              v-if="hasActionableTasks"
+              class="today-task-entry"
+              size="small"
+              :icon="ArrowRight"
+              @click="openTaskCenter"
+            >
+              查看全部
+            </el-button>
           </div>
           <button
             v-for="task in visiblePendingTasks"
             :key="task.code"
             class="today-task-row today-task-row--button"
             type="button"
-            @click="router.push(task.actionPath)"
+            @click="openWorkspacePath(task.actionPath)"
           >
             <span>{{ task.title }}</span>
             <span class="tag-soft" :class="priorityClass(task.priority)">{{ priorityLabel(task.priority) }}</span>
           </button>
-          <el-empty v-if="!loading && pendingTasks.length === 0" description="当前没有待办" :image-size="58" />
+          <el-empty
+            v-if="!loading && visiblePendingTasks.length === 0"
+            :description="pendingTaskEmptyDescription"
+            :image-size="58"
+          />
         </section>
 
-        <UiAiSuggestionCard
-          :title="primarySuggestion?.title || '当前项目进展顺利'"
-          :description="primarySuggestion?.description || '创建新项目后，系统会在这里给出下一步建议。'"
-          :action-label="primarySuggestion ? '立即处理' : '新建项目'"
-          @action="router.push(primarySuggestion?.actionPath || '/projects/new')"
-        />
+        <div class="dashboard-suggestion">
+          <UiAiSuggestionCard
+            :title="displaySuggestion?.title || '暂无新的 AI 建议'"
+            :description="displaySuggestion?.description || '当前没有基于项目进度生成的新建议。'"
+            :action-label="distinctSuggestion ? '查看建议' : ''"
+            @action="openSuggestion"
+          />
+        </div>
       </aside>
     </div>
 
@@ -169,7 +183,7 @@ import UiAiSuggestionCard from '@/components/ui/UiAiSuggestionCard.vue';
 import UiMetricCard from '@/components/ui/UiMetricCard.vue';
 import UiSubjectIcon from '@/components/ui/UiSubjectIcon.vue';
 import { formatRelativeTime, projectIcon, projectTone } from '@/utils/presentation';
-import { MoreFilled } from '@element-plus/icons-vue';
+import { ArrowRight, MoreFilled } from '@element-plus/icons-vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -182,7 +196,9 @@ const healthType = ref<'success' | 'warning'>('success');
 
 const projects = computed(() => workspace.value?.continueProjects || []);
 const pendingTasks = computed(() => workspace.value?.pendingTasks || []);
-const visiblePendingTasks = computed(() => pendingTasks.value.slice(0, 5));
+const actionablePendingTasks = computed(() => pendingTasks.value.filter((task) => isWorkspacePath(task.actionPath)));
+const visiblePendingTasks = computed(() => actionablePendingTasks.value.slice(0, 5));
+const hasActionableTasks = computed(() => actionablePendingTasks.value.length > 0);
 const metrics = computed(() => workspace.value?.metrics || {
   projectCount: 0,
   activeProjectCount: 0,
@@ -192,7 +208,20 @@ const metrics = computed(() => workspace.value?.metrics || {
   generatedArtifactCount: 0,
 });
 const finishedCount = computed(() => Math.max(0, metrics.value.projectCount - metrics.value.activeProjectCount));
-const primarySuggestion = computed(() => workspace.value?.suggestions?.[0]);
+const pendingTaskNote = computed(() => {
+  if (loading.value) return '正在读取项目阶段';
+  if (hasActionableTasks.value) return '按项目当前阶段自动派生';
+  if (pendingTasks.value.length > 0) return '待办已生成，暂无可执行入口';
+  return '当前没有待完成任务';
+});
+const pendingTaskEmptyDescription = computed(() => (
+  pendingTasks.value.length > 0 ? '待办已生成，但暂无可执行入口' : '当前没有待办'
+));
+const distinctSuggestion = computed(() => workspace.value?.suggestions?.find((suggestion) => (
+  isWorkspacePath(suggestion.actionPath)
+  && !actionablePendingTasks.value.some((task) => task.actionPath === suggestion.actionPath)
+)));
+const displaySuggestion = computed(() => distinctSuggestion.value || workspace.value?.suggestions?.[0]);
 const todayLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
 const greeting = computed(() => {
   const hour = new Date().getHours();
@@ -215,8 +244,22 @@ function handleProjectCommand(command: string, projectId: number) {
   router.push(routes[command] || routes.overview);
 }
 
-function openFirstTask() {
-  router.push(pendingTasks.value[0]?.actionPath || '/projects');
+function isWorkspacePath(path?: string) {
+  return Boolean(path && path.startsWith('/') && !path.startsWith('//'));
+}
+
+function openWorkspacePath(path?: string) {
+  if (!isWorkspacePath(path)) return;
+  void router.push(path!);
+}
+
+function openTaskCenter() {
+  if (!hasActionableTasks.value) return;
+  void router.push('/tasks');
+}
+
+function openSuggestion() {
+  openWorkspacePath(distinctSuggestion.value?.actionPath);
 }
 
 function openFirstProject(section: 'materials' | 'intent') {
@@ -266,6 +309,17 @@ onMounted(loadWorkspace);
 </script>
 
 <style scoped>
+.page,
+.dashboard-body,
+.dashboard-body > *,
+.dashboard-metrics {
+  min-width: 0;
+}
+
+.dashboard-body {
+  width: 100%;
+}
+
 .project-continuation-panel {
   overflow: hidden;
 }
@@ -488,6 +542,25 @@ onMounted(loadWorkspace);
   color: var(--ui-primary);
 }
 
+.today-task-row--button:focus-visible {
+  outline: 2px solid rgba(91, 69, 246, 0.28);
+  outline-offset: 2px;
+}
+
+.today-task-entry.el-button {
+  height: 30px;
+  padding: 0 10px;
+  font-weight: 600;
+}
+
+.dashboard-suggestion {
+  min-width: 0;
+}
+
+.dashboard-suggestion :deep(.ui-ai-suggestion-card) {
+  min-width: 0;
+}
+
 .today-task-row:last-child {
   border-bottom: 0;
 }
@@ -549,9 +622,30 @@ onMounted(loadWorkspace);
   .dashboard-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .dashboard-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 760px) {
+  .dashboard-metrics,
+  .dashboard-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .page-actions .el-button {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
   .project-list__head {
     display: none;
   }
@@ -580,6 +674,10 @@ onMounted(loadWorkspace);
     grid-area: next;
   }
 
+  .project-list__next span {
+    white-space: normal;
+  }
+
   .project-list__updated {
     display: block;
     grid-area: updated;
@@ -587,6 +685,11 @@ onMounted(loadWorkspace);
 
   .project-list__menu {
     grid-area: menu;
+  }
+
+  .today-task-row--button > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 }
 </style>

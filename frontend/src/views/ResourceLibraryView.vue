@@ -5,7 +5,7 @@
         <h2>资源库</h2>
         <p>汇总当前教师项目中的真实参考资料，可按项目、文件类型和解析状态筛选。</p>
       </div>
-      <el-button :loading="loading" @click="loadLibrary">刷新资料</el-button>
+      <el-button :icon="Refresh" :loading="loading" @click="loadLibrary">刷新资料</el-button>
     </header>
 
     <StatePanel
@@ -41,17 +41,21 @@
         type="empty"
         title="还没有可汇总的资料"
         description="请先在教学项目中上传参考资料。"
-      />
+      >
+        <template #action><el-button type="primary" :icon="FolderOpened" @click="router.push('/projects')">打开项目列表</el-button></template>
+      </StatePanel>
       <StatePanel
         v-else-if="filteredMaterials.length === 0"
         type="empty"
         title="没有符合筛选条件的资料"
         description="请调整项目、类型、解析状态或关键词后重试。"
-      />
+      >
+        <template #action><el-button :icon="Refresh" @click="clearFilters">清除筛选</el-button></template>
+      </StatePanel>
       <section v-else class="panel resource-library__table">
         <div class="resource-library__summary">共 {{ filteredMaterials.length }} 份资料，来自 {{ projectCount }} 个项目</div>
-        <el-table :data="filteredMaterials" table-layout="fixed">
-          <el-table-column label="资料" min-width="240">
+        <el-table :data="pagedMaterials" table-layout="fixed" row-key="libraryKey">
+          <el-table-column label="资料" min-width="260">
             <template #default="{ row }">
               <div class="resource-library__file">
                 <strong>{{ row.originalFilename }}</strong>
@@ -59,22 +63,29 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="项目" min-width="190">
+          <el-table-column label="项目" min-width="210">
             <template #default="{ row }">
-              <strong>{{ row.projectName }}</strong>
-              <span class="muted">{{ row.courseName }}</span>
+              <div class="resource-library__project">
+                <strong>{{ row.projectName }}</strong>
+                <span>{{ row.courseName }}</span>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="类型" width="100"><template #default="{ row }"><span class="tag-soft">{{ row.fileType }}</span></template></el-table-column>
           <el-table-column label="解析状态" width="120"><template #default="{ row }"><span :class="['tag-soft', parseStatusClass(row.parseStatus)]">{{ parseStatusLabel(row.parseStatus) }}</span></template></el-table-column>
           <el-table-column label="文件大小" width="110"><template #default="{ row }">{{ formatBytes(row.fileSize) }}</template></el-table-column>
-          <el-table-column label="操作" width="190" fixed="right">
+          <el-table-column label="操作" width="226" fixed="right" align="right">
             <template #default="{ row }">
-              <el-button text type="primary" :loading="viewingId === row.id" @click="viewFile(row)">查看文件</el-button>
-              <el-button text @click="openMaterials(row.projectId)">项目资料</el-button>
+              <div class="resource-library__actions">
+                <el-button type="primary" plain :icon="View" :loading="viewingKey === row.libraryKey" @click="viewFile(row)">查看文件</el-button>
+                <el-button plain :icon="FolderOpened" @click="openMaterials(row.projectId)">打开项目</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
+        <div v-if="filteredMaterials.length > pageSize" class="resource-library__pagination">
+          <el-pagination v-model:current-page="currentPage" :page-size="pageSize" :total="filteredMaterials.length" layout="prev, pager, next" />
+        </div>
       </section>
     </template>
   </section>
@@ -86,11 +97,13 @@ import { listProjects, type TeachingProject } from '@/api/projects';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAuthStore } from '@/stores/auth';
 import { formatBytes } from '@/utils/presentation';
+import { FolderOpened, Refresh, View } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 interface LibraryMaterial extends MaterialRecord {
+  libraryKey: string;
   projectName: string;
   courseName: string;
 }
@@ -100,12 +113,14 @@ const router = useRouter();
 const projects = ref<TeachingProject[]>([]);
 const materials = ref<LibraryMaterial[]>([]);
 const loading = ref(false);
-const viewingId = ref<number>();
+const viewingKey = ref<string>();
 const errorMessage = ref('');
 const projectFilter = ref('ALL');
 const typeFilter = ref('ALL');
 const parseFilter = ref('ALL');
 const keyword = ref('');
+const currentPage = ref(1);
+const pageSize = 10;
 const parseStatuses: MaterialParseStatus[] = ['NOT_STARTED', 'PROCESSING', 'SUCCEEDED', 'FAILED'];
 const canAccess = computed(() => auth.activeRole === 'TEACHER');
 const fileTypes = computed(() => [...new Set(materials.value.map((item) => item.fileType))].sort());
@@ -117,9 +132,17 @@ const filteredMaterials = computed(() => {
     const matchesStatus = !parseFilter.value || parseFilter.value === 'ALL' || item.parseStatus === parseFilter.value;
     const searchable = [item.originalFilename, item.description, item.usageNote, item.usageTypes.join(' ')].filter(Boolean).join(' ').toLocaleLowerCase();
     return matchesProject && matchesType && matchesStatus && (!normalizedKeyword || searchable.includes(normalizedKeyword));
-  });
+  }).sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+});
+const pagedMaterials = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredMaterials.value.slice(start, start + pageSize);
 });
 const projectCount = computed(() => new Set(filteredMaterials.value.map((item) => item.projectId)).size);
+
+watch([projectFilter, typeFilter, parseFilter, keyword], () => {
+  currentPage.value = 1;
+});
 
 watch(canAccess, (allowed) => {
   if (allowed) loadLibrary();
@@ -139,9 +162,11 @@ async function loadLibrary() {
     projects.value = ownedProjects;
     materials.value = materialLists.flatMap((list, index) => list.map((material) => ({
       ...material,
+      libraryKey: `${ownedProjects[index].id}-${material.id}`,
       projectName: ownedProjects[index].projectName,
       courseName: ownedProjects[index].courseName,
     })));
+    currentPage.value = 1;
   } catch (error) {
     errorMessage.value = resolveError(error, '暂时无法读取本人项目资料，请稍后重试。');
   } finally {
@@ -149,14 +174,21 @@ async function loadLibrary() {
   }
 }
 
+function clearFilters() {
+  projectFilter.value = 'ALL';
+  typeFilter.value = 'ALL';
+  parseFilter.value = 'ALL';
+  keyword.value = '';
+}
+
 async function viewFile(material: LibraryMaterial) {
-  viewingId.value = material.id;
+  viewingKey.value = material.libraryKey;
   try {
     await downloadMaterial(material.projectId, material);
   } catch (error) {
     ElMessage.error(resolveError(error, '文件读取失败，请稍后重试。'));
   } finally {
-    viewingId.value = undefined;
+    viewingKey.value = undefined;
   }
 }
 
@@ -185,11 +217,15 @@ function resolveError(error: unknown, fallback: string) {
 .resource-library__filters { display: grid; grid-template-columns: minmax(180px, 0.9fr) minmax(130px, 0.55fr) minmax(150px, 0.7fr) minmax(240px, 1.2fr); gap: 12px; margin-bottom: 16px; }
 .resource-library__table { overflow: hidden; }
 .resource-library__summary { padding: 4px 2px 14px; color: var(--ui-muted); font-size: 13px; }
-.resource-library__file { min-width: 0; }
-.resource-library__file strong, .resource-library__file span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resource-library__file, .resource-library__project { min-width: 0; }
+.resource-library__file strong, .resource-library__file span, .resource-library__project strong, .resource-library__project span { display: block; overflow-wrap: anywhere; white-space: normal; }
 .resource-library__file strong { color: var(--ui-text); }
-.resource-library__file span { margin-top: 4px; color: var(--ui-muted); font-size: 12px; }
-.resource-library__table :deep(.el-table .cell) { overflow: hidden; }
+.resource-library__file span, .resource-library__project span { margin-top: 4px; color: var(--ui-muted); font-size: 12px; }
+.resource-library__actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.resource-library__actions :deep(.el-button) { min-width: 94px; margin: 0; }
+.resource-library__actions :deep(.el-button .el-icon) { flex: 0 0 auto; }
+.resource-library__pagination { display: flex; justify-content: flex-end; padding: 14px 16px 2px; border-top: 1px solid var(--ui-border); }
+.resource-library__table :deep(.el-table .cell) { overflow: visible; }
 @media (max-width: 860px) { .resource-library__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .resource-library__filters { grid-template-columns: 1fr; } .resource-library__table { overflow-x: auto; } .resource-library__table :deep(.el-table) { min-width: 780px; } }
 </style>

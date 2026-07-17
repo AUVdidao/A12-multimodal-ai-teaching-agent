@@ -1,9 +1,6 @@
 <template>
   <section class="page" v-loading="loading">
     <template v-if="workspace">
-      <ProjectContextHeader :project="workspace.project" />
-      <ProjectWorkspaceNav :project-id="workspace.project.id" />
-
       <div class="material-layout">
         <section class="grid material-main">
           <section class="panel">
@@ -148,8 +145,6 @@ import {
   type MaterialUsageType,
 } from '@/api/materials';
 import { getMaterialWorkspace, type MaterialWorkspace, type MaterialWorkspaceItem } from '@/api/workspace';
-import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
-import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import UiUploadDropzone from '@/components/ui/UiUploadDropzone.vue';
 import { formatBytes, formatDateTime } from '@/utils/presentation';
 import { Download, FolderChecked, RefreshRight } from '@element-plus/icons-vue';

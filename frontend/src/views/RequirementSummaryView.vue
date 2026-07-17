@@ -1,9 +1,6 @@
 <template>
   <section class="page" v-loading="loading">
     <template v-if="workspace">
-      <ProjectContextHeader :project="workspace.project" />
-      <ProjectWorkspaceNav :project-id="workspace.project.id" />
-
       <div class="summary-layout">
         <section class="panel">
           <div class="panel__header">
@@ -102,8 +99,6 @@ import {
   type RequirementSummaryPayload,
 } from '@/api/requirementSummaries';
 import { getRequirementSummaryWorkspace, type RequirementSummaryWorkspace } from '@/api/workspace';
-import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
-import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 import { formatFullDateTime } from '@/utils/presentation';
 import { ElMessage } from 'element-plus';

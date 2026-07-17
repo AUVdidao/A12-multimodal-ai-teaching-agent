@@ -1,7 +1,5 @@
 ﻿<template>
   <section class="page" v-loading="loading">
-    <ProjectContextHeader v-if="project" :project="project" />
-
     <section v-if="project" class="panel">
       <div class="panel__header">
         <div>
@@ -26,7 +24,6 @@
 </template>
 
 <script setup lang="ts">
-import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
 import { listModelModes, saveProjectModelMode, type ModelModeOption } from '@/api/projects';
 import { ElMessage } from 'element-plus';

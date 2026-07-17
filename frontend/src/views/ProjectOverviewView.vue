@@ -1,8 +1,6 @@
 <template>
   <section class="page overview-page" v-loading="loading">
     <template v-if="overview">
-      <ProjectContextHeader :project="overview.project" />
-
       <section class="panel overview-timeline">
         <div class="timeline-track">
           <article v-for="step in overview.timeline" :key="step.code" :class="['timeline-step', `is-${step.state.toLowerCase()}`]">
@@ -78,7 +76,6 @@
 
 <script setup lang="ts">
 import { getProjectWorkspaceOverview, type ProjectOverview } from '@/api/workspace';
-import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import UiMetricCard from '@/components/ui/UiMetricCard.vue';
 import UiProgressRingCard from '@/components/ui/UiProgressRingCard.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';

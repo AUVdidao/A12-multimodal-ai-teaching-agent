@@ -5,7 +5,7 @@
         <h2>知识库</h2>
         <p>查看本人项目中已建立的知识索引，并进入对应项目执行真实检索。</p>
       </div>
-      <el-button :loading="loading" @click="loadLibrary">刷新统计</el-button>
+      <el-button :icon="Refresh" :loading="loading" @click="loadLibrary">刷新统计</el-button>
     </header>
 
     <StatePanel
@@ -20,7 +20,9 @@
     </StatePanel>
 
     <template v-else>
-      <StatePanel v-if="entries.length === 0" type="empty" title="还没有教学项目" description="创建教学项目并完成资料解析后，可在这里查看知识索引入口。" />
+      <StatePanel v-if="entries.length === 0" type="empty" title="还没有教学项目" description="创建教学项目并完成资料解析后，可在这里查看知识索引入口。">
+        <template #action><el-button type="primary" :icon="FolderOpened" @click="router.push('/projects')">打开项目列表</el-button></template>
+      </StatePanel>
       <template v-else>
         <section class="knowledge-library__metrics">
           <article><span>教学项目</span><strong>{{ entries.length }}</strong><small>本人可访问项目</small></article>
@@ -37,7 +39,7 @@
             <el-select v-model="selectedProjectId" placeholder="选择教学项目">
               <el-option v-for="entry in entries" :key="entry.id" :label="entry.projectName" :value="entry.id" />
             </el-select>
-            <el-button type="primary" :disabled="!selectedProject" @click="openKnowledge">进入项目检索</el-button>
+            <el-button type="primary" :icon="Search" :disabled="!selectedProject" @click="openKnowledge">进入检索</el-button>
           </div>
           <div v-if="selectedProject" class="knowledge-library__selected">
             <strong>{{ selectedProject.projectName }}</strong>
@@ -47,15 +49,25 @@
         </section>
 
         <section class="panel knowledge-library__table">
-          <el-table :data="entries" table-layout="fixed" @row-click="selectProject">
-            <el-table-column label="教学项目" min-width="250">
+          <el-table :data="pagedEntries" table-layout="fixed" row-key="id" @row-click="selectProject">
+            <el-table-column label="教学项目" min-width="280">
               <template #default="{ row }"><strong>{{ row.projectName }}</strong><span class="knowledge-library__chapter">{{ row.courseName }} · {{ row.chapterTitle }}</span></template>
             </el-table-column>
             <el-table-column label="已索引资料" width="130"><template #default="{ row }">{{ row.indexedMaterialCount }}</template></el-table-column>
             <el-table-column label="知识片段" width="120"><template #default="{ row }"><strong>{{ row.knowledgeChunkCount }}</strong></template></el-table-column>
             <el-table-column label="检索状态" width="130"><template #default="{ row }"><span :class="['tag-soft', row.knowledgeChunkCount ? 'success' : 'warning']">{{ row.knowledgeChunkCount ? '可进入检索' : '暂无片段' }}</span></template></el-table-column>
-            <el-table-column label="操作" width="130" fixed="right"><template #default="{ row }"><el-button text type="primary" @click.stop="openKnowledge(row.id)">进入检索</el-button></template></el-table-column>
+            <el-table-column label="操作" width="226" fixed="right" align="right">
+              <template #default="{ row }">
+                <div class="knowledge-library__actions">
+                  <el-button type="primary" plain :icon="Search" @click.stop="openKnowledge(row.id)">进入检索</el-button>
+                  <el-button plain :icon="FolderOpened" @click.stop="openProject(row.id)">打开项目</el-button>
+                </div>
+              </template>
+            </el-table-column>
           </el-table>
+          <div v-if="entries.length > pageSize" class="knowledge-library__pagination">
+            <el-pagination v-model:current-page="currentPage" :page-size="pageSize" :total="entries.length" layout="prev, pager, next" />
+          </div>
         </section>
       </template>
     </template>
@@ -67,6 +79,7 @@ import { listProjects } from '@/api/projects';
 import { getProjectWorkspaceOverview } from '@/api/workspace';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAuthStore } from '@/stores/auth';
+import { FolderOpened, Refresh, Search } from '@element-plus/icons-vue';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -77,6 +90,7 @@ interface KnowledgeLibraryEntry {
   chapterTitle: string;
   indexedMaterialCount: number;
   knowledgeChunkCount: number;
+  updatedAt: string;
 }
 
 const auth = useAuthStore();
@@ -85,10 +99,16 @@ const entries = ref<KnowledgeLibraryEntry[]>([]);
 const selectedProjectId = ref<number>();
 const loading = ref(false);
 const errorMessage = ref('');
+const currentPage = ref(1);
+const pageSize = 10;
 const canAccess = computed(() => auth.activeRole === 'TEACHER');
 const selectedProject = computed(() => entries.value.find((entry) => entry.id === selectedProjectId.value));
 const indexedMaterialCount = computed(() => entries.value.reduce((total, entry) => total + entry.indexedMaterialCount, 0));
 const knowledgeChunkCount = computed(() => entries.value.reduce((total, entry) => total + entry.knowledgeChunkCount, 0));
+const pagedEntries = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return entries.value.slice(start, start + pageSize);
+});
 
 watch(canAccess, (allowed) => {
   if (allowed) loadLibrary();
@@ -112,7 +132,9 @@ async function loadLibrary() {
       chapterTitle: overview.project.chapterTitle,
       indexedMaterialCount: overview.metrics.indexedMaterialCount,
       knowledgeChunkCount: overview.metrics.knowledgeChunkCount,
-    }));
+      updatedAt: overview.project.updatedAt,
+    })).sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+    currentPage.value = 1;
     if (!entries.value.some((entry) => entry.id === selectedProjectId.value)) selectedProjectId.value = entries.value[0]?.id;
   } catch (error) {
     errorMessage.value = resolveError(error, '暂时无法读取本人项目的知识库统计，请稍后重试。');
@@ -127,6 +149,10 @@ function selectProject(entry: KnowledgeLibraryEntry) {
 
 function openKnowledge(projectId = selectedProjectId.value) {
   if (projectId) router.push({ name: 'project-knowledge', params: { projectId } });
+}
+
+function openProject(projectId: number) {
+  router.push({ name: 'project-overview', params: { projectId } });
 }
 
 function resolveError(error: unknown, fallback: string) {
@@ -147,6 +173,11 @@ function resolveError(error: unknown, fallback: string) {
 .knowledge-library__controls h3 { margin: 5px 0 0; }
 .knowledge-library__selected { display: grid; gap: 4px; margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--ui-border); color: var(--ui-muted); font-size: 13px; }
 .knowledge-library__selected strong { color: var(--ui-text); }
-.knowledge-library__chapter { display: block; margin-top: 4px; color: var(--ui-muted); font-size: 12px; }
+.knowledge-library__chapter { display: block; margin-top: 4px; color: var(--ui-muted); font-size: 12px; overflow-wrap: anywhere; white-space: normal; }
+.knowledge-library__table :deep(.el-table .cell strong) { overflow-wrap: anywhere; white-space: normal; }
+.knowledge-library__actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.knowledge-library__actions :deep(.el-button) { min-width: 94px; margin: 0; }
+.knowledge-library__actions :deep(.el-button .el-icon) { flex: 0 0 auto; }
+.knowledge-library__pagination { display: flex; justify-content: flex-end; padding: 14px 16px 2px; border-top: 1px solid var(--ui-border); }
 @media (max-width: 760px) { .knowledge-library__metrics { grid-template-columns: 1fr; } .knowledge-library__controls { grid-template-columns: 1fr; align-items: stretch; } .knowledge-library__controls .el-button { width: 100%; } .knowledge-library__table { overflow-x: auto; } .knowledge-library__table :deep(.el-table) { min-width: 720px; } }
 </style>

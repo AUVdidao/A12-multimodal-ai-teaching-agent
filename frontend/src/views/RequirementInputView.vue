@@ -1,9 +1,6 @@
 <template>
   <section class="page" v-loading="loading">
     <template v-if="workspace">
-      <ProjectContextHeader :project="workspace.project" />
-      <ProjectWorkspaceNav :project-id="workspace.project.id" />
-
       <div class="requirement-layout">
         <section class="panel requirement-chat">
           <div class="panel__header">
@@ -112,8 +109,6 @@ import { getClarificationQuestions } from '@/api/clarification';
 import { clearProjectDialogues, saveDialogueMessage } from '@/api/dialogues';
 import { saveTeachingRequirement, type TeachingRequirementPayload } from '@/api/requirements';
 import { getRequirementWorkspace, type RequirementWorkspace } from '@/api/workspace';
-import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
-import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import UiChatMessage from '@/components/ui/UiChatMessage.vue';
 import { formatDateTime } from '@/utils/presentation';
 import { ElMessage, ElMessageBox } from 'element-plus';

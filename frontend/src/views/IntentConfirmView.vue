@@ -1,21 +1,8 @@
 <template>
   <section class="intent-page" data-testid="teaching-intent-page" v-loading="loading">
-    <IntentWorkflowStepper />
-
-    <div v-if="workspace" class="intent-page__content">
-      <form class="intent-page__form" @submit.prevent="confirmIntent">
-        <section class="intent-project-card">
-          <span class="intent-project-card__icon">
-            <A12AssetIcon name="folder" :size="34" />
-          </span>
-          <div>
-            <small>项目名称</small>
-            <div class="intent-project-card__title">
-              <h2>{{ workspace.project.projectName }}</h2>
-            </div>
-          </div>
-          <p>{{ workspace.project.subtitle || `${workspace.project.courseName} / ${workspace.project.chapterTitle}` }}</p>
-        </section>
+    <template v-if="workspace">
+      <div class="intent-page__content">
+        <form class="intent-page__form" @submit.prevent="confirmIntent">
 
         <section v-if="isConfirmed" class="intent-lock-notice" role="status">
           <A12AssetIcon name="document" :size="18" />
@@ -173,8 +160,9 @@
           :items="evidence"
           @search="router.push(`/projects/${projectId}/knowledge`)"
         />
-      </aside>
-    </div>
+        </aside>
+      </div>
+    </template>
 
     <transition name="intent-toast">
       <div v-if="feedback" class="intent-feedback" role="status">{{ feedback }}</div>
@@ -193,7 +181,6 @@ import IntentCheckTag from '@/components/intent/IntentCheckTag.vue';
 import IntentEvidencePanel from '@/components/intent/IntentEvidencePanel.vue';
 import IntentFormSection from '@/components/intent/IntentFormSection.vue';
 import IntentStatusCard from '@/components/intent/IntentStatusCard.vue';
-import IntentWorkflowStepper from '@/components/intent/IntentWorkflowStepper.vue';
 import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
 import { ElMessage } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -404,11 +391,6 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
   color: #171b2c;
 }
 
-.intent-page > :deep(.intent-stepper) {
-  flex: 0 0 48px;
-  margin-bottom: 9px;
-}
-
 .intent-page__content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(440px, 38%, 510px);
@@ -425,60 +407,6 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
   min-width: 0;
   min-height: 0;
   gap: 10px;
-}
-
-.intent-project-card {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  height: 100%;
-  padding: 12px 16px;
-  border: 1px solid #e6eaf2;
-  border-radius: 12px;
-  background: #fff;
-}
-
-.intent-project-card__icon {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border-radius: 11px;
-  background: #f1edff;
-}
-
-.intent-project-card small {
-  color: #8b95aa;
-  font-size: 11px;
-}
-
-.intent-project-card__title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.intent-project-card h2 {
-  margin: 0;
-  font-size: 21px;
-  font-weight: 700;
-}
-
-.intent-project-card__title button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.intent-project-card p {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: #4d5871;
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 .intent-lock-notice {
@@ -838,12 +766,5 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
     flex-basis: 100%;
   }
 
-  .intent-project-card {
-    padding: 12px;
-  }
-
-  .intent-project-card h2 {
-    font-size: 18px;
-  }
 }
 </style>

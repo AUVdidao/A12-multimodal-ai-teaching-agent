@@ -1,7 +1,10 @@
 <template>
   <nav class="workspace-nav" aria-label="项目工作区导航">
     <template v-for="item in navItems" :key="item.path">
-      <RouterLink class="workspace-nav__item" :to="item.path">
+      <RouterLink
+        :class="['workspace-nav__item', { 'is-related-active': isRelatedActive(item.path) }]"
+        :to="item.path"
+      >
         <el-icon><component :is="item.icon" /></el-icon>
         <span>{{ item.label }}</span>
       </RouterLink>
@@ -22,11 +25,12 @@ import {
   View,
 } from '@element-plus/icons-vue';
 import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 
 const props = defineProps<{
   projectId: string | number;
 }>();
+const route = useRoute();
 
 const navItems = computed(() => {
   const root = `/projects/${props.projectId}`;
@@ -42,4 +46,8 @@ const navItems = computed(() => {
     { label: '成果导出', path: `${root}/export`, icon: Download },
   ];
 });
+
+function isRelatedActive(path: string) {
+  return route.name === 'project-mode' && path === `/projects/${props.projectId}`;
+}
 </script>

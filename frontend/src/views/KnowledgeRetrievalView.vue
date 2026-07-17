@@ -1,9 +1,6 @@
 <template>
   <section class="page" v-loading="loading">
     <template v-if="overview && materials">
-      <ProjectContextHeader :project="overview.project" />
-      <ProjectWorkspaceNav :project-id="overview.project.id" />
-
       <div class="grid cols-3">
         <article class="stat-card">
           <small>已索引资料</small>
@@ -95,8 +92,6 @@ import {
   type MaterialWorkspace,
   type ProjectOverview,
 } from '@/api/workspace';
-import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
-import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';

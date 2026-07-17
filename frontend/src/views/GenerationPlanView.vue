@@ -14,26 +14,6 @@
     </StatePanel>
 
     <template v-else>
-      <ProjectWorkspaceNav :project-id="workspace.projectId" />
-
-      <header class="generation-hero">
-        <div class="generation-hero__main">
-          <span class="generation-hero__icon"><el-icon><MagicStick /></el-icon></span>
-          <div>
-            <span class="generation-hero__eyebrow">{{ workspace.projectName }}</span>
-            <h2>教学内容生成</h2>
-            <p>{{ heroStatus }}</p>
-          </div>
-        </div>
-        <div class="generation-hero__actions">
-          <UiStatusPill :label="providerLabel" tone="purple" dot />
-          <el-button :icon="Back" @click="router.push(`/projects/${projectId}/intent`)">教学意图</el-button>
-          <el-button v-if="artifactCount" type="primary" :icon="View" @click="router.push(`/projects/${projectId}/preview`)">
-            查看成果
-          </el-button>
-        </div>
-      </header>
-
       <div class="generation-layout">
         <main class="generation-main">
           <section v-if="!plan" class="generation-empty">
@@ -233,13 +213,11 @@ import {
   type PlanOutlineItem,
 } from '@/api/generation';
 import GenerationOutlineEditor from '@/components/generation/GenerationOutlineEditor.vue';
-import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 import { formatDateTime } from '@/utils/presentation';
 import {
   Aim,
-  Back,
   ChatDotRound,
   CircleCheck,
   Clock,
@@ -249,7 +227,6 @@ import {
   Plus,
   Refresh,
   SetUp,
-  View,
 } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
@@ -279,11 +256,6 @@ const artifactCount = computed(() => workspace.value?.artifacts?.length || 0);
 const providerLabel = computed(() => {
   const provider = plan.value?.provider || workspace.value?.provider || '';
   return provider.toUpperCase().includes('MOCK') ? 'Mock AI' : provider || 'AI';
-});
-const heroStatus = computed(() => {
-  if (!plan.value) return `尚无生成方案 · ${providerLabel.value}`;
-  if (plan.value.confirmed) return `方案已确认 · ${artifactCount.value ? `已有 ${artifactCount.value} 项成果` : '等待生成内容'}`;
-  return isDirty.value ? '方案有未保存修改' : '方案草稿已保存，等待确认';
 });
 const projectStatusLabel = computed(() => {
   const status = workspace.value?.projectStatus || '';
@@ -523,7 +495,6 @@ onMounted(loadWorkspace);
   margin: 0 auto;
 }
 
-.generation-hero,
 .plan-toolbar,
 .interaction-editor,
 .generation-empty,
@@ -535,17 +506,6 @@ onMounted(loadWorkspace);
   box-shadow: var(--shadow-panel);
 }
 
-.generation-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-}
-
-.generation-hero__main,
-.generation-hero__actions,
 .plan-toolbar__title,
 .interaction-editor__header,
 .interaction-editor__title,
@@ -558,39 +518,6 @@ onMounted(loadWorkspace);
   align-items: center;
 }
 
-.generation-hero__main {
-  min-width: 0;
-  gap: 14px;
-}
-
-.generation-hero__main > div {
-  min-width: 0;
-}
-
-.generation-hero__icon {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--ui-primary-soft);
-  color: var(--ui-primary);
-  font-size: 24px;
-}
-
-.generation-hero__eyebrow {
-  display: block;
-  max-width: min(620px, 60vw);
-  overflow: hidden;
-  color: var(--ui-muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.generation-hero h2,
-.generation-hero p,
 .plan-toolbar h3,
 .plan-toolbar p,
 .interaction-editor h3,
@@ -602,25 +529,12 @@ onMounted(loadWorkspace);
   margin: 0;
 }
 
-.generation-hero h2 {
-  margin-top: 2px;
-  font-size: 21px;
-}
-
-.generation-hero p,
 .plan-toolbar p,
 .interaction-editor p,
 .generation-side-panel p {
   margin-top: 3px;
   color: var(--ui-muted);
   font-size: 12px;
-}
-
-.generation-hero__actions {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 .generation-layout {
@@ -911,25 +825,6 @@ onMounted(loadWorkspace);
 }
 
 @media (max-width: 720px) {
-  .generation-hero {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 16px;
-  }
-
-  .generation-hero__eyebrow {
-    max-width: calc(100vw - 120px);
-  }
-
-  .generation-hero__actions,
-  .generation-hero__actions .el-button {
-    width: 100%;
-  }
-
-  .generation-hero__actions :deep(.ui-status-pill) {
-    width: auto;
-  }
-
   .generation-aside {
     grid-template-columns: 1fr;
   }
@@ -955,12 +850,6 @@ onMounted(loadWorkspace);
 }
 
 @media (max-width: 480px) {
-  .generation-hero__icon {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
-  }
-
   .generation-capabilities {
     grid-template-columns: 1fr;
   }

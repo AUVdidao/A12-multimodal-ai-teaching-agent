@@ -107,10 +107,7 @@ textarea {
   flex: 1;
   padding: 10px 15px 10px 13px;
   overflow: auto;
-}
-
-.app-shell__main--intent {
-  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .app-header {
@@ -780,6 +777,27 @@ textarea {
   margin: 0 auto;
 }
 
+.project-workspace-layout {
+  width: min(100%, 1440px);
+  min-width: 0;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.project-workspace-layout__state {
+  min-height: 180px;
+  align-items: center;
+}
+
+.project-workspace-layout__view,
+.project-workspace-layout__view > * {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-right: auto;
+  margin-left: auto;
+}
+
 .page-hero,
 .panel,
 .project-context,
@@ -874,7 +892,7 @@ textarea {
 
 .project-context {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
   padding: 16px;
@@ -896,6 +914,16 @@ textarea {
   align-items: center;
   gap: 14px;
   min-width: 0;
+}
+
+.project-context__main > div:last-child {
+  min-width: 0;
+}
+
+.project-context__eyebrow,
+.project-context h2,
+.project-context p {
+  overflow-wrap: anywhere;
 }
 
 .project-context__icon {
@@ -941,6 +969,7 @@ textarea {
 }
 
 .workspace-nav__item.router-link-exact-active,
+.workspace-nav__item.is-related-active,
 .workspace-nav__item:not(.is-muted):hover {
   background: var(--ui-primary-soft);
   color: var(--ui-primary);
@@ -1011,9 +1040,15 @@ textarea {
   border-radius: 8px;
 }
 
-.el-button--primary:not(.is-plain) {
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
   background: var(--ui-primary);
   border-color: var(--ui-primary);
+  color: #fff;
+}
+
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link):hover,
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link):focus-visible {
+  color: #fff;
 }
 
 .el-card,

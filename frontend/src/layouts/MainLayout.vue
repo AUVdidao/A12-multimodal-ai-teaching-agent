@@ -8,7 +8,7 @@
       <header class="app-shell__header">
         <AppHeader />
       </header>
-      <main :class="['app-shell__main', { 'app-shell__main--intent': isIntentPage }]">
+      <main class="app-shell__main">
         <router-view />
       </main>
     </section>
@@ -18,9 +18,4 @@
 <script setup lang="ts">
 import AppHeader from '@/components/AppHeader.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
-import { computed } from 'vue';
-import { useRoute } from 'vue-router';
-
-const route = useRoute();
-const isIntentPage = computed(() => route.name === 'project-intent');
 </script>

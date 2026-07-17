@@ -18,22 +18,7 @@
       </template>
     </StatePanel>
 
-    <template v-else-if="project">
-      <ProjectContextHeader :project="project" />
-      <ProjectWorkspaceNav :project-id="project.id" />
-
-      <header class="export-hero">
-        <div class="export-hero__main">
-          <span><el-icon><Download /></el-icon></span>
-          <div>
-            <small>{{ project.projectName }}</small>
-            <h2>成果导出</h2>
-            <p>{{ formatSummary }}</p>
-          </div>
-        </div>
-        <el-button :icon="Back" @click="router.push(`/projects/${project.id}/preview`)">返回成果预览</el-button>
-      </header>
-
+    <template v-else>
       <div v-if="downloadError" class="export-notice">
         <el-alert :title="downloadError" type="error" show-icon :closable="false" />
       </div>
@@ -87,9 +72,6 @@
         <span><el-icon><Files /></el-icon></span>
         <h3>尚无可导出的成果</h3>
         <p>完成内容生成后，PPTX 课件和 DOCX 教案会显示在这里。</p>
-        <el-button type="primary" :icon="Back" @click="router.push(`/projects/${project.id}/plan`)">
-          返回内容生成
-        </el-button>
       </section>
     </template>
   </section>
@@ -102,29 +84,20 @@ import {
   type ExportFormat,
   type ExportOption,
 } from '@/api/exports';
-import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
-import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
-import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
-import { Back, DataBoard, Document, Download, Files, Refresh } from '@element-plus/icons-vue';
+import { DataBoard, Document, Download, Files, Refresh } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 const route = useRoute();
-const router = useRouter();
 const projectId = computed(() => Number(route.params.projectId));
-const project = ref<ProjectBrief>();
 const formats = ref<ExportOption[]>([]);
 const loading = ref(true);
 const loadError = ref('');
 const downloadError = ref('');
 const downloadingFormat = ref<ExportFormat>();
-
-const formatSummary = computed(() => formats.value.length
-  ? `当前版本提供 ${formats.value.map((item) => item.format).join('、')} 下载`
-  : '当前项目还没有可导出的成果');
 
 function formatIcon(format: ExportFormat) {
   return format === 'PPTX' ? DataBoard : Document;
@@ -135,14 +108,9 @@ async function loadExports() {
   loadError.value = '';
   downloadError.value = '';
   try {
-    const [overview, catalog] = await Promise.all([
-      getProjectWorkspaceOverview(projectId.value),
-      getProjectExportCatalog(projectId.value),
-    ]);
-    project.value = overview.project;
+    const catalog = await getProjectExportCatalog(projectId.value);
     formats.value = catalog.formats || [];
   } catch (error) {
-    project.value = undefined;
     formats.value = [];
     loadError.value = resolveError(error, '导出信息读取失败，请稍后重试。');
   } finally {
@@ -181,28 +149,12 @@ onMounted(loadExports);
   margin: 0 auto;
 }
 
-.export-hero,
-.export-hero__main,
 .export-format__header,
 .export-notice {
   display: flex;
   align-items: center;
 }
 
-.export-hero {
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 4px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid var(--ui-border);
-}
-
-.export-hero__main {
-  min-width: 0;
-  gap: 14px;
-}
-
-.export-hero__main > span,
 .export-empty > span {
   display: grid;
   width: 48px;
@@ -215,38 +167,11 @@ onMounted(loadExports);
   font-size: 24px;
 }
 
-.export-hero__main > div {
-  min-width: 0;
-}
-
-.export-hero small {
-  display: block;
-  max-width: min(620px, 60vw);
-  overflow: hidden;
-  color: var(--ui-muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.export-hero h2,
-.export-hero p,
 .export-format h3,
 .export-format p,
 .export-empty h3,
 .export-empty p {
   margin: 0;
-}
-
-.export-hero h2 {
-  margin-top: 2px;
-  font-size: 21px;
-}
-
-.export-hero p {
-  margin-top: 3px;
-  color: var(--ui-muted);
-  font-size: 12px;
 }
 
 .export-notice {
@@ -392,25 +317,7 @@ onMounted(loadExports);
   color: var(--ui-muted);
 }
 
-.export-empty .el-button {
-  margin-top: 20px;
-}
-
 @media (max-width: 760px) {
-  .export-hero {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 16px 0;
-  }
-
-  .export-hero small {
-    max-width: calc(100vw - 120px);
-  }
-
-  .export-hero > .el-button {
-    width: 100%;
-  }
-
   .export-grid {
     grid-template-columns: 1fr;
   }

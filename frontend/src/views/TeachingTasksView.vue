@@ -69,7 +69,7 @@
             />
           </el-select>
         </div>
-        <span class="task-toolbar__count">显示 {{ filteredTasks.length }} / {{ tasks.length }} 项</span>
+        <span class="task-toolbar__count">共 {{ filteredTasks.length }} 项<template v-if="filteredTasks.length !== tasks.length">（全部 {{ tasks.length }} 项）</template></span>
       </div>
 
       <el-alert
@@ -81,7 +81,7 @@
         :closable="false"
       />
 
-      <el-table v-if="filteredTasks.length > 0" :data="filteredTasks" row-key="id">
+      <el-table v-if="filteredTasks.length > 0" :data="pagedTasks" row-key="id" table-layout="fixed">
         <el-table-column type="expand" width="44">
           <template #default="{ row }">
             <div class="task-detail">
@@ -161,22 +161,20 @@
           </template>
         </el-table-column>
 
-        <el-table-column v-if="isTeacher" label="操作" width="206" align="right">
+        <el-table-column v-if="isTeacher" label="操作" width="224" align="right" fixed="right">
           <template #default="{ row }">
             <div v-if="canUpdate(row) || canSubmit(row)" class="task-row-actions">
               <el-button
                 v-if="canUpdate(row)"
-                type="primary"
                 plain
                 :icon="EditPen"
                 @click="openProgressDialog(row)"
               >
-                更新进度
+                编辑进度
               </el-button>
               <el-button
                 v-if="canSubmit(row)"
-                type="success"
-                plain
+                type="primary"
                 :icon="Upload"
                 @click="openSubmissionDialog(row)"
               >
@@ -188,7 +186,19 @@
         </el-table-column>
       </el-table>
 
-      <el-empty v-else :description="emptyDescription" :image-size="72" />
+      <div v-if="filteredTasks.length > pageSize" class="task-pagination">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :total="filteredTasks.length"
+          layout="prev, pager, next"
+        />
+      </div>
+
+      <el-empty v-else-if="filteredTasks.length === 0" :description="emptyDescription" :image-size="72">
+        <el-button v-if="tasks.length > 0" :icon="Refresh" @click="clearFilters">清除筛选</el-button>
+        <el-button v-else-if="isLeader" type="primary" :icon="Plus" @click="createDialogVisible = true">创建第一项任务</el-button>
+      </el-empty>
     </section>
 
     <el-dialog
@@ -434,6 +444,8 @@ const loading = ref(true);
 const errorMessage = ref('');
 const keyword = ref('');
 const statusFilter = ref<StatusFilter>('ALL');
+const currentPage = ref(1);
+const pageSize = 10;
 const referenceData = ref<CollaborationReferenceData>({ teachers: [], leaders: [], students: [], courses: [], classes: [] });
 const projects = ref<TeachingProject[]>([]);
 const projectsLoading = ref(false);
@@ -544,10 +556,14 @@ const filteredTasks = computed(() => {
     ].some((value) => value?.toLocaleLowerCase().includes(query));
   });
 });
+const pagedTasks = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredTasks.value.slice(start, start + pageSize);
+});
 
 const emptyDescription = computed(() => {
   if (tasks.value.length === 0) {
-    return isLeader.value ? '暂无教学任务，可创建并分配第一项任务' : '当前没有分配给你的教学任务';
+    return isLeader.value ? '暂无教学任务，可创建并分配第一项任务' : '当前没有分配给你的教学任务，请等待教研负责人分配';
   }
   return '没有符合当前筛选条件的教学任务';
 });
@@ -579,6 +595,10 @@ watch(() => auth.activeRole, () => {
   if (isTeacher.value) void loadProjects();
 });
 
+watch([keyword, statusFilter], () => {
+  currentPage.value = 1;
+});
+
 watch(() => createForm.courseId, () => {
   if (createForm.classId && !availableClasses.value.some((item) => item.id === createForm.classId)) {
     createForm.classId = undefined;
@@ -595,11 +615,17 @@ async function loadTasks() {
   errorMessage.value = '';
   try {
     tasks.value = await listTeachingTasks();
+    currentPage.value = 1;
   } catch (error) {
     errorMessage.value = resolveError(error, '暂时无法读取教学任务，请稍后重试。');
   } finally {
     loading.value = false;
   }
+}
+
+function clearFilters() {
+  keyword.value = '';
+  statusFilter.value = 'ALL';
 }
 
 async function loadReferenceData() {
@@ -845,9 +871,8 @@ function resolveError(error: unknown, fallback: string) {
 .course-cell strong,
 .course-cell span {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .task-identity strong,
@@ -877,31 +902,50 @@ function resolveError(error: unknown, fallback: string) {
 }
 
 .assignee-cell span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .due-cell {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 7px;
 }
 
 .due-cell time {
   color: var(--color-text-secondary);
   font-size: 12px;
-  white-space: nowrap;
+  line-height: 1.45;
+  white-space: normal;
 }
 
 .task-row-actions {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
 
 .task-row-actions .el-button + .el-button {
   margin-left: 0;
+}
+
+.task-row-actions :deep(.el-button) {
+  min-width: 88px;
+  margin: 0;
+}
+
+.task-row-actions :deep(.el-button .el-icon) {
+  flex: 0 0 auto;
+}
+
+.task-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--color-border);
 }
 
 .task-detail {
