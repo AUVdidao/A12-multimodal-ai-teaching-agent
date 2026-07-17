@@ -78,10 +78,22 @@ class DifyAIWorkflowGatewayTest {
             requestBody.set(readJson(exchange));
             ObjectNode business = objectNode("""
                     {
-                      "missingFields": ["targetAudience"],
-                      "questions": ["Which audience?"],
-                      "suggestedFields": {"targetAudience": "Grade 5"},
-                      "nextAction": "Confirm the missing field"
+                      "workflowCode": "WF-01",
+                      "success": true,
+                      "data": {
+                        "recognizedFields": {"courseName": "Mathematics"},
+                        "missingFields": ["targetAudience"],
+                        "questions": [{
+                          "questionId": "q-target-audience",
+                          "field": "targetAudience",
+                          "questionText": "Which audience?"
+                        }],
+                        "canContinue": false
+                      },
+                      "warnings": [],
+                      "errors": [],
+                      "confidence": 0.94,
+                      "traceHint": "a12-WF-01-project-78"
                     }
                     """);
             sendJson(exchange, 200, successWithTextResult(
@@ -111,6 +123,9 @@ class DifyAIWorkflowGatewayTest {
                 .isEqualTo("Create a fraction lesson");
         assertThat(response.workflow()).isEqualTo("published-wf-01-v3");
         assertThat(response.missingFields()).containsExactly("targetAudience");
+        assertThat(response.questions()).containsExactly("Which audience?");
+        assertThat(response.suggestedFields()).containsEntry("courseName", "Mathematics");
+        assertThat(response.nextAction()).isEqualTo("ANSWER_CLARIFICATION_QUESTIONS");
     }
 
     @Test
@@ -312,7 +327,11 @@ class DifyAIWorkflowGatewayTest {
     }
 
     private DifyAIWorkflowGateway gateway() {
-        return new DifyAIWorkflowGateway(properties, objectMapper);
+        return new DifyAIWorkflowGateway(
+                properties,
+                objectMapper,
+                new DifyWorkflowContractAdapter(objectMapper)
+        );
     }
 
     private void configure(WorkflowCode workflowCode, String workflowId, String apiKey) {
@@ -333,19 +352,29 @@ class DifyAIWorkflowGatewayTest {
         return switch (operation) {
             case "requirement-summary" -> objectNode("""
                     {
-                      "summary": {
-                        "courseName": "Mathematics",
-                        "chapterTopic": "Fractions",
-                        "targetAudience": "Grade 5",
-                        "lessonDurationMinutes": 40,
-                        "teachingGoals": ["Understand fractions"],
-                        "keyDifficulties": ["Equivalent fractions"],
-                        "outputTypes": ["PPT", "DOCX", "INTERACTION"],
-                        "coursewareStyle": "Clear",
-                        "interactionType": "Quiz"
+                      "workflowCode": "WF-02",
+                      "success": true,
+                      "data": {
+                        "requirementSummary": {
+                          "courseName": "Mathematics",
+                          "chapterTitle": "Fractions",
+                          "targetStudents": "Grade 5",
+                          "lessonDuration": 40,
+                          "teachingGoals": ["Understand fractions"],
+                          "knowledgePoints": ["Fraction definition"],
+                          "keyDifficulties": ["Equivalent fractions"],
+                          "outputTypes": ["PPT", "DOCX", "INTERACTION"],
+                          "coursewareStyle": "Clear",
+                          "interactionType": "Quiz",
+                          "generationMode": "STANDARD"
+                        },
+                        "uncertainFields": [],
+                        "generationHints": ["Use a visual fraction model"]
                       },
-                      "assumptions": [],
-                      "confirmationQuestion": "Confirm?"
+                      "warnings": [],
+                      "errors": [],
+                      "confidence": 0.96,
+                      "traceHint": "a12-WF-02-project-78"
                     }
                     """);
             case "material-analysis" -> objectNode("""

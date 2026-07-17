@@ -2,6 +2,7 @@
   "request": {
     "workflowCode": "WF-02",
     "traceHint": "sample-wf02-001",
+    "operation": "requirement-summary",
     "input": {
       "projectInfo": {
         "projectRef": "sample-project",
@@ -11,6 +12,7 @@
         "lessonDuration": 40,
         "generationMode": "STANDARD"
       },
+      "rawRequirement": "Create a Grade 5 science lesson about how light affects plant growth.",
       "dialogHistory": [
         {
           "role": "teacher",

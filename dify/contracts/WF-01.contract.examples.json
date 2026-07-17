@@ -2,6 +2,7 @@
   "request": {
     "workflowCode": "WF-01",
     "traceHint": "sample-wf01-001",
+    "operation": "clarification",
     "input": {
       "projectInfo": {
         "courseName": "Science",
@@ -11,6 +12,15 @@
         "generationMode": "STANDARD"
       },
       "rawRequirement": "Help students explain how light affects plant growth and include a small-group observation activity.",
+      "knownFields": [
+        "courseName",
+        "chapterTitle",
+        "targetStudents"
+      ],
+      "requestedMissingFields": [
+        "lessonDuration",
+        "outputTypes"
+      ],
       "dialogHistory": [
         {
           "role": "teacher",

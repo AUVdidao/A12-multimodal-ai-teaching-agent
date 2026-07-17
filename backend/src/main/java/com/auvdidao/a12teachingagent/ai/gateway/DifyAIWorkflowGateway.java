@@ -50,11 +50,17 @@ public class DifyAIWorkflowGateway {
 
     private final AiWorkflowProperties properties;
     private final ObjectMapper objectMapper;
+    private final DifyWorkflowContractAdapter contractAdapter;
     private final RestClient restClient;
 
-    public DifyAIWorkflowGateway(AiWorkflowProperties properties, ObjectMapper objectMapper) {
+    public DifyAIWorkflowGateway(
+            AiWorkflowProperties properties,
+            ObjectMapper objectMapper,
+            DifyWorkflowContractAdapter contractAdapter
+    ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.contractAdapter = contractAdapter;
         this.restClient = buildRestClient(properties);
     }
 
@@ -181,7 +187,7 @@ public class DifyAIWorkflowGateway {
             throw unavailable(workflowCode, "Dify endpoint configuration is invalid");
         }
 
-        T response = mapResponse(responseBody, workflowCode, expectedWorkflowId, responseType);
+        T response = mapResponse(responseBody, workflowCode, operation, expectedWorkflowId, responseType);
         validator.accept(response);
         return response;
     }
@@ -189,6 +195,7 @@ public class DifyAIWorkflowGateway {
     private <T> T mapResponse(
             String responseBody,
             WorkflowCode workflowCode,
+            String operation,
             String expectedWorkflowId,
             Class<T> responseType
     ) {
@@ -235,7 +242,11 @@ public class DifyAIWorkflowGateway {
         }
 
         require(payload.isObject(), workflowCode, "Dify business output must be a JSON object");
-        ObjectNode responseNode = ((ObjectNode) payload).deepCopy();
+        ObjectNode responseNode = contractAdapter.responsePayload(
+                workflowCode,
+                operation,
+                (ObjectNode) payload
+        );
         String returnedId = returnedWorkflowId != null && returnedWorkflowId.isTextual()
                 ? returnedWorkflowId.asText()
                 : null;
@@ -294,9 +305,9 @@ public class DifyAIWorkflowGateway {
             envelope.put("workflowCode", workflowCode.code());
             envelope.put("traceHint", "a12-" + workflowCode.code() + "-project-" + projectId);
             envelope.put("operation", operation);
-            envelope.set("input", objectMapper.valueToTree(payload));
+            envelope.set("input", contractAdapter.requestInput(workflowCode, payload));
             return objectMapper.writeValueAsString(envelope);
-        } catch (JsonProcessingException exception) {
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
             throw unavailable(workflowCode, "Gateway request payload could not be serialized");
         }
     }
