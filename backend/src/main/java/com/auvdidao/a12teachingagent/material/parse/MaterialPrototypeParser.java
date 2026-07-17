@@ -10,6 +10,15 @@ public interface MaterialPrototypeParser {
 
     ParsedContent parse(UploadedMaterial material, List<PurposeType> usageTypes, RequirementSummary requirementSummary);
 
-    record ParsedContent(String summary, List<String> keywords, List<String> teachingStages) {
+    record ParsedContent(
+            String summary,
+            List<String> keywords,
+            List<String> teachingStages,
+            String analysisText
+    ) {
+
+        public ParsedContent(String summary, List<String> keywords, List<String> teachingStages) {
+            this(summary, keywords, teachingStages, summary);
+        }
     }
 }

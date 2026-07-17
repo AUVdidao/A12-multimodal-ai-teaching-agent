@@ -305,7 +305,7 @@ public class DifyAIWorkflowGateway {
             envelope.put("workflowCode", workflowCode.code());
             envelope.put("traceHint", "a12-" + workflowCode.code() + "-project-" + projectId);
             envelope.put("operation", operation);
-            envelope.set("input", contractAdapter.requestInput(workflowCode, payload));
+            envelope.set("input", contractAdapter.requestInput(workflowCode, operation, payload));
             return objectMapper.writeValueAsString(envelope);
         } catch (JsonProcessingException | IllegalArgumentException exception) {
             throw unavailable(workflowCode, "Gateway request payload could not be serialized");

@@ -73,7 +73,15 @@ public class RemoteMaterialPrototypeParser implements MaterialPrototypeParser {
             if (response == null || response.summary() == null || response.keywords() == null || response.teachingStages() == null) {
                 throw new MaterialParsingException("Remote material parser returned an invalid response.");
             }
-            return new ParsedContent(response.summary(), response.keywords(), response.teachingStages());
+            String analysisText = response.analysisText() == null || response.analysisText().isBlank()
+                    ? response.summary()
+                    : response.analysisText();
+            return new ParsedContent(
+                    response.summary(),
+                    response.keywords(),
+                    response.teachingStages(),
+                    analysisText
+            );
         } catch (RestClientResponseException exception) {
             throw new MaterialParsingException("Remote material parser rejected the material: HTTP " + exception.getStatusCode().value() + ".");
         } catch (RestClientException exception) {
@@ -135,6 +143,11 @@ public class RemoteMaterialPrototypeParser implements MaterialPrototypeParser {
                 : summary.getTopic().strip();
     }
 
-    private record RemoteParseResponse(String summary, List<String> keywords, List<String> teachingStages) {
+    private record RemoteParseResponse(
+            String summary,
+            List<String> keywords,
+            List<String> teachingStages,
+            String analysisText
+    ) {
     }
 }

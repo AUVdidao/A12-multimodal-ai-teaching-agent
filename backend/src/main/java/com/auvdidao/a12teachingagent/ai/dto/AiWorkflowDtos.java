@@ -110,8 +110,24 @@ public final class AiWorkflowDtos {
             @NotNull Long projectId,
             @NotBlank String fileName,
             @NotBlank String materialType,
-            String purpose
+            String purpose,
+            String materialText,
+            List<String> purposeTypes,
+            RequirementSummaryData courseContext
     ) {
+
+        public MaterialAnalysisRequest(
+                Long projectId,
+                String fileName,
+                String materialType,
+                String purpose
+        ) {
+            this(projectId, fileName, materialType, purpose, null, List.of(), null);
+        }
+
+        public MaterialAnalysisRequest {
+            purposeTypes = purposeTypes == null ? List.of() : List.copyOf(purposeTypes);
+        }
     }
 
     public record MaterialAnalysisResponse(
@@ -128,8 +144,23 @@ public final class AiWorkflowDtos {
             @NotNull Long projectId,
             @NotBlank String courseName,
             @NotBlank String chapterTopic,
-            List<String> keywords
+            List<String> keywords,
+            List<KnowledgeSnippet> candidateSnippets
     ) {
+
+        public KnowledgeRetrievalRequest(
+                Long projectId,
+                String courseName,
+                String chapterTopic,
+                List<String> keywords
+        ) {
+            this(projectId, courseName, chapterTopic, keywords, List.of());
+        }
+
+        public KnowledgeRetrievalRequest {
+            keywords = keywords == null ? List.of() : List.copyOf(keywords);
+            candidateSnippets = candidateSnippets == null ? List.of() : List.copyOf(candidateSnippets);
+        }
     }
 
     public record KnowledgeRetrievalResponse(

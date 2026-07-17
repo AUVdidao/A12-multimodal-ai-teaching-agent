@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 public class DeterministicMaterialPrototypeParser implements MaterialPrototypeParser {
 
     private static final int SUMMARY_TEXT_LIMIT = 600;
+    private static final int ANALYSIS_TEXT_LIMIT = 32_000;
     private static final int KEYWORD_LIMIT = 6;
     private static final Pattern WORD_PATTERN = Pattern.compile("[\\p{L}\\p{N}][\\p{L}\\p{N}_-]{1,39}");
     private static final Pattern MARKDOWN_PREFIX = Pattern.compile("^[#>*+\\-\\d.\\s]+", Pattern.UNICODE_CHARACTER_CLASS);
@@ -45,7 +46,10 @@ public class DeterministicMaterialPrototypeParser implements MaterialPrototypePa
                 ? extractKeywords(extraction.text(), requirementSummary)
                 : List.of();
 
-        return new ParsedContent(summary, keywords, stages);
+        String analysisText = extraction.hasText()
+                ? abbreviate(extraction.text().strip(), ANALYSIS_TEXT_LIMIT)
+                : summary;
+        return new ParsedContent(summary, keywords, stages, analysisText);
     }
 
     private static String extractedSummary(

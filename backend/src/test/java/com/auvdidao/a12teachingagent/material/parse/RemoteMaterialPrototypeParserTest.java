@@ -40,7 +40,7 @@ class RemoteMaterialPrototypeParserTest {
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.ISO_8859_1));
             int status = responseStatus.get();
             byte[] response = (status == 200
-                    ? "{\"summary\":\"remote summary\",\"keywords\":[\"RemoteContractMarker\"],\"teachingStages\":[\"概念讲解\"]}"
+                    ? "{\"summary\":\"remote summary\",\"keywords\":[\"RemoteContractMarker\"],\"teachingStages\":[\"概念讲解\"],\"analysisText\":\"RemoteContractMarker extracted text\"}"
                     : "{\"code\":\"EXTRACTION_FAILED\",\"message\":\"fixture failure\"}").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, response.length);
@@ -68,6 +68,7 @@ class RemoteMaterialPrototypeParserTest {
 
         assertThat(parsed.summary()).isEqualTo("remote summary");
         assertThat(parsed.keywords()).containsExactly("RemoteContractMarker");
+        assertThat(parsed.analysisText()).isEqualTo("RemoteContractMarker extracted text");
         assertThat(requestBody.get()).contains("RemoteContractMarker", "Content-Disposition: form-data; name=\"file\"");
         assertThat(requestBody.get()).doesNotContain(tempDirectory.toString());
     }

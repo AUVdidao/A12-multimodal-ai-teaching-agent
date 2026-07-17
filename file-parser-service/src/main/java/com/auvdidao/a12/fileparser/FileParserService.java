@@ -37,6 +37,8 @@ import java.util.regex.Pattern;
 @Service
 public class FileParserService {
 
+    private static final int ANALYSIS_TEXT_LIMIT = 32_000;
+
     private static final int MAX_PDF_PAGES = 500;
     private static final int MAX_PPTX_SLIDES = 500;
     private static final long MAX_ARCHIVE_ENTRY_BYTES = 32L * 1024 * 1024;
@@ -77,7 +79,10 @@ public class FileParserService {
         return new ParseResponse(
                 summary,
                 extraction.hasText() ? keywords(extraction.text(), safeTopic) : List.of(),
-                teachingStages(usageTypes)
+                teachingStages(usageTypes),
+                extraction.hasText()
+                        ? abbreviate(extraction.text().strip(), ANALYSIS_TEXT_LIMIT)
+                        : summary
         );
     }
 
@@ -297,7 +302,12 @@ public class FileParserService {
         if (normalized.length() >= 2 && normalized.length() <= 40 && normalized.chars().anyMatch(Character::isLetterOrDigit)) values.add(normalized);
     }
 
-    public record ParseResponse(String summary, List<String> keywords, List<String> teachingStages) {
+    public record ParseResponse(
+            String summary,
+            List<String> keywords,
+            List<String> teachingStages,
+            String analysisText
+    ) {
     }
 
     private record Extraction(String text, String sourceLabel, String noTextReason, boolean truncated) {

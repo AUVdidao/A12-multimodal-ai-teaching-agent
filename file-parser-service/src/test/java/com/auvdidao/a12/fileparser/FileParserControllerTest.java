@@ -42,6 +42,7 @@ class FileParserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.summary", containsString("Markdown UTF-8")))
                 .andExpect(jsonPath("$.summary", containsString("真实 Markdown 正文")))
+                .andExpect(jsonPath("$.analysisText", containsString("真实 Markdown 正文")))
                 .andExpect(jsonPath("$.teachingStages", contains("概念讲解", "课堂导入", "案例分析")));
     }
 
@@ -52,7 +53,8 @@ class FileParserControllerTest {
         mockMvc.perform(multipart("/internal/file-parser/parse").file(file).param("fileType", "PDF"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.summary", containsString("PDFBox PDF 文本")))
-                .andExpect(jsonPath("$.summary", containsString("PdfServiceMarker")));
+                .andExpect(jsonPath("$.summary", containsString("PdfServiceMarker")))
+                .andExpect(jsonPath("$.analysisText", containsString("PdfServiceMarker")));
     }
 
     @Test

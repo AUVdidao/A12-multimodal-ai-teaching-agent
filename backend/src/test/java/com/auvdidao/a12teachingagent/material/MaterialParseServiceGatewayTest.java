@@ -112,12 +112,15 @@ class MaterialParseServiceGatewayTest {
 
         ArgumentCaptor<MaterialAnalysisRequest> requestCaptor = ArgumentCaptor.forClass(MaterialAnalysisRequest.class);
         verify(aiWorkflowGateway).analyzeMaterial(requestCaptor.capture());
-        assertThat(requestCaptor.getValue()).isEqualTo(new MaterialAnalysisRequest(
-                PROJECT_ID,
-                "光合作用教材.pdf",
-                "PDF",
-                "教材依据、案例素材"
-        ));
+        MaterialAnalysisRequest request = requestCaptor.getValue();
+        assertThat(request.projectId()).isEqualTo(PROJECT_ID);
+        assertThat(request.fileName()).isEqualTo("光合作用教材.pdf");
+        assertThat(request.materialType()).isEqualTo("PDF");
+        assertThat(request.purpose()).isEqualTo("教材依据、案例素材");
+        assertThat(request.materialText()).contains("叶绿体中的叶绿素吸收光能");
+        assertThat(request.purposeTypes()).containsExactly("TEXTBOOK_BASIS", "CASE_MATERIAL");
+        assertThat(request.courseContext().courseName()).isEqualTo("生物");
+        assertThat(request.courseContext().chapterTopic()).isEqualTo("光合作用");
         verify(knowledgeIndexService).index(fixture.material());
     }
 
@@ -241,7 +244,8 @@ class MaterialParseServiceGatewayTest {
         return new MaterialPrototypeParser.ParsedContent(
                 "本地真实提取摘要",
                 List.of("本地关键词"),
-                List.of("概念讲解", "案例分析")
+                List.of("概念讲解", "案例分析"),
+                "叶绿体中的叶绿素吸收光能，并将光能转换为化学能。"
         );
     }
 

@@ -6,6 +6,7 @@ import com.auvdidao.a12teachingagent.ai.config.WorkflowCode;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeRetrievalRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeSnippet;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryRequest;
@@ -31,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -138,6 +140,7 @@ class DifyAIWorkflowGatewayTest {
         Set<String> operations = ConcurrentHashMap.newKeySet();
         Set<String> paths = ConcurrentHashMap.newKeySet();
         List<String> authorizations = new ArrayList<>();
+        Map<String, JsonNode> requestEnvelopes = new ConcurrentHashMap<>();
         handler.set(exchange -> {
             JsonNode request = readJson(exchange);
             JsonNode envelope = objectNode(request.path("inputs").path("request_json").asText());
@@ -146,6 +149,7 @@ class DifyAIWorkflowGatewayTest {
             operations.add(operation);
             paths.add(exchange.getRequestURI().getPath());
             authorizations.add(exchange.getRequestHeaders().getFirst("Authorization"));
+            requestEnvelopes.put(operation, envelope);
             ObjectNode output = outputFor(operation);
             if ("material-analysis".equals(operation)) {
                 sendJson(exchange, 200, successWithObjectOutput(workflowId, "data", output));
@@ -165,13 +169,22 @@ class DifyAIWorkflowGatewayTest {
                 78L,
                 "fractions.pdf",
                 "PDF",
-                "lesson evidence"
+                "lesson evidence",
+                "A fraction represents part of a whole.",
+                List.of("TEXTBOOK_BASIS"),
+                requirementSummaryData()
         ));
         var knowledge = gateway.retrieveKnowledge(new KnowledgeRetrievalRequest(
                 78L,
                 "Mathematics",
                 "Fractions",
-                List.of("fraction")
+                List.of("fraction"),
+                List.of(new KnowledgeSnippet(
+                        "Fraction definition",
+                        "fractions.pdf",
+                        "A fraction represents part of a whole.",
+                        0.95
+                ))
         ));
         var intent = gateway.buildTeachingIntent(new TeachingIntentRequest(
                 78L,
@@ -218,6 +231,14 @@ class DifyAIWorkflowGatewayTest {
                 "Bearer wf-05-key",
                 "Bearer wf-07-key"
         );
+        assertThat(requestEnvelopes.get("material-analysis")
+                .path("input").path("materialText").path("content").asText())
+                .contains("part of a whole");
+        assertThat(requestEnvelopes.get("knowledge-retrieval")
+                .path("input").path("knowledgeCandidates").size()).isEqualTo(1);
+        assertThat(requestEnvelopes.get("teaching-intent")
+                .path("input").path("requirementSummary").path("status").asText())
+                .isEqualTo("CONFIRMED");
     }
 
     @Test
@@ -379,32 +400,73 @@ class DifyAIWorkflowGatewayTest {
                     """);
             case "material-analysis" -> objectNode("""
                     {
-                      "status": "PARSED",
-                      "summary": "Material summary",
-                      "keywords": ["fraction"],
-                      "teachingUses": ["example"],
-                      "suggestedChunks": ["definition"]
+                      "workflowCode": "WF-03",
+                      "success": true,
+                      "data": {
+                        "materialSummary": {
+                          "title": "Fraction notes",
+                          "overview": "Material summary",
+                          "keywords": ["fraction"]
+                        },
+                        "usableFragments": [{
+                          "fragmentId": "fragment-1",
+                          "content": "A fraction represents part of a whole.",
+                          "sourceName": "fractions.pdf",
+                          "pageNumber": 1,
+                          "purposeTypes": ["TEXTBOOK_BASIS"]
+                        }],
+                        "riskNotes": []
+                      },
+                      "warnings": [],
+                      "errors": [],
+                      "confidence": 0.95,
+                      "traceHint": "a12-WF-03-project-78"
                     }
                     """);
             case "knowledge-retrieval" -> objectNode("""
                     {
-                      "snippets": [{
-                        "title": "Fraction definition",
-                        "sourceName": "fractions.pdf",
-                        "content": "A fraction represents part of a whole.",
-                        "score": 0.95
-                      }],
-                      "retrievalNote": "One grounded result"
+                      "workflowCode": "WF-04",
+                      "success": true,
+                      "data": {
+                        "knowledgeRetrieval": {
+                          "snippets": [{
+                            "sourceId": "candidate-1",
+                            "title": "Fraction definition",
+                            "sourceName": "fractions.pdf",
+                            "content": "A fraction represents part of a whole.",
+                            "relevance": 0.95
+                          }],
+                          "retrievalNote": "One grounded result"
+                        }
+                      },
+                      "warnings": [],
+                      "errors": [],
+                      "confidence": 0.95,
+                      "traceHint": "a12-WF-04-project-78"
                     }
                     """);
             case "teaching-intent" -> objectNode("""
                     {
-                      "intentId": "intent-dify-78",
-                      "generationGoals": ["Explain fractions"],
-                      "contentBasis": ["fractions.pdf"],
-                      "interactionIdeas": ["Quick quiz"],
-                      "outputTypes": ["PPT", "DOCX", "INTERACTION"],
-                      "confirmationPrompt": "Confirm intent?"
+                      "workflowCode": "WF-04",
+                      "success": true,
+                      "data": {
+                        "intentId": "intent-dify-78",
+                        "teachingIntent": {
+                          "teachingGoals": ["Explain fractions"],
+                          "contentPriorities": ["Use fractions.pdf as evidence"],
+                          "keyDifficulties": ["Equivalent fractions"],
+                          "teachingOrganization": ["Whole-class explanation"],
+                          "interactionPlan": ["Quick quiz"],
+                          "outputTypes": ["PPT", "DOCX", "INTERACTION"],
+                          "constraints": ["40 minutes"]
+                        },
+                        "usedReferences": [],
+                        "conflictWarnings": []
+                      },
+                      "warnings": [],
+                      "errors": [],
+                      "confidence": 0.93,
+                      "traceHint": "a12-WF-04-project-78"
                     }
                     """);
             case "generation-plan" -> objectNode("""

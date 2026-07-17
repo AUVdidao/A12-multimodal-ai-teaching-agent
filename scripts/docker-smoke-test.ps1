@@ -56,7 +56,17 @@ function Invoke-A12Api {
     }
     catch {
         $status = if ($null -ne $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { "n/a" }
-        $details = if (-not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) { $_.ErrorDetails.Message } else { $_.Exception.Message }
+        $errorDetails = $_.ErrorDetails
+        $details = if (
+            $null -ne $errorDetails -and
+            $errorDetails.PSObject.Properties.Name -contains "Message" -and
+            -not [string]::IsNullOrWhiteSpace([string]$errorDetails.Message)
+        ) {
+            [string]$errorDetails.Message
+        }
+        else {
+            $_.Exception.Message
+        }
         throw "Check failed: $Name at $url. HTTP: $status. Response: $details"
     }
 }

@@ -2,6 +2,7 @@ package com.auvdidao.a12teachingagent.material;
 
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisResponse;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
@@ -101,7 +102,10 @@ public class MaterialParseService {
                     projectId,
                     analysisFileName(material),
                     analysisMaterialType(material),
-                    analysisPurpose(usages)
+                    analysisPurpose(usages),
+                    parsed.analysisText(),
+                    usages.stream().map(Enum::name).toList(),
+                    analysisCourseContext(summary)
             ));
             EnrichedContent enriched = mergeAnalysis(parsed, analysis);
             result.setSummary(enriched.summary());
@@ -282,6 +286,55 @@ public class MaterialParseService {
                 .distinct()
                 .reduce((left, right) -> left + "、" + right)
                 .orElse("教学知识补充");
+    }
+
+    private static RequirementSummaryData analysisCourseContext(RequirementSummary summary) {
+        if (summary == null) {
+            return null;
+        }
+        return new RequirementSummaryData(
+                summary.getSubject(),
+                summary.getTopic(),
+                summary.getGradeLevel(),
+                resolveLessonDurationMinutes(summary.getLessonDuration()),
+                splitSummaryValues(summary.getTeachingGoals()),
+                mergeSummaryValues(summary.getKeyPoints(), summary.getDifficultPoints()),
+                summary.getOutputTypes(),
+                summary.getStylePreference(),
+                summary.getInteractionType()
+        );
+    }
+
+    private static List<String> splitSummaryValues(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(value.split("[,，;；\\r\\n]+"))
+                .map(String::strip)
+                .filter(item -> !item.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private static List<String> mergeSummaryValues(String first, String second) {
+        LinkedHashSet<String> values = new LinkedHashSet<>(splitSummaryValues(first));
+        values.addAll(splitSummaryValues(second));
+        return List.copyOf(values);
+    }
+
+    private static Integer resolveLessonDurationMinutes(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        java.util.regex.Matcher minutes = java.util.regex.Pattern.compile("(\\d+)\\s*分钟").matcher(value);
+        if (minutes.find()) {
+            return Integer.parseInt(minutes.group(1));
+        }
+        java.util.regex.Matcher periods = java.util.regex.Pattern.compile("(\\d+)\\s*(?:课时|学时)").matcher(value);
+        if (periods.find()) {
+            return Integer.parseInt(periods.group(1)) * 45;
+        }
+        return null;
     }
 
     public static ParseResultResponse toResponse(ParseResult result) {

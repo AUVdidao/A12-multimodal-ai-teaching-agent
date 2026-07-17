@@ -24,6 +24,7 @@ import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementSu
 import com.auvdidao.a12teachingagent.knowledge.KnowledgeSearchService;
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeHitResponse;
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeSearchResponse;
+import com.auvdidao.a12teachingagent.intent.dto.TeachingIntentDtos.TeachingIntentUpdateRequest;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -185,6 +186,30 @@ class TeachingIntentServiceGatewayTest {
                 searchService,
                 aiWorkflowGateway
         );
+    }
+
+    @Test
+    void updateKeepsStructuredPrimaryBasisWhenContentBasisIsLong() {
+        Project project = project();
+        TeachingIntent existing = existingIntent(201L);
+        existing.setPrimaryBasis("OFFICIAL_OUTLINE");
+        String longContentBasis = "Confirmed requirement and grounded evidence. ".repeat(20);
+        when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
+        when(intentRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(intentRepository.save(any(TeachingIntent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.update(PROJECT_ID, existing.getId(), new TeachingIntentUpdateRequest(
+                "Updated generation goal",
+                longContentBasis,
+                "Case-based teaching",
+                "Guided discussion",
+                List.of("PPT", "DOCX"),
+                "Concise"
+        ));
+
+        assertThat(response.contentBasis()).isEqualTo(longContentBasis.trim());
+        assertThat(existing.getPrimaryBasis()).isEqualTo("OFFICIAL_OUTLINE");
+        verify(intentRepository).save(existing);
     }
 
     private void stubPipeline(

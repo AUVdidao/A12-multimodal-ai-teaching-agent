@@ -173,7 +173,6 @@ public class TeachingIntentService {
         intent.setGenerationGoal(request.generationGoal().trim());
         intent.setGenerationGoals(List.of(request.generationGoal().trim()));
         intent.setContentBasis(request.contentBasis().trim());
-        intent.setPrimaryBasis(request.contentBasis().trim());
         intent.setTeachingApproach(request.teachingApproach().trim());
         intent.setInteractionMode(request.interactionMode().trim());
         intent.setTeachingFormat(request.interactionMode().trim());

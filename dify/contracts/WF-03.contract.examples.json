@@ -2,6 +2,7 @@
   "request": {
     "workflowCode": "WF-03",
     "traceHint": "sample-wf03-001",
+    "operation": "material-analysis",
     "input": {
       "materialText": {
         "title": "Sample Plant Observation Notes",
