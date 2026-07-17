@@ -1,0 +1,84 @@
+{
+  "request": {
+    "workflowCode": "WF-03",
+    "traceHint": "sample-wf03-001",
+    "input": {
+      "materialText": {
+        "title": "Sample Plant Observation Notes",
+        "sourceName": "teacher-uploaded-sample.txt",
+        "content": "Page 1: Two similar seedlings were observed for seven days. One received regular light and one remained in a dark box. Page 2: The seedling with regular light remained green and grew steadily. The seedling in darkness became pale and weak.",
+        "pageMarkersPreserved": true
+      },
+      "purposeTypes": [
+        "CONCEPT_EXPLANATION",
+        "CLASSROOM_ACTIVITY"
+      ],
+      "courseContext": {
+        "courseName": "Science",
+        "chapterTitle": "Plant Growth",
+        "targetStudents": "Grade 5"
+      }
+    }
+  },
+  "successResponse": {
+    "workflowCode": "WF-03",
+    "success": true,
+    "data": {
+      "materialSummary": {
+        "title": "Light and Seedling Growth Observation",
+        "overview": "A controlled observation compares two similar seedlings exposed to different light conditions over seven days.",
+        "keywords": [
+          "plant growth",
+          "light",
+          "controlled observation",
+          "evidence"
+        ]
+      },
+      "usableFragments": [
+        {
+          "fragmentId": "fragment-001",
+          "content": "Two similar seedlings were observed for seven days under different light conditions.",
+          "sourceName": "teacher-uploaded-sample.txt",
+          "pageNumber": 1,
+          "purposeTypes": [
+            "CLASSROOM_ACTIVITY"
+          ]
+        },
+        {
+          "fragmentId": "fragment-002",
+          "content": "The seedling in regular light remained green while the seedling in darkness became pale and weak.",
+          "sourceName": "teacher-uploaded-sample.txt",
+          "pageNumber": 2,
+          "purposeTypes": [
+            "CONCEPT_EXPLANATION"
+          ]
+        }
+      ],
+      "riskNotes": [
+        "The notes describe an observation but do not provide measurement values."
+      ]
+    },
+    "warnings": [
+      "Do not present the observations as quantitative evidence."
+    ],
+    "errors": [],
+    "confidence": 0.91,
+    "traceHint": "sample-wf03-001"
+  },
+  "errorResponse": {
+    "workflowCode": "WF-03",
+    "success": false,
+    "data": null,
+    "warnings": [],
+    "errors": [
+      {
+        "code": "EMPTY_MATERIAL_TEXT",
+        "message": "Parsed material text is required before analysis.",
+        "field": "input.materialText.content",
+        "retryable": true
+      }
+    ],
+    "confidence": 0,
+    "traceHint": "sample-wf03-error"
+  }
+}

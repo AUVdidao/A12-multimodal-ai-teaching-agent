@@ -1,0 +1,126 @@
+{
+  "request": {
+    "workflowCode": "WF-05",
+    "traceHint": "sample-wf05-001",
+    "input": {
+      "teachingIntent": {
+        "status": "CONFIRMED",
+        "teachingGoals": [
+          "Explain how light affects plant growth",
+          "Use observation evidence to support an explanation"
+        ],
+        "contentPriorities": [
+          "Compare observations before explanations"
+        ],
+        "interactionPlan": [
+          "Small-group evidence sorting"
+        ],
+        "outputTypes": [
+          "PPT",
+          "DOCX",
+          "INTERACTION"
+        ]
+      },
+      "generationMode": "STANDARD",
+      "constraints": {
+        "lessonDurationMinutes": 40,
+        "maximumSlides": 10,
+        "interactionMinutes": 12,
+        "targetTypes": [
+          "PPT",
+          "DOCX",
+          "INTERACTION"
+        ]
+      }
+    }
+  },
+  "successResponse": {
+    "workflowCode": "WF-05",
+    "success": true,
+    "data": {
+      "pptOutline": [
+        {
+          "slideNo": 1,
+          "title": "Learning Goals and Observation Question",
+          "purpose": "Set the lesson purpose",
+          "keyPoints": [
+            "How does light affect plant growth?"
+          ],
+          "materialReferences": [
+            "material-sample-001"
+          ]
+        },
+        {
+          "slideNo": 2,
+          "title": "Compare the Seedlings",
+          "purpose": "Separate observations from explanations",
+          "keyPoints": [
+            "Color",
+            "Strength",
+            "Growth pattern"
+          ],
+          "materialReferences": [
+            "material-sample-001"
+          ]
+        }
+      ],
+      "docOutline": [
+        {
+          "sectionNo": 1,
+          "title": "Teaching Goals",
+          "purpose": "Define expected learning",
+          "keyPoints": [
+            "Evidence-based explanation"
+          ],
+          "materialReferences": []
+        },
+        {
+          "sectionNo": 2,
+          "title": "Teaching Process",
+          "purpose": "Sequence observation, discussion, and explanation",
+          "keyPoints": [
+            "Observe",
+            "Compare",
+            "Explain"
+          ],
+          "materialReferences": [
+            "material-sample-001"
+          ]
+        }
+      ],
+      "interactionPlan": {
+        "type": "EVIDENCE_SORTING",
+        "knowledgePoints": [
+          "Observation and explanation",
+          "Light and plant growth"
+        ],
+        "questionCount": 4,
+        "difficulty": "MEDIUM",
+        "estimatedMinutes": 12
+      },
+      "consistencyNotes": [
+        "The plan reserves 12 of 40 minutes for interaction and remains within the ten-slide limit."
+      ]
+    },
+    "warnings": [],
+    "errors": [],
+    "confidence": 0.95,
+    "traceHint": "sample-wf05-001"
+  },
+  "errorResponse": {
+    "workflowCode": "WF-05",
+    "success": false,
+    "data": null,
+    "warnings": [],
+    "errors": [
+      {
+        "code": "TEACHING_INTENT_NOT_CONFIRMED",
+        "message": "A confirmed teaching intent is required before planning generation.",
+        "field": "input.teachingIntent.status",
+        "retryable": false
+      }
+    ],
+    "confidence": 0,
+    "traceHint": "sample-wf05-error"
+  }
+}

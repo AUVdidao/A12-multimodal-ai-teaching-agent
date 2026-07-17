@@ -1,0 +1,75 @@
+{
+  "request": {
+    "workflowCode": "WF-01",
+    "traceHint": "sample-wf01-001",
+    "input": {
+      "projectInfo": {
+        "courseName": "Science",
+        "chapterTitle": "Plant Growth",
+        "targetStudents": "Grade 5",
+        "lessonDuration": null,
+        "generationMode": "STANDARD"
+      },
+      "rawRequirement": "Help students explain how light affects plant growth and include a small-group observation activity.",
+      "dialogHistory": [
+        {
+          "role": "teacher",
+          "content": "The class is Grade 5."
+        }
+      ]
+    }
+  },
+  "successResponse": {
+    "workflowCode": "WF-01",
+    "success": true,
+    "data": {
+      "recognizedFields": {
+        "courseName": "Science",
+        "chapterTitle": "Plant Growth",
+        "targetStudents": "Grade 5",
+        "teachingGoals": [
+          "Explain how light affects plant growth"
+        ],
+        "interactionType": "SMALL_GROUP_OBSERVATION",
+        "generationMode": "STANDARD"
+      },
+      "missingFields": [
+        "lessonDuration",
+        "outputTypes"
+      ],
+      "questions": [
+        {
+          "questionId": "q-lesson-duration",
+          "field": "lessonDuration",
+          "questionText": "How many minutes are available for this lesson?"
+        },
+        {
+          "questionId": "q-output-types",
+          "field": "outputTypes",
+          "questionText": "Which outputs are required: slides, lesson document, interaction content, or a combination?"
+        }
+      ],
+      "canContinue": false
+    },
+    "warnings": [],
+    "errors": [],
+    "confidence": 0.94,
+    "traceHint": "sample-wf01-001"
+  },
+  "errorResponse": {
+    "workflowCode": "WF-01",
+    "success": false,
+    "data": null,
+    "warnings": [],
+    "errors": [
+      {
+        "code": "INVALID_INPUT",
+        "message": "rawRequirement must not be empty.",
+        "field": "input.rawRequirement",
+        "retryable": false
+      }
+    ],
+    "confidence": 0,
+    "traceHint": "sample-wf01-error"
+  }
+}

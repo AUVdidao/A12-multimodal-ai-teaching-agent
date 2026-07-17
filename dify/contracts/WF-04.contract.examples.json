@@ -1,0 +1,115 @@
+{
+  "request": {
+    "workflowCode": "WF-04",
+    "traceHint": "sample-wf04-001",
+    "input": {
+      "requirementSummary": {
+        "status": "CONFIRMED",
+        "courseName": "Science",
+        "chapterTitle": "Plant Growth",
+        "targetStudents": "Grade 5",
+        "lessonDuration": 40,
+        "teachingGoals": [
+          "Explain how light affects plant growth",
+          "Use observation evidence to support an explanation"
+        ],
+        "keyDifficulties": [
+          "Distinguishing observation from explanation"
+        ],
+        "outputTypes": [
+          "PPT",
+          "DOCX",
+          "INTERACTION"
+        ]
+      },
+      "materialSummaries": [
+        {
+          "sourceId": "material-sample-001",
+          "title": "Light and Seedling Growth Observation",
+          "confirmed": true,
+          "summary": "Two similar seedlings were observed under different light conditions."
+        }
+      ],
+      "knowledgeSnippets": [
+        {
+          "sourceId": "knowledge-sample-001",
+          "sourceName": "system-knowledge-sample",
+          "title": "Fair comparisons",
+          "content": "A fair comparison changes one condition while keeping other relevant conditions similar.",
+          "relevance": 0.89
+        }
+      ]
+    }
+  },
+  "successResponse": {
+    "workflowCode": "WF-04",
+    "success": true,
+    "data": {
+      "teachingIntent": {
+        "teachingGoals": [
+          "Explain how light affects plant growth",
+          "Use observation evidence to support an explanation"
+        ],
+        "contentPriorities": [
+          "Compare observed changes before introducing explanations",
+          "Connect claims to evidence from the observation notes"
+        ],
+        "keyDifficulties": [
+          "Distinguishing observation from explanation"
+        ],
+        "teachingOrganization": [
+          "Whole-class evidence review",
+          "Small-group comparison",
+          "Individual explanation"
+        ],
+        "interactionPlan": [
+          "Groups sort statements into observations and explanations",
+          "Students justify one conclusion with a cited observation"
+        ],
+        "outputTypes": [
+          "PPT",
+          "DOCX",
+          "INTERACTION"
+        ],
+        "constraints": [
+          "Fit the complete sequence into 40 minutes"
+        ]
+      },
+      "usedReferences": [
+        {
+          "sourceType": "TEACHER_MATERIAL",
+          "sourceId": "material-sample-001",
+          "title": "Light and Seedling Growth Observation",
+          "relevance": 1
+        },
+        {
+          "sourceType": "KNOWLEDGE_SNIPPET",
+          "sourceId": "knowledge-sample-001",
+          "title": "Fair comparisons",
+          "relevance": 0.89
+        }
+      ],
+      "conflictWarnings": []
+    },
+    "warnings": [],
+    "errors": [],
+    "confidence": 0.93,
+    "traceHint": "sample-wf04-001"
+  },
+  "errorResponse": {
+    "workflowCode": "WF-04",
+    "success": false,
+    "data": null,
+    "warnings": [],
+    "errors": [
+      {
+        "code": "REQUIREMENT_NOT_CONFIRMED",
+        "message": "A confirmed requirement summary is required to build teaching intent.",
+        "field": "input.requirementSummary.status",
+        "retryable": false
+      }
+    ],
+    "confidence": 0,
+    "traceHint": "sample-wf04-error"
+  }
+}

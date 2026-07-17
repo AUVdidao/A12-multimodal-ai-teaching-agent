@@ -1,0 +1,76 @@
+{
+  "request": {
+    "workflowCode": "WF-07",
+    "traceHint": "sample-wf07-001",
+    "input": {
+      "currentVersion": {
+        "versionRef": "sample-version-002",
+        "artifactType": "PPT",
+        "contentJson": {
+          "slides": [
+            {
+              "slideNo": 1,
+              "title": "How Does Light Affect Plant Growth?",
+              "body": [
+                "Compare two seedlings grown under different light conditions."
+              ]
+            },
+            {
+              "slideNo": 2,
+              "title": "What Did We Observe?",
+              "body": [
+                "Regular light: green and steady growth",
+                "Darkness: pale and weak growth"
+              ]
+            }
+          ]
+        }
+      },
+      "editText": "On slide 2, add one everyday example that helps Grade 5 students understand why plants near a window may grow differently.",
+      "locatorContext": {
+        "artifactType": "PPT",
+        "selectedLocator": "slide-2"
+      }
+    }
+  },
+  "successResponse": {
+    "workflowCode": "WF-07",
+    "success": true,
+    "data": {
+      "targetContentType": "PPT",
+      "targetLocator": "slide-2",
+      "editAction": "ADD_CASE",
+      "scope": "PARTIAL",
+      "requiresRegeneration": true,
+      "impactScope": {
+        "artifactIds": [
+          "sample-version-002"
+        ],
+        "sections": [
+          "slide-2"
+        ],
+        "reason": "The instruction adds a localized example without changing the overall lesson structure."
+      }
+    },
+    "warnings": [],
+    "errors": [],
+    "confidence": 0.97,
+    "traceHint": "sample-wf07-001"
+  },
+  "errorResponse": {
+    "workflowCode": "WF-07",
+    "success": false,
+    "data": null,
+    "warnings": [],
+    "errors": [
+      {
+        "code": "EMPTY_EDIT_TEXT",
+        "message": "editText must describe the requested change.",
+        "field": "input.editText",
+        "retryable": false
+      }
+    ],
+    "confidence": 0,
+    "traceHint": "sample-wf07-error"
+  }
+}

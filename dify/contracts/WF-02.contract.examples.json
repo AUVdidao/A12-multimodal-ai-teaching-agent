@@ -1,0 +1,91 @@
+{
+  "request": {
+    "workflowCode": "WF-02",
+    "traceHint": "sample-wf02-001",
+    "input": {
+      "projectInfo": {
+        "projectRef": "sample-project",
+        "courseName": "Science",
+        "chapterTitle": "Plant Growth",
+        "targetStudents": "Grade 5",
+        "lessonDuration": 40,
+        "generationMode": "STANDARD"
+      },
+      "dialogHistory": [
+        {
+          "role": "teacher",
+          "content": "Use observation records and finish with a short explanation task."
+        }
+      ],
+      "defaultValues": {
+        "coursewareStyle": {
+          "value": "CLEAR_VISUAL",
+          "source": "system-default"
+        },
+        "outputTypes": {
+          "value": [
+            "PPT",
+            "DOCX",
+            "INTERACTION"
+          ],
+          "source": "teacher-confirmed"
+        }
+      }
+    }
+  },
+  "successResponse": {
+    "workflowCode": "WF-02",
+    "success": true,
+    "data": {
+      "requirementSummary": {
+        "courseName": "Science",
+        "chapterTitle": "Plant Growth",
+        "targetStudents": "Grade 5",
+        "lessonDuration": 40,
+        "teachingGoals": [
+          "Explain how light affects plant growth",
+          "Use observation evidence to support an explanation"
+        ],
+        "knowledgePoints": [
+          "Plants need light for healthy growth",
+          "Controlled observations compare changed and unchanged conditions"
+        ],
+        "keyDifficulties": [
+          "Distinguishing observation from explanation"
+        ],
+        "coursewareStyle": "CLEAR_VISUAL",
+        "interactionType": "SMALL_GROUP_OBSERVATION",
+        "outputTypes": [
+          "PPT",
+          "DOCX",
+          "INTERACTION"
+        ],
+        "generationMode": "STANDARD"
+      },
+      "uncertainFields": [],
+      "generationHints": [
+        "Reserve time for groups to compare observation records."
+      ]
+    },
+    "warnings": [],
+    "errors": [],
+    "confidence": 0.96,
+    "traceHint": "sample-wf02-001"
+  },
+  "errorResponse": {
+    "workflowCode": "WF-02",
+    "success": false,
+    "data": null,
+    "warnings": [],
+    "errors": [
+      {
+        "code": "MISSING_CONFIRMED_CONTEXT",
+        "message": "projectInfo and dialogHistory do not contain enough confirmed information to build a summary.",
+        "field": "input.projectInfo",
+        "retryable": false
+      }
+    ],
+    "confidence": 0,
+    "traceHint": "sample-wf02-error"
+  }
+}
