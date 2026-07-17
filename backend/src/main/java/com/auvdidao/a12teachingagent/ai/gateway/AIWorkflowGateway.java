@@ -13,6 +13,8 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryReq
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionResponse;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
 
@@ -31,6 +33,8 @@ public interface AIWorkflowGateway {
     TeachingIntentResponse buildTeachingIntent(TeachingIntentRequest request);
 
     GenerationPlanResponse createGenerationPlan(GenerationPlanRequest request);
+
+    StructuredContentResponse generateStructuredContent(StructuredContentRequest request);
 
     RevisionResponse reviseArtifact(RevisionRequest request);
 }

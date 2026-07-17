@@ -3,11 +3,17 @@ package com.auvdidao.a12teachingagent.ai.gateway;
 import com.auvdidao.a12teachingagent.ai.config.WorkflowCode;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.DialogTurn;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationConstraints;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanSnapshot;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeRetrievalRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeSnippet;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.PlanSection;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -232,6 +238,168 @@ class DifyWorkflowContractAdapterTest {
         assertThat(intent.path("generationGoals").get(0).asText()).isEqualTo("解释光合作用");
         assertThat(intent.path("contentBasis").get(1).asText()).isEqualTo("教学组织：小组讨论");
         assertThat(intent.path("confirmationPrompt").asText()).isEqualTo("请确认以上教学意图是否准确。");
+    }
+
+    @Test
+    void buildsAndMapsWf05GenerationPlanContract() throws Exception {
+        JsonNode input = adapter.requestInput(
+                WorkflowCode.GENERATION_PLAN,
+                "generation-plan",
+                new GenerationPlanRequest(
+                        78L,
+                        "生物",
+                        "光合作用",
+                        "八年级",
+                        List.of("PPT", "DOCX", "INTERACTION"),
+                        GenerationMode.HIGH_QUALITY,
+                        List.of("解释能量转换"),
+                        List.of("先观察实验现象"),
+                        List.of("证据分类"),
+                        new GenerationConstraints(45, 10, 8, List.of("PPT", "DOCX", "INTERACTION"))
+                )
+        );
+
+        assertThat(input.path("teachingIntent").path("status").asText()).isEqualTo("CONFIRMED");
+        assertThat(input.path("teachingIntent").path("teachingGoals").get(0).asText())
+                .isEqualTo("解释能量转换");
+        assertThat(input.path("constraints").path("maximumSlides").asInt()).isEqualTo(10);
+
+        JsonNode output = objectMapper.readTree("""
+                {
+                  "planId": "plan-wf05-78",
+                  "pptOutline": [{
+                    "slideNo": 1,
+                    "title": "导入",
+                    "purpose": "激活先验知识",
+                    "keyPoints": ["观察实验现象"],
+                    "materialReferences": ["教材.pdf"]
+                  }],
+                  "docOutline": [{
+                    "sectionNo": 1,
+                    "title": "教学过程",
+                    "purpose": "组织探究",
+                    "keyPoints": ["证据分类"],
+                    "materialReferences": ["教材.pdf"]
+                  }],
+                  "interactionPlan": {
+                    "type": "QUIZ",
+                    "knowledgePoints": ["能量转换"],
+                    "questionCount": 3,
+                    "difficulty": "MEDIUM",
+                    "estimatedMinutes": 8
+                  }
+                }
+                """);
+        JsonNode response = adapter.responsePayload(
+                WorkflowCode.GENERATION_PLAN,
+                "generation-plan",
+                (com.fasterxml.jackson.databind.node.ObjectNode) output
+        );
+
+        assertThat(response.path("planId").asText()).isEqualTo("plan-wf05-78");
+        assertThat(response.path("pptOutline").get(0).path("materialReference").asText())
+                .isEqualTo("教材.pdf");
+        assertThat(response.path("interactionPlan").get(0).asText()).isEqualTo("QUIZ");
+        assertThat(response.path("estimatedDuration").asText()).contains("8");
+    }
+
+    @Test
+    void buildsAndMapsWf06StructuredContentContract() throws Exception {
+        JsonNode input = adapter.requestInput(
+                WorkflowCode.CONTENT_DRAFT,
+                "structured-content",
+                new StructuredContentRequest(
+                        78L,
+                        new GenerationPlanSnapshot(
+                                "plan-wf05-78",
+                                List.of(new PlanSection("导入", List.of("观察现象"), "教材.pdf")),
+                                List.of(new PlanSection("教学过程", List.of("证据分类"), "教材.pdf")),
+                                List.of("随堂问答")
+                        ),
+                        List.of(new KnowledgeSnippet("能量转换", "教材.pdf", "光能转化为化学能。", 0.95)),
+                        List.of("PPT", "DOCX", "INTERACTION")
+                )
+        );
+
+        assertThat(input.path("generationPlan").path("status").asText()).isEqualTo("CONFIRMED");
+        assertThat(input.path("generationPlan").path("planRef").asText()).isEqualTo("plan-wf05-78");
+        assertThat(input.path("referenceContext").get(0).path("sourceName").asText())
+                .isEqualTo("教材.pdf");
+
+        JsonNode output = objectMapper.readTree("""
+                {
+                  "pptContent": {
+                    "artifactType": "PPT",
+                    "title": "光合作用课件",
+                    "contentJson": {"deckTitle": "光合作用", "theme": "clear", "slides": [{}]},
+                    "assetSuggestions": []
+                  },
+                  "docContent": {
+                    "artifactType": "DOCX",
+                    "title": "光合作用教案",
+                    "contentJson": {"sections": [{}]},
+                    "assetSuggestions": []
+                  },
+                  "interactionContent": {
+                    "artifactType": "INTERACTION",
+                    "title": "光合作用问答",
+                    "contentJson": {"questions": [{}]},
+                    "assetSuggestions": []
+                  }
+                }
+                """);
+        JsonNode response = adapter.responsePayload(
+                WorkflowCode.CONTENT_DRAFT,
+                "structured-content",
+                (com.fasterxml.jackson.databind.node.ObjectNode) output
+        );
+
+        assertThat(response.path("fallbackToBackendDrafts").asBoolean()).isFalse();
+        assertThat(response.path("pptContent").path("contentJson").path("slides")).hasSize(1);
+        assertThat(response.path("docContent").path("artifactType").asText()).isEqualTo("DOCX");
+    }
+
+    @Test
+    void buildsAndMapsWf07RevisionIntentContract() throws Exception {
+        JsonNode input = adapter.requestInput(
+                WorkflowCode.REVISION,
+                "revision",
+                new RevisionRequest(
+                        78L,
+                        9L,
+                        "在第三页增加案例",
+                        "{\"deckTitle\":\"光合作用\",\"slides\":[]}",
+                        "PPT",
+                        "slide-3"
+                )
+        );
+
+        assertThat(input.path("currentVersion").path("contentJson").path("deckTitle").asText())
+                .isEqualTo("光合作用");
+        assertThat(input.path("locatorContext").path("selectedLocator").asText()).isEqualTo("slide-3");
+
+        JsonNode output = objectMapper.readTree("""
+                {
+                  "editAction": "ADD",
+                  "scope": "PARTIAL",
+                  "targetLocator": "slide-3",
+                  "instructionSummary": "增加一个应用案例",
+                  "impactScope": {
+                    "sections": ["slide-3"],
+                    "reason": "只影响第三页"
+                  },
+                  "requiresRegeneration": true
+                }
+                """);
+        JsonNode response = adapter.responsePayload(
+                WorkflowCode.REVISION,
+                "revision",
+                (com.fasterxml.jackson.databind.node.ObjectNode) output
+        );
+
+        assertThat(response.path("changeSummary").asText()).contains("ADD", "slide-3");
+        assertThat(response.path("changedSections").get(0).asText()).isEqualTo("slide-3");
+        assertThat(response.path("revisedContent").isNull()).isTrue();
     }
 
     private static RequirementSummaryData summaryData() {

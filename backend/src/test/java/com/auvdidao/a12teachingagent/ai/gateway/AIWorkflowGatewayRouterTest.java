@@ -153,31 +153,30 @@ class AIWorkflowGatewayRouterTest {
         assertThat(status.message())
                 .contains("Configured workflow slots: WF-01")
                 .contains("missing or incomplete workflow slots: WF-02")
-                .contains("Gateway-mapped callable workflows: WF-01, WF-02, WF-03, WF-04, WF-05, WF-07")
-                .contains("WF-06 is configuration-only")
+                .contains("Gateway-mapped callable workflows: WF-01, WF-02, WF-03, WF-04, WF-05, WF-06, WF-07")
                 .doesNotContain("wf-01-secret-key")
                 .doesNotContain("wf-01-secret-key");
     }
 
     @Test
-    void fullConfigurationRequiresWf06WhileCallableConfigurationIsReportedSeparately() {
+    void fullConfigurationRequiresEveryGatewayMappedWorkflow() {
         AiWorkflowProperties properties = properties(AiProvider.DIFY, true);
         configureEveryCallableWorkflow(properties);
 
         var mappedStatus = router(properties).status();
 
-        assertThat(properties.areCallableDifyWorkflowsConfigured()).isTrue();
+        assertThat(properties.areCallableDifyWorkflowsConfigured()).isFalse();
         assertThat(mappedStatus.difyConfigured()).isFalse();
-        assertThat(mappedStatus.activeProvider()).isEqualTo("DIFY_MAPPED");
+        assertThat(mappedStatus.activeProvider()).isEqualTo("DIFY_PARTIAL");
         assertThat(mappedStatus.message())
-                .contains("missing or incomplete workflow slots: WF-06")
-                .contains("WF-06 is configuration-only");
+                .contains("missing or incomplete workflow slots: WF-06");
 
         properties.getDify().getWorkflows().getContentDraft().setWorkflowId("published-wf-06");
         properties.getDify().getWorkflows().getContentDraft().setApiKey("wf-06-key");
         var fullStatus = router(properties).status();
 
         assertThat(properties.isDifyConfigured()).isTrue();
+        assertThat(properties.areCallableDifyWorkflowsConfigured()).isTrue();
         assertThat(fullStatus.difyConfigured()).isTrue();
         assertThat(fullStatus.activeProvider()).isEqualTo("DIFY");
         assertThat(properties.getDify().resolveWorkflowId(

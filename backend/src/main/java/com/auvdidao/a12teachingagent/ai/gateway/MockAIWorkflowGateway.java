@@ -15,6 +15,8 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryReq
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionResponse;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
 import com.auvdidao.a12teachingagent.clarification.ClarificationField;
@@ -192,6 +194,16 @@ public class MockAIWorkflowGateway {
                 List.of("生成 3 道互动问答", "每题包含答案与解析", "支持前端预览和后续导出"),
                 request.generationMode() == GenerationMode.HIGH_QUALITY ? "约 45 秒" : "约 15 秒",
                 "请确认生成方案，确认后进入 PPT / Word / 互动内容生成。"
+        );
+    }
+
+    public StructuredContentResponse generateStructuredContent(StructuredContentRequest request) {
+        return new StructuredContentResponse(
+                WORKFLOW,
+                null,
+                null,
+                null,
+                true
         );
     }
 

@@ -17,6 +17,9 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryReq
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionResponse;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredArtifactDraft;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
@@ -312,6 +315,17 @@ public class DifyAIWorkflowGateway {
         }
     }
 
+    public StructuredContentResponse generateStructuredContent(StructuredContentRequest request) {
+        return execute(
+                WorkflowCode.CONTENT_DRAFT,
+                "structured-content",
+                request.projectId(),
+                request,
+                StructuredContentResponse.class,
+                response -> validateStructuredContent(response, WorkflowCode.CONTENT_DRAFT)
+        );
+    }
+
     private URI workflowUri(String baseUrl, WorkflowCode workflowCode) {
         if (!StringUtils.hasText(baseUrl)) {
             throw unavailable(workflowCode, "Dify base URL is missing");
@@ -475,8 +489,132 @@ public class DifyAIWorkflowGateway {
         require(response != null, workflowCode, "revision output is missing");
         require(StringUtils.hasText(response.changeSummary()), workflowCode, "changeSummary is missing");
         require(response.changedSections() != null, workflowCode, "changedSections is missing");
-        require(StringUtils.hasText(response.revisedContent()), workflowCode, "revisedContent is missing");
         require(StringUtils.hasText(response.versionSuggestion()), workflowCode, "versionSuggestion is missing");
+    }
+
+    private static void validateStructuredContent(
+            StructuredContentResponse response,
+            WorkflowCode workflowCode
+    ) {
+        require(response != null, workflowCode, "structured content output is missing");
+        require(!response.fallbackToBackendDrafts(), workflowCode, "Dify requested backend fallback drafts");
+        validateStructuredDraft(response.pptContent(), "PPT", "slides", workflowCode);
+        validateStructuredDraft(response.docContent(), "DOCX", "sections", workflowCode);
+        validateStructuredDraft(response.interactionContent(), "INTERACTION", "questions", workflowCode);
+    }
+
+    private static void validateStructuredDraft(
+            StructuredArtifactDraft draft,
+            String expectedType,
+            String requiredArray,
+            WorkflowCode workflowCode
+    ) {
+        require(draft != null, workflowCode, expectedType + " draft is missing");
+        require(expectedType.equalsIgnoreCase(draft.artifactType()), workflowCode, expectedType + " artifactType is invalid");
+        require(StringUtils.hasText(draft.title()), workflowCode, expectedType + " title is missing");
+        require(draft.contentJson() != null && draft.contentJson().isObject(), workflowCode, expectedType + " contentJson is invalid");
+        require(
+                draft.contentJson().path(requiredArray).isArray() && !draft.contentJson().path(requiredArray).isEmpty(),
+                workflowCode,
+                expectedType + " contentJson." + requiredArray + " is missing"
+        );
+        require(draft.assetSuggestions() != null, workflowCode, expectedType + " assetSuggestions is missing");
+        switch (expectedType) {
+            case "PPT" -> validatePptContent(draft.contentJson(), workflowCode);
+            case "DOCX" -> validateDocContent(draft.contentJson(), workflowCode);
+            case "INTERACTION" -> validateInteractionContent(draft.contentJson(), workflowCode);
+            default -> throw unavailable(workflowCode, "unsupported structured artifact type");
+        }
+    }
+
+    private static void validatePptContent(JsonNode content, WorkflowCode workflowCode) {
+        requireText(content, "deckTitle", "PPT", workflowCode);
+        requireText(content, "theme", "PPT", workflowCode);
+        for (JsonNode slide : content.path("slides")) {
+            require(slide.isObject(), workflowCode, "PPT slide is invalid");
+            require(slide.path("index").canConvertToInt() && slide.path("index").asInt() > 0,
+                    workflowCode, "PPT slide index is invalid");
+            requireText(slide, "kind", "PPT slide", workflowCode);
+            requireText(slide, "title", "PPT slide", workflowCode);
+            requireText(slide, "layout", "PPT slide", workflowCode);
+            require(slide.path("points").isArray(), workflowCode, "PPT slide points are missing");
+            requireText(slide, "speakerNotes", "PPT slide", workflowCode);
+        }
+    }
+
+    private static void validateDocContent(JsonNode content, WorkflowCode workflowCode) {
+        requireText(content, "title", "DOCX", workflowCode);
+        JsonNode courseInfo = content.path("courseInfo");
+        require(courseInfo.isObject(), workflowCode, "DOCX courseInfo is missing");
+        for (String field : List.of(
+                "projectName", "courseName", "chapterTopic", "targetAudience", "generationMode"
+        )) {
+            requireText(courseInfo, field, "DOCX courseInfo", workflowCode);
+        }
+        require(
+                courseInfo.path("lessonDurationMinutes").canConvertToInt()
+                        && courseInfo.path("lessonDurationMinutes").asInt() > 0,
+                workflowCode,
+                "DOCX courseInfo lessonDurationMinutes is invalid"
+        );
+        for (String field : List.of(
+                "teachingGoals", "keyPoints", "difficultPoints", "methods",
+                "classroomActivities", "homework", "resourceNotes"
+        )) {
+            require(content.path(field).isArray(), workflowCode, "DOCX " + field + " is missing");
+        }
+        JsonNode process = content.path("teachingProcess");
+        require(process.isArray() && !process.isEmpty(), workflowCode, "DOCX teachingProcess is missing");
+        for (JsonNode step : process) {
+            require(step.isObject(), workflowCode, "DOCX teachingProcess step is invalid");
+            requireText(step, "stage", "DOCX teachingProcess step", workflowCode);
+            require(step.path("durationMinutes").canConvertToInt() && step.path("durationMinutes").asInt() > 0,
+                    workflowCode, "DOCX teachingProcess durationMinutes is invalid");
+            requireText(step, "content", "DOCX teachingProcess step", workflowCode);
+            requireText(step, "teacherActivity", "DOCX teachingProcess step", workflowCode);
+            requireText(step, "studentActivity", "DOCX teachingProcess step", workflowCode);
+        }
+        for (JsonNode section : content.path("sections")) {
+            require(section.isObject(), workflowCode, "DOCX section is invalid");
+            require(section.path("order").canConvertToInt() && section.path("order").asInt() > 0,
+                    workflowCode, "DOCX section order is invalid");
+            requireText(section, "title", "DOCX section", workflowCode);
+            require(section.path("paragraphs").isArray(), workflowCode, "DOCX section paragraphs are missing");
+        }
+    }
+
+    private static void validateInteractionContent(JsonNode content, WorkflowCode workflowCode) {
+        requireText(content, "title", "INTERACTION", workflowCode);
+        requireText(content, "instructions", "INTERACTION", workflowCode);
+        for (JsonNode question : content.path("questions")) {
+            require(question.isObject(), workflowCode, "INTERACTION question is invalid");
+            requireText(question, "id", "INTERACTION question", workflowCode);
+            requireText(question, "question", "INTERACTION question", workflowCode);
+            JsonNode options = question.path("options");
+            require(options.isArray() && !options.isEmpty(), workflowCode, "INTERACTION options are missing");
+            require(
+                    question.path("correctOption").canConvertToInt()
+                            && question.path("correctOption").asInt() >= 0
+                            && question.path("correctOption").asInt() < options.size(),
+                    workflowCode,
+                    "INTERACTION correctOption is invalid"
+            );
+            requireText(question, "correctAnswer", "INTERACTION question", workflowCode);
+            requireText(question, "explanation", "INTERACTION question", workflowCode);
+        }
+    }
+
+    private static void requireText(
+            JsonNode content,
+            String field,
+            String label,
+            WorkflowCode workflowCode
+    ) {
+        require(
+                content.path(field).isTextual() && StringUtils.hasText(content.path(field).asText()),
+                workflowCode,
+                label + " " + field + " is missing"
+        );
     }
 
     private static void require(boolean condition, WorkflowCode workflowCode, String reason) {

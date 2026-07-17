@@ -2,12 +2,19 @@ package com.auvdidao.a12teachingagent.ai.gateway;
 
 import com.auvdidao.a12teachingagent.ai.config.WorkflowCode;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationConstraints;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanSnapshot;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeRetrievalRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeSnippet;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.PlanSection;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -39,7 +46,9 @@ public class DifyWorkflowContractAdapter {
             case REQUIREMENT_SUMMARY -> requirementSummaryInput(payload);
             case MATERIAL_ANALYSIS -> materialAnalysisInput(payload);
             case KNOWLEDGE_AND_TEACHING_INTENT -> knowledgeAndIntentInput(operation, payload);
-            default -> objectMapper.valueToTree(payload);
+            case GENERATION_PLAN -> generationPlanInput(payload);
+            case CONTENT_DRAFT -> structuredContentInput(payload);
+            case REVISION -> revisionInput(payload);
         };
     }
 
@@ -49,7 +58,9 @@ public class DifyWorkflowContractAdapter {
             case REQUIREMENT_SUMMARY -> requirementSummaryResponse(payload);
             case MATERIAL_ANALYSIS -> materialAnalysisResponse(payload);
             case KNOWLEDGE_AND_TEACHING_INTENT -> knowledgeAndIntentResponse(operation, payload);
-            default -> payload.deepCopy();
+            case GENERATION_PLAN -> generationPlanResponse(payload);
+            case CONTENT_DRAFT -> structuredContentResponse(payload);
+            case REVISION -> revisionResponse(payload);
         };
     }
 
@@ -190,6 +201,116 @@ public class DifyWorkflowContractAdapter {
             knowledge.put("relevance", snippet.score());
         }
         return input;
+    }
+
+    private JsonNode generationPlanInput(Object payload) {
+        if (!(payload instanceof GenerationPlanRequest request)) {
+            return objectMapper.valueToTree(payload);
+        }
+
+        ObjectNode input = objectMapper.createObjectNode();
+        ObjectNode projectInfo = input.putObject("projectInfo");
+        projectInfo.put("projectRef", String.valueOf(request.projectId()));
+        projectInfo.put("courseName", request.courseName());
+        projectInfo.put("chapterTitle", request.chapterTopic());
+        putIfText(projectInfo, "targetStudents", request.targetAudience());
+
+        ObjectNode intent = input.putObject("teachingIntent");
+        intent.put("status", "CONFIRMED");
+        intent.set("teachingGoals", objectMapper.valueToTree(request.teachingGoals()));
+        intent.set("contentPriorities", objectMapper.valueToTree(request.contentPriorities()));
+        intent.set("interactionPlan", objectMapper.valueToTree(request.interactionIdeas()));
+        intent.set("outputTypes", objectMapper.valueToTree(request.outputTypes()));
+        input.put(
+                "generationMode",
+                request.generationMode() == null ? "STANDARD" : request.generationMode().name()
+        );
+
+        GenerationConstraints source = request.constraints();
+        ObjectNode constraints = input.putObject("constraints");
+        constraints.put("lessonDurationMinutes", positiveOrDefault(
+                source == null ? null : source.lessonDurationMinutes(),
+                45
+        ));
+        constraints.put("maximumSlides", positiveOrDefault(
+                source == null ? null : source.maximumSlides(),
+                12
+        ));
+        constraints.put("interactionMinutes", positiveOrDefault(
+                source == null ? null : source.interactionMinutes(),
+                10
+        ));
+        List<String> targetTypes = source == null || source.targetTypes().isEmpty()
+                ? request.outputTypes()
+                : source.targetTypes();
+        constraints.set("targetTypes", objectMapper.valueToTree(targetTypes));
+        return input;
+    }
+
+    private JsonNode structuredContentInput(Object payload) {
+        if (!(payload instanceof StructuredContentRequest request)) {
+            return objectMapper.valueToTree(payload);
+        }
+
+        ObjectNode input = objectMapper.createObjectNode();
+        GenerationPlanSnapshot source = request.generationPlan();
+        ObjectNode plan = input.putObject("generationPlan");
+        plan.put("status", "CONFIRMED");
+        plan.put("planRef", source.planRef());
+        plan.set("pptOutline", contractSections(source.pptOutline(), "slideNo"));
+        plan.set("docOutline", contractSections(source.docOutline(), "sectionNo"));
+        plan.set("interactionPlan", objectMapper.valueToTree(source.interactionPlan()));
+
+        ArrayNode references = input.putArray("referenceContext");
+        int index = 1;
+        for (KnowledgeSnippet snippet : safeSnippets(request.referenceContext())) {
+            ObjectNode reference = references.addObject();
+            reference.put("sourceId", "reference-" + index++);
+            reference.put("sourceName", defaultString(snippet.sourceName()));
+            reference.put("title", defaultString(snippet.title()));
+            reference.put("content", defaultString(snippet.content()));
+            reference.put("relevance", snippet.score());
+        }
+        input.set("targetTypes", objectMapper.valueToTree(request.targetTypes()));
+        return input;
+    }
+
+    private JsonNode revisionInput(Object payload) {
+        if (!(payload instanceof RevisionRequest request)) {
+            return objectMapper.valueToTree(payload);
+        }
+
+        ObjectNode input = objectMapper.createObjectNode();
+        ObjectNode currentVersion = input.putObject("currentVersion");
+        currentVersion.put("versionRef", "artifact-" + request.artifactId());
+        currentVersion.put("artifactType", defaultIfBlank(request.artifactType(), "UNKNOWN"));
+        currentVersion.set("contentJson", parseJsonValue(request.currentContent()));
+        input.put("editText", request.instruction());
+        ObjectNode locator = input.putObject("locatorContext");
+        locator.put("artifactType", defaultIfBlank(request.artifactType(), "UNKNOWN"));
+        if (StringUtils.hasText(request.selectedLocator())) {
+            locator.put("selectedLocator", request.selectedLocator().strip());
+        } else {
+            locator.putNull("selectedLocator");
+        }
+        return input;
+    }
+
+    private ArrayNode contractSections(List<PlanSection> sections, String orderField) {
+        ArrayNode result = objectMapper.createArrayNode();
+        int index = 1;
+        for (PlanSection section : sections == null ? List.<PlanSection>of() : sections) {
+            if (section == null) {
+                continue;
+            }
+            ObjectNode item = result.addObject();
+            item.put(orderField, index++);
+            item.put("title", defaultString(section.title()));
+            item.put("purpose", defaultString(section.materialReference()));
+            item.set("keyPoints", objectMapper.valueToTree(safeStrings(section.points())));
+            item.putArray("materialReferences");
+        }
+        return result;
     }
 
     private ObjectNode summaryNode(RequirementSummaryData summary, boolean confirmed) {
@@ -408,8 +529,136 @@ public class DifyWorkflowContractAdapter {
         return response;
     }
 
+    private ObjectNode generationPlanResponse(ObjectNode payload) {
+        if (payload.has("planId")
+                && payload.path("pptOutline").isArray()
+                && payload.path("interactionPlan").isArray()) {
+            return payload.deepCopy();
+        }
+
+        ObjectNode response = objectMapper.createObjectNode();
+        String planId = payload.path("planId").asText("").strip();
+        response.put("planId", StringUtils.hasText(planId) ? planId : "dify-generation-plan");
+        response.set("pptOutline", gatewayPlanSections(payload.get("pptOutline")));
+        response.set("docOutline", gatewayPlanSections(payload.get("docOutline")));
+
+        ArrayNode interactionPlan = response.putArray("interactionPlan");
+        JsonNode interaction = payload.get("interactionPlan");
+        if (interaction != null && interaction.isArray()) {
+            interactionPlan.addAll(arrayCopy(interaction));
+        } else if (interaction != null && interaction.isObject()) {
+            addIfText(interactionPlan, interaction.path("type").asText());
+            for (String point : textValues(interaction.get("knowledgePoints"))) {
+                interactionPlan.add("Knowledge point: " + point);
+            }
+            if (interaction.path("questionCount").canConvertToInt()) {
+                interactionPlan.add("Question count: " + interaction.path("questionCount").asInt());
+            }
+            addIfText(interactionPlan, interaction.path("difficulty").asText());
+        }
+        if (interactionPlan.isEmpty()) {
+            interactionPlan.add("Classroom question and evidence-based discussion");
+        }
+
+        int estimatedMinutes = interaction != null && interaction.path("estimatedMinutes").canConvertToInt()
+                ? interaction.path("estimatedMinutes").asInt()
+                : 10;
+        response.put("estimatedDuration", "Approximately " + Math.max(1, estimatedMinutes) + " minutes");
+        response.put("nextAction", "Confirm the generation plan before drafting structured content.");
+        return response;
+    }
+
+    private ArrayNode gatewayPlanSections(JsonNode sections) {
+        ArrayNode result = objectMapper.createArrayNode();
+        if (sections == null || !sections.isArray()) {
+            return result;
+        }
+        for (JsonNode source : sections) {
+            ObjectNode section = result.addObject();
+            section.put("title", source.path("title").asText("").strip());
+            section.set("points", arrayCopy(source.get("keyPoints")));
+            List<String> references = textValues(source.get("materialReferences"));
+            String purpose = source.path("purpose").asText("").strip();
+            section.put(
+                    "materialReference",
+                    !references.isEmpty()
+                            ? String.join(", ", references)
+                            : StringUtils.hasText(purpose) ? purpose : "Confirmed teaching intent"
+            );
+        }
+        return result;
+    }
+
+    private ObjectNode structuredContentResponse(ObjectNode payload) {
+        if (!payload.has("pptContent")
+                || !payload.has("docContent")
+                || !payload.has("interactionContent")) {
+            return payload.deepCopy();
+        }
+        ObjectNode response = payload.deepCopy();
+        response.put("fallbackToBackendDrafts", false);
+        return response;
+    }
+
+    private ObjectNode revisionResponse(ObjectNode payload) {
+        if (payload.has("changeSummary") && payload.has("changedSections")) {
+            return payload.deepCopy();
+        }
+        if (!payload.has("editAction") || !payload.has("impactScope")) {
+            return payload.deepCopy();
+        }
+
+        ObjectNode response = objectMapper.createObjectNode();
+        String action = payload.path("editAction").asText("OTHER");
+        String scope = payload.path("scope").asText("PARTIAL");
+        String locator = payload.path("targetLocator").asText("");
+        String reason = payload.path("impactScope").path("reason").asText("");
+        StringBuilder summary = new StringBuilder("Interpreted ")
+                .append(action)
+                .append(" as a ")
+                .append(scope)
+                .append(" revision");
+        if (StringUtils.hasText(locator)) {
+            summary.append(" targeting ").append(locator);
+        }
+        if (StringUtils.hasText(reason)) {
+            summary.append(". ").append(reason.strip());
+        }
+        response.put("changeSummary", summary.toString());
+        response.set("changedSections", arrayCopy(payload.path("impactScope").get("sections")));
+        response.putNull("revisedContent");
+        response.put("versionSuggestion", "Create a new version after applying the interpreted revision intent.");
+        return response;
+    }
+
     private ArrayNode arrayOrEmpty(JsonNode value) {
         return value != null && value.isArray() ? (ArrayNode) value : objectMapper.createArrayNode();
+    }
+
+    private JsonNode parseJsonValue(String value) {
+        if (!StringUtils.hasText(value)) {
+            return objectMapper.createObjectNode();
+        }
+        try {
+            JsonNode parsed = objectMapper.readTree(value);
+            return parsed == null ? objectMapper.createObjectNode() : parsed;
+        } catch (JsonProcessingException exception) {
+            return objectMapper.getNodeFactory().textNode(value);
+        }
+    }
+
+    private static int positiveOrDefault(Integer value, int fallback) {
+        return value == null || value <= 0 ? fallback : value;
+    }
+
+    private static String defaultIfBlank(String value, String fallback) {
+        return StringUtils.hasText(value) ? value.strip() : fallback;
+    }
+
+    private static void addIfText(ArrayNode target, String value) {
+        if (StringUtils.hasText(value)) {
+            target.add(value.strip());
+        }
     }
 
     private ArrayNode arrayCopy(JsonNode value) {

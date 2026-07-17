@@ -5,12 +5,15 @@ import com.auvdidao.a12teachingagent.ai.config.AiWorkflowProperties.Workflow;
 import com.auvdidao.a12teachingagent.ai.config.WorkflowCode;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanSnapshot;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeRetrievalRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeSnippet;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.PlanSection;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
@@ -136,6 +139,7 @@ class DifyAIWorkflowGatewayTest {
         configure(WorkflowCode.MATERIAL_ANALYSIS, "published-wf-03", "wf-03-key");
         configure(WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT, "published-wf-04", "wf-04-key");
         configure(WorkflowCode.GENERATION_PLAN, "published-wf-05", "wf-05-key");
+        configure(WorkflowCode.CONTENT_DRAFT, "published-wf-06", "wf-06-key");
         configure(WorkflowCode.REVISION, "published-wf-07", "wf-07-key");
         Set<String> operations = ConcurrentHashMap.newKeySet();
         Set<String> paths = ConcurrentHashMap.newKeySet();
@@ -199,11 +203,32 @@ class DifyAIWorkflowGatewayTest {
                 List.of("PPT", "DOCX", "INTERACTION"),
                 GenerationMode.STANDARD
         ));
+        var content = gateway.generateStructuredContent(new StructuredContentRequest(
+                78L,
+                new GenerationPlanSnapshot(
+                        plan.planId(),
+                        List.of(new PlanSection(
+                                "Introduction",
+                                List.of("Learning goal"),
+                                "fractions.pdf"
+                        )),
+                        List.of(new PlanSection(
+                                "Lesson process",
+                                List.of("Explain fractions"),
+                                "fractions.pdf"
+                        )),
+                        List.of("Quick quiz")
+                ),
+                knowledge.snippets(),
+                List.of("PPT", "DOCX", "INTERACTION")
+        ));
         var revision = gateway.reviseArtifact(new RevisionRequest(
                 78L,
                 9L,
                 "Add one example",
-                "Current content"
+                "{\"deckTitle\":\"Fractions\",\"slides\":[]}",
+                "PPT",
+                "slide-3"
         ));
 
         assertThat(summary.workflow()).isEqualTo("published-wf-02");
@@ -211,6 +236,11 @@ class DifyAIWorkflowGatewayTest {
         assertThat(knowledge.workflow()).isEqualTo("published-wf-04");
         assertThat(intent.workflow()).isEqualTo("published-wf-04");
         assertThat(plan.workflow()).isEqualTo("published-wf-05");
+        assertThat(content.workflow()).isEqualTo("published-wf-06");
+        assertThat(content.fallbackToBackendDrafts()).isFalse();
+        assertThat(content.pptContent().contentJson().path("slides")).hasSize(1);
+        assertThat(content.docContent().contentJson().path("sections")).hasSize(1);
+        assertThat(content.interactionContent().contentJson().path("questions")).hasSize(1);
         assertThat(revision.workflow()).isEqualTo("published-wf-07");
         assertThat(operations).containsExactlyInAnyOrder(
                 "requirement-summary",
@@ -218,6 +248,7 @@ class DifyAIWorkflowGatewayTest {
                 "knowledge-retrieval",
                 "teaching-intent",
                 "generation-plan",
+                "structured-content",
                 "revision"
         );
         assertThat(paths).containsExactlyInAnyOrder(
@@ -229,6 +260,7 @@ class DifyAIWorkflowGatewayTest {
                 "Bearer wf-04-key",
                 "Bearer wf-04-key",
                 "Bearer wf-05-key",
+                "Bearer wf-06-key",
                 "Bearer wf-07-key"
         );
         assertThat(requestEnvelopes.get("material-analysis")
@@ -239,6 +271,17 @@ class DifyAIWorkflowGatewayTest {
         assertThat(requestEnvelopes.get("teaching-intent")
                 .path("input").path("requirementSummary").path("status").asText())
                 .isEqualTo("CONFIRMED");
+        assertThat(requestEnvelopes.get("structured-content")
+                .path("input").path("generationPlan").path("status").asText())
+                .isEqualTo("CONFIRMED");
+        assertThat(requestEnvelopes.get("structured-content")
+                .path("input").path("referenceContext")).hasSize(1);
+        assertThat(requestEnvelopes.get("revision")
+                .path("input").path("currentVersion").path("artifactType").asText())
+                .isEqualTo("PPT");
+        assertThat(requestEnvelopes.get("revision")
+                .path("input").path("locatorContext").path("selectedLocator").asText())
+                .isEqualTo("slide-3");
     }
 
     @Test
@@ -345,6 +388,51 @@ class DifyAIWorkflowGatewayTest {
         assertThatThrownBy(() -> gateway.clarifyRequirement(request))
                 .isInstanceOf(AiWorkflowUnavailableException.class)
                 .hasMessageContaining("questions is missing");
+    }
+
+    @Test
+    void incompatibleStructuredContentIsRejectedBeforePersistence() {
+        configure(WorkflowCode.CONTENT_DRAFT, "published-wf-06", "wf-06-key");
+        handler.set(exchange -> sendJson(exchange, 200, successWithObjectOutput(
+                "published-wf-06",
+                "result",
+                objectNode("""
+                        {
+                          "pptContent": {
+                            "artifactType": "PPT",
+                            "title": "Draft",
+                            "contentJson": {"slides": [{}]},
+                            "assetSuggestions": []
+                          },
+                          "docContent": {
+                            "artifactType": "DOCX",
+                            "title": "Draft",
+                            "contentJson": {"sections": [{}]},
+                            "assetSuggestions": []
+                          },
+                          "interactionContent": {
+                            "artifactType": "INTERACTION",
+                            "title": "Draft",
+                            "contentJson": {"questions": [{}]},
+                            "assetSuggestions": []
+                          }
+                        }
+                        """)
+        )));
+
+        assertThatThrownBy(() -> gateway().generateStructuredContent(new StructuredContentRequest(
+                78L,
+                new GenerationPlanSnapshot(
+                        "plan-78",
+                        List.of(new PlanSection("Introduction", List.of("Goal"), "Confirmed plan")),
+                        List.of(new PlanSection("Process", List.of("Explain"), "Confirmed plan")),
+                        List.of("Quick quiz")
+                ),
+                List.of(),
+                List.of("PPT", "DOCX", "INTERACTION")
+        )))
+                .isInstanceOf(AiWorkflowUnavailableException.class)
+                .hasMessageContaining("PPT deckTitle is missing");
     }
 
     private DifyAIWorkflowGateway gateway() {
@@ -487,12 +575,90 @@ class DifyAIWorkflowGatewayTest {
                       "nextAction": "Confirm plan"
                     }
                     """);
+            case "structured-content" -> objectNode("""
+                    {
+                      "pptContent": {
+                        "artifactType": "PPT",
+                        "title": "Fractions lesson slides",
+                        "contentJson": {
+                          "deckTitle": "Fractions",
+                          "theme": "clear-visual",
+                          "slides": [{
+                            "index": 1,
+                            "kind": "COVER",
+                            "title": "Fractions",
+                            "layout": "TITLE",
+                            "points": ["Part of a whole"],
+                            "speakerNotes": "Introduce the lesson goal."
+                          }]
+                        },
+                        "assetSuggestions": []
+                      },
+                      "docContent": {
+                        "artifactType": "DOCX",
+                        "title": "Fractions lesson plan",
+                        "contentJson": {
+                          "title": "Fractions lesson plan",
+                          "courseInfo": {
+                            "projectName": "Fractions lesson",
+                            "courseName": "Mathematics",
+                            "chapterTopic": "Fractions",
+                            "targetAudience": "Grade 5",
+                            "lessonDurationMinutes": 40,
+                            "generationMode": "STANDARD"
+                          },
+                          "teachingGoals": ["Understand fractions"],
+                          "keyPoints": ["Fraction definition"],
+                          "difficultPoints": ["Equivalent fractions"],
+                          "methods": ["Visual explanation"],
+                          "teachingProcess": [{
+                            "stage": "Explanation",
+                            "durationMinutes": 20,
+                            "content": "Explain fractions.",
+                            "teacherActivity": "Model equal parts.",
+                            "studentActivity": "Compare fraction models."
+                          }],
+                          "classroomActivities": ["Quick quiz"],
+                          "homework": ["Draw a fraction model"],
+                          "resourceNotes": ["Source: fractions.pdf"],
+                          "sections": [{
+                            "order": 1,
+                            "title": "Lesson process",
+                            "paragraphs": ["Explain fractions."]
+                          }]
+                        },
+                        "assetSuggestions": []
+                      },
+                      "interactionContent": {
+                        "artifactType": "INTERACTION",
+                        "title": "Fractions quick quiz",
+                        "contentJson": {
+                          "title": "Fractions quick quiz",
+                          "instructions": "Choose the best answer.",
+                          "questions": [{
+                            "id": "q1",
+                            "question": "Which fraction is one half?",
+                            "options": ["1/2", "1/3", "2/3"],
+                            "correctOption": 0,
+                            "correctAnswer": "1/2",
+                            "explanation": "One of two equal parts is one half."
+                          }]
+                        },
+                        "assetSuggestions": []
+                      }
+                    }
+                    """);
             case "revision" -> objectNode("""
                     {
-                      "changeSummary": "Added one example",
-                      "changedSections": ["Examples"],
-                      "revisedContent": "Current content plus an example",
-                      "versionSuggestion": "Create a new draft"
+                      "editAction": "ADD",
+                      "scope": "PARTIAL",
+                      "targetLocator": "slide-3",
+                      "instructionSummary": "Add one worked example",
+                      "impactScope": {
+                        "sections": ["slide-3"],
+                        "reason": "The request targets a single slide."
+                      },
+                      "requiresRegeneration": true
                     }
                     """);
             default -> throw new IllegalArgumentException("Unexpected operation: " + operation);
@@ -505,6 +671,7 @@ class DifyAIWorkflowGatewayTest {
             case "material-analysis" -> "published-wf-03";
             case "knowledge-retrieval", "teaching-intent" -> "published-wf-04";
             case "generation-plan" -> "published-wf-05";
+            case "structured-content" -> "published-wf-06";
             case "revision" -> "published-wf-07";
             default -> throw new IllegalArgumentException("Unexpected operation: " + operation);
         };

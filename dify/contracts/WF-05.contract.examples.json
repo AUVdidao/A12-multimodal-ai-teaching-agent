@@ -2,7 +2,14 @@
   "request": {
     "workflowCode": "WF-05",
     "traceHint": "sample-wf05-001",
+    "operation": "generation-plan",
     "input": {
+      "projectInfo": {
+        "projectRef": "501",
+        "courseName": "Science",
+        "chapterTitle": "How Light Affects Plant Growth",
+        "targetStudents": "Grade 5"
+      },
       "teachingIntent": {
         "status": "CONFIRMED",
         "teachingGoals": [
@@ -38,6 +45,7 @@
     "workflowCode": "WF-05",
     "success": true,
     "data": {
+      "planId": "plan-501",
       "pptOutline": [
         {
           "slideNo": 1,

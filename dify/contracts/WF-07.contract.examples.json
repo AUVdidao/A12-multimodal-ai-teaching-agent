@@ -2,6 +2,7 @@
   "request": {
     "workflowCode": "WF-07",
     "traceHint": "sample-wf07-001",
+    "operation": "revision",
     "input": {
       "currentVersion": {
         "versionRef": "sample-version-002",

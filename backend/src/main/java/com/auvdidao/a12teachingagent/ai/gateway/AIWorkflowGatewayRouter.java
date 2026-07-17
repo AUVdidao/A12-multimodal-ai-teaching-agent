@@ -16,6 +16,8 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryReq
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RevisionResponse;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
@@ -128,6 +130,16 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
     }
 
     @Override
+    public StructuredContentResponse generateStructuredContent(StructuredContentRequest request) {
+        return route(
+                WorkflowCode.CONTENT_DRAFT,
+                "structured-content",
+                () -> difyGateway.generateStructuredContent(request),
+                () -> mockGateway.generateStructuredContent(request)
+        );
+    }
+
+    @Override
     public RevisionResponse reviseArtifact(RevisionRequest request) {
         return route(
                 WorkflowCode.REVISION,
@@ -218,8 +230,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
         message.append("Configured workflow slots: ").append(configured)
                 .append("; missing or incomplete workflow slots: ").append(missing)
                 .append("; Gateway-mapped callable workflows: ")
-                .append(listOrNone(properties.callableWorkflowCodes())).append('.')
-                .append(" WF-06 is configuration-only because AIWorkflowGateway has no content-draft method.");
+                .append(listOrNone(properties.callableWorkflowCodes())).append('.');
 
         String fallbackReason = lastFallbackReason.get();
         if (StringUtils.hasText(fallbackReason)) {

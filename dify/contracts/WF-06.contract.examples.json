@@ -2,6 +2,7 @@
   "request": {
     "workflowCode": "WF-06",
     "traceHint": "sample-wf06-001",
+    "operation": "structured-content",
     "input": {
       "generationPlan": {
         "status": "CONFIRMED",
@@ -13,33 +14,40 @@
             "purpose": "Set the lesson purpose",
             "keyPoints": [
               "How does light affect plant growth?"
-            ]
-          },
-          {
-            "slideNo": 2,
-            "title": "Compare the Seedlings",
-            "purpose": "Separate observations from explanations",
-            "keyPoints": [
-              "Color",
-              "Strength",
-              "Growth pattern"
-            ]
+            ],
+            "materialReferences": []
           }
         ],
-        "interactionPlan": {
-          "type": "EVIDENCE_SORTING",
-          "questionCount": 4
-        }
+        "docOutline": [
+          {
+            "sectionNo": 1,
+            "title": "Teaching Process",
+            "purpose": "Sequence observation and explanation",
+            "keyPoints": [
+              "Observe",
+              "Compare",
+              "Explain"
+            ],
+            "materialReferences": []
+          }
+        ],
+        "interactionPlan": [
+          "Evidence sorting",
+          "Four classroom questions"
+        ]
       },
       "referenceContext": [
         {
-          "sourceId": "material-sample-001",
+          "sourceId": "reference-1",
           "sourceName": "teacher-uploaded-sample.txt",
-          "content": "The seedling in regular light remained green while the seedling in darkness became pale and weak."
+          "title": "Seedling observation",
+          "content": "The seedling in regular light remained green while the seedling in darkness became pale and weak.",
+          "relevance": 1.0
         }
       ],
       "targetTypes": [
         "PPT",
+        "DOCX",
         "INTERACTION"
       ]
     }
@@ -52,63 +60,119 @@
         "artifactType": "PPT",
         "title": "How Light Affects Plant Growth",
         "contentJson": {
+          "deckTitle": "How Light Affects Plant Growth",
+          "theme": "Clear teaching",
           "slides": [
             {
-              "slideNo": 1,
-              "title": "How Does Light Affect Plant Growth?",
-              "body": [
-                "Compare two seedlings grown under different light conditions.",
-                "Use observations to support an explanation."
+              "index": 1,
+              "kind": "COVER",
+              "title": "How Light Affects Plant Growth",
+              "layout": "TITLE",
+              "points": [
+                "Compare seedlings grown under different light conditions"
               ],
-              "sourceIds": [
-                "material-sample-001"
-              ]
+              "speakerNotes": "Introduce the observation question."
             },
             {
-              "slideNo": 2,
+              "index": 2,
+              "kind": "CONTENT",
               "title": "What Did We Observe?",
-              "body": [
+              "layout": "BULLETS",
+              "points": [
                 "Regular light: green and steady growth",
                 "Darkness: pale and weak growth"
               ],
-              "sourceIds": [
-                "material-sample-001"
-              ]
+              "speakerNotes": "Source: teacher-uploaded-sample.txt"
             }
           ]
         },
         "assetSuggestions": [
           {
             "type": "COMPARISON_TABLE",
-            "purpose": "Organize the two sets of observations",
+            "purpose": "Organize the two observations",
             "sourceRequired": false
           }
         ]
       },
-      "docContent": null,
+      "docContent": {
+        "artifactType": "DOCX",
+        "title": "How Light Affects Plant Growth Lesson Plan",
+        "contentJson": {
+          "title": "How Light Affects Plant Growth Lesson Plan",
+          "courseInfo": {
+            "projectName": "Plant Growth Lesson",
+            "courseName": "Science",
+            "chapterTopic": "How Light Affects Plant Growth",
+            "targetAudience": "Grade 5",
+            "lessonDurationMinutes": 40,
+            "generationMode": "STANDARD"
+          },
+          "teachingGoals": [
+            "Explain how light affects plant growth"
+          ],
+          "keyPoints": [
+            "Observation and explanation"
+          ],
+          "difficultPoints": [
+            "Use evidence to justify an explanation"
+          ],
+          "methods": [
+            "Evidence-based discussion"
+          ],
+          "teachingProcess": [
+            {
+              "stage": "Observation",
+              "durationMinutes": 15,
+              "content": "Compare the two seedlings.",
+              "teacherActivity": "Prompt students to separate observations from explanations.",
+              "studentActivity": "Record and compare visible differences."
+            }
+          ],
+          "classroomActivities": [
+            "Small-group evidence sorting"
+          ],
+          "homework": [
+            "Observe a plant near a window and record one change"
+          ],
+          "resourceNotes": [
+            "Source: teacher-uploaded-sample.txt"
+          ],
+          "sections": [
+            {
+              "order": 1,
+              "title": "Teaching Process",
+              "paragraphs": [
+                "Students observe, compare, and explain the seedling evidence."
+              ]
+            }
+          ]
+        },
+        "assetSuggestions": []
+      },
       "interactionContent": {
         "artifactType": "INTERACTION",
         "title": "Observation or Explanation?",
         "contentJson": {
-          "items": [
+          "title": "Observation or Explanation?",
+          "instructions": "Choose the best answer, then read the explanation.",
+          "questions": [
             {
-              "prompt": "The seedling in darkness became pale.",
-              "answer": "OBSERVATION",
-              "explanation": "This statement reports what was seen."
-            },
-            {
-              "prompt": "The seedling became pale because it did not receive light.",
-              "answer": "EXPLANATION",
-              "explanation": "This statement proposes why the change occurred."
+              "id": "q1",
+              "question": "Which statement is an observation?",
+              "options": [
+                "The seedling in darkness became pale.",
+                "The seedling became pale because it lacked light."
+              ],
+              "correctOption": 0,
+              "correctAnswer": "A",
+              "explanation": "The first statement reports what was seen."
             }
           ]
         },
         "assetSuggestions": []
       }
     },
-    "warnings": [
-      "DOCX was not requested and docContent is null."
-    ],
+    "warnings": [],
     "errors": [],
     "confidence": 0.92,
     "traceHint": "sample-wf06-001"

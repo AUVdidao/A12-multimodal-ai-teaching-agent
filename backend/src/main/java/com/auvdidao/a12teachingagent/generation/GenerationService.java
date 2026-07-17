@@ -13,6 +13,7 @@ import com.auvdidao.a12teachingagent.domain.generation.ArtifactVersion;
 import com.auvdidao.a12teachingagent.domain.generation.GeneratedArtifact;
 import com.auvdidao.a12teachingagent.domain.generation.GenerationPlan;
 import com.auvdidao.a12teachingagent.domain.generation.TeachingIntent;
+import com.auvdidao.a12teachingagent.domain.generation.TeachingIntentEvidence;
 import com.auvdidao.a12teachingagent.domain.generation.repository.ArtifactVersionRepository;
 import com.auvdidao.a12teachingagent.domain.generation.repository.GeneratedArtifactRepository;
 import com.auvdidao.a12teachingagent.domain.generation.repository.GenerationPlanRepository;
@@ -101,7 +102,16 @@ public class GenerationService {
                         firstNonBlank(project.getChapterTopic(), project.getProjectName(), "Course topic"),
                         firstNonBlank(intent.getTargetAudience(), project.getTargetAudience()),
                         intent.getOutputTypes(),
-                        project.getGenerationMode() == null ? GenerationMode.STANDARD : project.getGenerationMode()
+                        project.getGenerationMode() == null ? GenerationMode.STANDARD : project.getGenerationMode(),
+                        teachingGoals(intent),
+                        contentPriorities(intent),
+                        interactionIdeas(intent),
+                        new AiWorkflowDtos.GenerationConstraints(
+                                positiveOrDefault(project.getLessonDurationMinutes(), 45),
+                                12,
+                                Math.max(5, positiveOrDefault(project.getLessonDurationMinutes(), 45) / 4),
+                                artifactTypeNames()
+                        )
                 )
         );
 
@@ -193,9 +203,12 @@ public class GenerationService {
                 .collect(() -> EnumSet.noneOf(ArtifactType.class), EnumSet::add, EnumSet::addAll);
 
         List<GeneratedArtifact> newArtifacts = new ArrayList<>();
+        Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> structuredDrafts = existingTypes.size() == ARTIFACT_TYPES.size()
+                ? Map.of()
+                : structuredDrafts(projectId, intent, plan);
         for (ArtifactType type : ARTIFACT_TYPES) {
             if (!existingTypes.contains(type)) {
-                newArtifacts.add(createArtifact(project, intent, plan, version, type));
+                newArtifacts.add(createArtifact(project, intent, plan, version, type, structuredDrafts.get(type)));
             }
         }
         if (!newArtifacts.isEmpty()) {
@@ -308,25 +321,100 @@ public class GenerationService {
             TeachingIntent intent,
             GenerationPlan plan,
             ArtifactVersion version,
-            ArtifactType type
+            ArtifactType type,
+            AiWorkflowDtos.StructuredArtifactDraft draft
     ) {
         GenerationPlanResponse planResponse = toPlanResponse(plan);
-        Object content = switch (type) {
-            case PPT -> contentFactory.buildPpt(project, intent, planResponse);
-            case DOCX -> contentFactory.buildLessonPlan(project, intent, planResponse);
-            case INTERACTION -> contentFactory.buildInteraction(project);
-        };
+        Object content = draft == null
+                ? switch (type) {
+                    case PPT -> contentFactory.buildPpt(project, intent, planResponse);
+                    case DOCX -> contentFactory.buildLessonPlan(project, intent, planResponse);
+                    case INTERACTION -> contentFactory.buildInteraction(project);
+                }
+                : draft.contentJson();
 
         GeneratedArtifact artifact = new GeneratedArtifact();
         artifact.setProjectId(project.getId());
         artifact.setGenerationPlanId(plan.getId());
         artifact.setVersionId(version.getId());
         artifact.setArtifactType(type);
-        artifact.setTitle(artifactTitle(project, type));
+        artifact.setTitle(draft == null ? artifactTitle(project, type) : firstNonBlank(draft.title(), artifactTitle(project, type)));
         artifact.setSchemaVersion(SCHEMA_VERSION);
         artifact.setContentJson(writeJson(content));
         artifact.setFilePath(null);
         return artifact;
+    }
+
+    private Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> structuredDrafts(
+            Long projectId,
+            TeachingIntent intent,
+            GenerationPlan plan
+    ) {
+        GenerationPlanResponse planResponse = toPlanResponse(plan);
+        AiWorkflowDtos.StructuredContentResponse generated = aiWorkflowGateway.generateStructuredContent(
+                new AiWorkflowDtos.StructuredContentRequest(
+                        projectId,
+                        new AiWorkflowDtos.GenerationPlanSnapshot(
+                                String.valueOf(plan.getId()),
+                                toAiPlanSections(planResponse.pptOutline()),
+                                toAiPlanSections(planResponse.docOutline()),
+                                planResponse.interactionPlan()
+                        ),
+                        referenceContext(intent),
+                        artifactTypeNames()
+                )
+        );
+        if (generated == null || generated.fallbackToBackendDrafts()) {
+            return Map.of();
+        }
+
+        Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> drafts = new LinkedHashMap<>();
+        putDraft(drafts, ArtifactType.PPT, generated.pptContent());
+        putDraft(drafts, ArtifactType.DOCX, generated.docContent());
+        putDraft(drafts, ArtifactType.INTERACTION, generated.interactionContent());
+        return Map.copyOf(drafts);
+    }
+
+    private static void putDraft(
+            Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> drafts,
+            ArtifactType expectedType,
+            AiWorkflowDtos.StructuredArtifactDraft draft
+    ) {
+        if (draft == null || draft.contentJson() == null || !draft.contentJson().isObject()) {
+            return;
+        }
+        if (expectedType.name().equalsIgnoreCase(draft.artifactType())) {
+            drafts.put(expectedType, draft);
+        }
+    }
+
+    private static List<AiWorkflowDtos.PlanSection> toAiPlanSections(List<PlanSection> sections) {
+        return sections.stream()
+                .map(section -> new AiWorkflowDtos.PlanSection(
+                        section.title(),
+                        List.of(section.description()),
+                        "Confirmed generation plan"
+                ))
+                .toList();
+    }
+
+    private static List<AiWorkflowDtos.KnowledgeSnippet> referenceContext(TeachingIntent intent) {
+        List<AiWorkflowDtos.KnowledgeSnippet> snippets = new ArrayList<>();
+        int index = 1;
+        for (TeachingIntentEvidence evidence : intent.getEvidenceItems()) {
+            if (evidence == null || !hasText(evidence.getContentExcerpt())) {
+                continue;
+            }
+            String sourceName = firstNonBlank(evidence.getSourceFilename(), "teaching-intent-evidence-" + index);
+            snippets.add(new AiWorkflowDtos.KnowledgeSnippet(
+                    firstNonBlank(evidence.getHitReason(), sourceName),
+                    sourceName,
+                    evidence.getContentExcerpt().trim(),
+                    1D
+            ));
+            index++;
+        }
+        return List.copyOf(snippets);
     }
 
     private TeachingIntent requireLatestConfirmedIntent(Long projectId) {
@@ -439,6 +527,40 @@ public class GenerationService {
             ));
         }
         return List.copyOf(result);
+    }
+
+    private static List<String> teachingGoals(TeachingIntent intent) {
+        List<String> goals = new ArrayList<>(intent.getGenerationGoals());
+        if (goals.isEmpty() && hasText(intent.getGenerationGoal())) {
+            goals.add(intent.getGenerationGoal().trim());
+        }
+        return List.copyOf(goals);
+    }
+
+    private static List<String> contentPriorities(TeachingIntent intent) {
+        List<String> priorities = new ArrayList<>();
+        if (hasText(intent.getContentBasis())) {
+            priorities.add(intent.getContentBasis().trim());
+        }
+        if (hasText(intent.getPrimaryBasis())) {
+            priorities.add(intent.getPrimaryBasis().trim());
+        }
+        priorities.addAll(intent.getSupplementalBasis());
+        return normalizeStrings(priorities);
+    }
+
+    private static List<String> interactionIdeas(TeachingIntent intent) {
+        return normalizeStrings(List.of(
+                firstNonBlank(intent.getInteractionMode(), intent.getTeachingApproach(), "Classroom discussion")
+        ));
+    }
+
+    private static List<String> artifactTypeNames() {
+        return ARTIFACT_TYPES.stream().map(Enum::name).toList();
+    }
+
+    private static int positiveOrDefault(Integer value, int fallback) {
+        return value == null || value <= 0 ? fallback : value;
     }
 
     private static List<PlanSection> normalizeSections(List<PlanSection> sections) {

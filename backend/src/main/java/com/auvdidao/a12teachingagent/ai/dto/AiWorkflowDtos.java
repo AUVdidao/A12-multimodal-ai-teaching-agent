@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.ai.dto;
 
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -194,8 +195,53 @@ public final class AiWorkflowDtos {
             @NotBlank String chapterTopic,
             String targetAudience,
             List<String> outputTypes,
-            GenerationMode generationMode
+            GenerationMode generationMode,
+            List<String> teachingGoals,
+            List<String> contentPriorities,
+            List<String> interactionIdeas,
+            GenerationConstraints constraints
     ) {
+
+        public GenerationPlanRequest(
+                Long projectId,
+                String courseName,
+                String chapterTopic,
+                String targetAudience,
+                List<String> outputTypes,
+                GenerationMode generationMode
+        ) {
+            this(
+                    projectId,
+                    courseName,
+                    chapterTopic,
+                    targetAudience,
+                    outputTypes,
+                    generationMode,
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    null
+            );
+        }
+
+        public GenerationPlanRequest {
+            outputTypes = outputTypes == null ? List.of() : List.copyOf(outputTypes);
+            teachingGoals = teachingGoals == null ? List.of() : List.copyOf(teachingGoals);
+            contentPriorities = contentPriorities == null ? List.of() : List.copyOf(contentPriorities);
+            interactionIdeas = interactionIdeas == null ? List.of() : List.copyOf(interactionIdeas);
+        }
+    }
+
+    public record GenerationConstraints(
+            Integer lessonDurationMinutes,
+            Integer maximumSlides,
+            Integer interactionMinutes,
+            List<String> targetTypes
+    ) {
+
+        public GenerationConstraints {
+            targetTypes = targetTypes == null ? List.of() : List.copyOf(targetTypes);
+        }
     }
 
     public record GenerationPlanResponse(
@@ -209,12 +255,71 @@ public final class AiWorkflowDtos {
     ) {
     }
 
+    public record GenerationPlanSnapshot(
+            @NotBlank String planRef,
+            List<PlanSection> pptOutline,
+            List<PlanSection> docOutline,
+            List<String> interactionPlan
+    ) {
+
+        public GenerationPlanSnapshot {
+            pptOutline = pptOutline == null ? List.of() : List.copyOf(pptOutline);
+            docOutline = docOutline == null ? List.of() : List.copyOf(docOutline);
+            interactionPlan = interactionPlan == null ? List.of() : List.copyOf(interactionPlan);
+        }
+    }
+
+    public record StructuredContentRequest(
+            @NotNull Long projectId,
+            @NotNull GenerationPlanSnapshot generationPlan,
+            List<KnowledgeSnippet> referenceContext,
+            List<String> targetTypes
+    ) {
+
+        public StructuredContentRequest {
+            referenceContext = referenceContext == null ? List.of() : List.copyOf(referenceContext);
+            targetTypes = targetTypes == null ? List.of() : List.copyOf(targetTypes);
+        }
+    }
+
+    public record StructuredArtifactDraft(
+            String artifactType,
+            String title,
+            JsonNode contentJson,
+            List<Map<String, Object>> assetSuggestions
+    ) {
+
+        public StructuredArtifactDraft {
+            assetSuggestions = assetSuggestions == null ? List.of() : List.copyOf(assetSuggestions);
+        }
+    }
+
+    public record StructuredContentResponse(
+            String workflow,
+            StructuredArtifactDraft pptContent,
+            StructuredArtifactDraft docContent,
+            StructuredArtifactDraft interactionContent,
+            boolean fallbackToBackendDrafts
+    ) {
+    }
+
     public record RevisionRequest(
             @NotNull Long projectId,
             @NotNull Long artifactId,
             @NotBlank String instruction,
-            @NotBlank String currentContent
+            @NotBlank String currentContent,
+            String artifactType,
+            String selectedLocator
     ) {
+
+        public RevisionRequest(
+                Long projectId,
+                Long artifactId,
+                String instruction,
+                String currentContent
+        ) {
+            this(projectId, artifactId, instruction, currentContent, null, null);
+        }
     }
 
     public record RevisionResponse(

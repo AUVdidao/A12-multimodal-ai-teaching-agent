@@ -93,7 +93,9 @@ public class RevisionService {
                         projectId,
                         artifactId,
                         instruction,
-                        firstNonBlank(sourceArtifact.getContentJson(), "{}")
+                        firstNonBlank(sourceArtifact.getContentJson(), "{}"),
+                        sourceArtifact.getArtifactType() == null ? null : sourceArtifact.getArtifactType().name(),
+                        null
                 )
         );
         AiWorkflowDtos.AiGatewayStatus providerStatus = aiWorkflowGateway.status();

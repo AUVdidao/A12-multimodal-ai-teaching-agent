@@ -6,7 +6,7 @@ public enum WorkflowCode {
     MATERIAL_ANALYSIS("WF-03", true),
     KNOWLEDGE_AND_TEACHING_INTENT("WF-04", true),
     GENERATION_PLAN("WF-05", true),
-    CONTENT_DRAFT("WF-06", false),
+    CONTENT_DRAFT("WF-06", true),
     REVISION("WF-07", true);
 
     private final String code;
