@@ -50,9 +50,6 @@ public class AiWorkflowProperties {
         if (dify == null || !StringUtils.hasText(dify.getBaseUrl())) {
             return "Dify base URL is missing";
         }
-        if (!StringUtils.hasText(dify.resolveWorkflowId(workflowCode))) {
-            return "published workflow ID is missing for " + workflowCode.code();
-        }
         if (!StringUtils.hasText(dify.resolveApiKey(workflowCode))) {
             return "API key is missing for " + workflowCode.code();
         }
@@ -89,7 +86,7 @@ public class AiWorkflowProperties {
     public static class Dify {
 
         private String baseUrl = "https://api.dify.ai/v1";
-        // Retained for configuration compatibility. Real routing requires one published ID per mapped workflow.
+        // Retained for configuration binding compatibility; published Workflow API routing is key-based.
         private String workflowId;
         private String apiKey;
         private String userPrefix = "a12-project-";
@@ -163,7 +160,7 @@ public class AiWorkflowProperties {
             if (workflow != null && StringUtils.hasText(workflow.getApiKey())) {
                 return workflow.getApiKey().strip();
             }
-            return StringUtils.hasText(apiKey) ? apiKey.strip() : null;
+            return null;
         }
 
         private Workflow workflow(WorkflowCode workflowCode) {

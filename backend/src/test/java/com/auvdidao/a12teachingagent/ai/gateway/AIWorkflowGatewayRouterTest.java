@@ -59,9 +59,10 @@ class AIWorkflowGatewayRouterTest {
     }
 
     @Test
-    void missingWorkflowIdFallsBackWithoutAttemptingHttpProvider() {
+    void missingPerWorkflowApiKeyFallsBackWithoutAttemptingHttpProvider() {
         AiWorkflowProperties properties = properties(AiProvider.DIFY, true);
         properties.getDify().setWorkflowId("legacy-shared-id");
+        properties.getDify().setApiKey("legacy-shared-key");
         when(mockGateway.clarifyRequirement(request)).thenReturn(mockResponse);
 
         AIWorkflowGatewayRouter router = router(properties);
@@ -71,21 +72,20 @@ class AIWorkflowGatewayRouterTest {
         verifyNoInteractions(difyGateway);
         assertThat(router.status().activeProvider()).isEqualTo("MOCK");
         assertThat(router.status().message())
-                .contains("published workflow ID is missing for WF-01")
-                .contains("Legacy dify.workflow-id is retained")
+                .contains("API key is missing for WF-01")
                 .doesNotContain("legacy-shared-id")
-                .doesNotContain("router-default-key");
+                .doesNotContain("legacy-shared-key");
     }
 
     @Test
-    void missingWorkflowIdWithoutFallbackThrowsUnavailable() {
+    void missingPerWorkflowApiKeyWithoutFallbackThrowsUnavailable() {
         AiWorkflowProperties properties = properties(AiProvider.DIFY, false);
 
         AIWorkflowGatewayRouter router = router(properties);
 
         assertThatThrownBy(() -> router.clarifyRequirement(request))
                 .isInstanceOf(AiWorkflowUnavailableException.class)
-                .hasMessageContaining("published workflow ID is missing for WF-01");
+                .hasMessageContaining("API key is missing for WF-01");
         verifyNoInteractions(mockGateway, difyGateway);
         assertThat(router.status().activeProvider()).isEqualTo("UNAVAILABLE");
     }
@@ -156,7 +156,7 @@ class AIWorkflowGatewayRouterTest {
                 .contains("Gateway-mapped callable workflows: WF-01, WF-02, WF-03, WF-04, WF-05, WF-07")
                 .contains("WF-06 is configuration-only")
                 .doesNotContain("wf-01-secret-key")
-                .doesNotContain("router-default-key");
+                .doesNotContain("wf-01-secret-key");
     }
 
     @Test
@@ -196,20 +196,26 @@ class AIWorkflowGatewayRouterTest {
         AiWorkflowProperties properties = new AiWorkflowProperties();
         properties.setProvider(provider);
         properties.setFallbackToMock(fallbackToMock);
-        properties.getDify().setApiKey("router-default-key");
         return properties;
     }
 
     private void configureClarification(AiWorkflowProperties properties) {
         properties.getDify().getWorkflows().getClarification().setWorkflowId("published-wf-01");
+        properties.getDify().getWorkflows().getClarification().setApiKey("wf-01-key");
     }
 
     private void configureEveryCallableWorkflow(AiWorkflowProperties properties) {
         properties.getDify().getWorkflows().getClarification().setWorkflowId("published-wf-01");
+        properties.getDify().getWorkflows().getClarification().setApiKey("wf-01-key");
         properties.getDify().getWorkflows().getSummary().setWorkflowId("published-wf-02");
+        properties.getDify().getWorkflows().getSummary().setApiKey("wf-02-key");
         properties.getDify().getWorkflows().getMaterial().setWorkflowId("published-wf-03");
+        properties.getDify().getWorkflows().getMaterial().setApiKey("wf-03-key");
         properties.getDify().getWorkflows().getKnowledgeIntent().setWorkflowId("published-wf-04");
+        properties.getDify().getWorkflows().getKnowledgeIntent().setApiKey("wf-04-key");
         properties.getDify().getWorkflows().getGenerationPlan().setWorkflowId("published-wf-05");
+        properties.getDify().getWorkflows().getGenerationPlan().setApiKey("wf-05-key");
         properties.getDify().getWorkflows().getRevision().setWorkflowId("published-wf-07");
+        properties.getDify().getWorkflows().getRevision().setApiKey("wf-07-key");
     }
 }

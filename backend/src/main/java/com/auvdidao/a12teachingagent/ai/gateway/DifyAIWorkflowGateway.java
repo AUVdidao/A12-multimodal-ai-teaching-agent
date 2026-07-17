@@ -149,16 +149,12 @@ public class DifyAIWorkflowGateway {
         }
 
         AiWorkflowProperties.Dify dify = properties.getDify();
-        String workflowId = dify.resolveWorkflowId(workflowCode);
+        String expectedWorkflowId = dify.resolveWorkflowId(workflowCode);
         String apiKey = dify.resolveApiKey(workflowCode);
-        String payloadJson = serializePayload(workflowCode, payload);
+        String requestJson = serializeRequestEnvelope(workflowCode, operation, projectId, payload);
 
         Map<String, Object> inputs = new LinkedHashMap<>();
-        inputs.put("workflowCode", workflowCode.code());
-        inputs.put("workflowId", workflowId);
-        inputs.put("operation", operation);
-        inputs.put("payloadJson", payloadJson);
-        inputs.put("request_json", payloadJson);
+        inputs.put("request_json", requestJson);
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("inputs", inputs);
@@ -168,7 +164,7 @@ public class DifyAIWorkflowGateway {
         String responseBody;
         try {
             responseBody = restClient.post()
-                    .uri(workflowUri(dify.getBaseUrl(), workflowId, workflowCode))
+                    .uri(workflowUri(dify.getBaseUrl(), workflowCode))
                     .contentType(MediaType.APPLICATION_JSON)
                     .headers(headers -> headers.setBearerAuth(apiKey))
                     .body(body)
@@ -185,7 +181,7 @@ public class DifyAIWorkflowGateway {
             throw unavailable(workflowCode, "Dify endpoint configuration is invalid");
         }
 
-        T response = mapResponse(responseBody, workflowCode, workflowId, responseType);
+        T response = mapResponse(responseBody, workflowCode, expectedWorkflowId, responseType);
         validator.accept(response);
         return response;
     }
@@ -193,7 +189,7 @@ public class DifyAIWorkflowGateway {
     private <T> T mapResponse(
             String responseBody,
             WorkflowCode workflowCode,
-            String workflowId,
+            String expectedWorkflowId,
             Class<T> responseType
     ) {
         JsonNode root = parseJson(responseBody, workflowCode);
@@ -206,11 +202,13 @@ public class DifyAIWorkflowGateway {
         );
 
         JsonNode returnedWorkflowId = data.get("workflow_id");
-        if (returnedWorkflowId != null && returnedWorkflowId.isTextual()) {
+        if (StringUtils.hasText(expectedWorkflowId)
+                && returnedWorkflowId != null
+                && returnedWorkflowId.isTextual()) {
             require(
-                    workflowId.equals(returnedWorkflowId.asText()),
+                    expectedWorkflowId.equals(returnedWorkflowId.asText()),
                     workflowCode,
-                    "Dify response workflow ID does not match the requested published version"
+                    "Dify response workflow ID does not match the configured expected ID"
             );
         }
 
@@ -238,7 +236,13 @@ public class DifyAIWorkflowGateway {
 
         require(payload.isObject(), workflowCode, "Dify business output must be a JSON object");
         ObjectNode responseNode = ((ObjectNode) payload).deepCopy();
-        responseNode.put("workflow", workflowId);
+        String returnedId = returnedWorkflowId != null && returnedWorkflowId.isTextual()
+                ? returnedWorkflowId.asText()
+                : null;
+        String workflowReference = StringUtils.hasText(returnedId)
+                ? returnedId
+                : StringUtils.hasText(expectedWorkflowId) ? expectedWorkflowId : workflowCode.code();
+        responseNode.put("workflow", workflowReference);
         try {
             return objectMapper.treeToValue(responseNode, responseType);
         } catch (JsonProcessingException | IllegalArgumentException exception) {
@@ -279,15 +283,25 @@ public class DifyAIWorkflowGateway {
         }
     }
 
-    private String serializePayload(WorkflowCode workflowCode, Object payload) {
+    private String serializeRequestEnvelope(
+            WorkflowCode workflowCode,
+            String operation,
+            Long projectId,
+            Object payload
+    ) {
         try {
-            return objectMapper.writeValueAsString(payload);
+            ObjectNode envelope = objectMapper.createObjectNode();
+            envelope.put("workflowCode", workflowCode.code());
+            envelope.put("traceHint", "a12-" + workflowCode.code() + "-project-" + projectId);
+            envelope.put("operation", operation);
+            envelope.set("input", objectMapper.valueToTree(payload));
+            return objectMapper.writeValueAsString(envelope);
         } catch (JsonProcessingException exception) {
             throw unavailable(workflowCode, "Gateway request payload could not be serialized");
         }
     }
 
-    private URI workflowUri(String baseUrl, String workflowId, WorkflowCode workflowCode) {
+    private URI workflowUri(String baseUrl, WorkflowCode workflowCode) {
         if (!StringUtils.hasText(baseUrl)) {
             throw unavailable(workflowCode, "Dify base URL is missing");
         }
@@ -297,7 +311,7 @@ public class DifyAIWorkflowGateway {
         }
         try {
             URI uri = UriComponentsBuilder.fromUriString(normalizedBaseUrl)
-                    .pathSegment("workflows", workflowId, "run")
+                    .pathSegment("workflows", "run")
                     .build()
                     .encode()
                     .toUri();

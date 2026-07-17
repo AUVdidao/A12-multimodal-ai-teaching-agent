@@ -55,9 +55,32 @@ a12:
       student-password: ${A12_DEMO_STUDENT_PASSWORD:}
       multi-password: ${A12_DEMO_MULTI_PASSWORD:}
   ai:
-    provider: MOCK
-    fallback-to-mock: true
+    provider: ${A12_AI_PROVIDER:${AI_PROVIDER:MOCK}}
+    fallback-to-mock: ${A12_AI_FALLBACK_TO_MOCK:true}
     dify:
-      base-url: https://api.dify.ai/v1
-      workflow-id:
-      api-key:
+      base-url: ${A12_AI_DIFY_BASE_URL:${DIFY_BASE_URL:https://api.dify.ai/v1}}
+      user-prefix: ${A12_AI_DIFY_USER_PREFIX:a12-project-}
+      connect-timeout: ${A12_AI_DIFY_CONNECT_TIMEOUT:5s}
+      read-timeout: ${A12_AI_DIFY_READ_TIMEOUT:60s}
+      workflows:
+        clarification:
+          workflow-id: ${DIFY_WF01_WORKFLOW_ID:}
+          api-key: ${DIFY_WF01_API_KEY:}
+        summary:
+          workflow-id: ${DIFY_WF02_WORKFLOW_ID:}
+          api-key: ${DIFY_WF02_API_KEY:}
+        material:
+          workflow-id: ${DIFY_WF03_WORKFLOW_ID:}
+          api-key: ${DIFY_WF03_API_KEY:}
+        knowledge-intent:
+          workflow-id: ${DIFY_WF04_WORKFLOW_ID:}
+          api-key: ${DIFY_WF04_API_KEY:}
+        generation-plan:
+          workflow-id: ${DIFY_WF05_WORKFLOW_ID:}
+          api-key: ${DIFY_WF05_API_KEY:}
+        content-draft:
+          workflow-id: ${DIFY_WF06_WORKFLOW_ID:}
+          api-key: ${DIFY_WF06_API_KEY:}
+        revision:
+          workflow-id: ${DIFY_WF07_WORKFLOW_ID:}
+          api-key: ${DIFY_WF07_API_KEY:}

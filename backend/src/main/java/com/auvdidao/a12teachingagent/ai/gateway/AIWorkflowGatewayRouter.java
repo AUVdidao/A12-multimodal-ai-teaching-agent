@@ -213,7 +213,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
         if (requestedProvider == AiProvider.MOCK) {
             message.append("Mock provider is active. ");
         } else {
-            message.append("Dify Run Workflow by ID routing is requested. ");
+            message.append("Dify published Workflow API routing is requested. ");
         }
         message.append("Configured workflow slots: ").append(configured)
                 .append("; missing or incomplete workflow slots: ").append(missing)
@@ -221,12 +221,6 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
                 .append(listOrNone(properties.callableWorkflowCodes())).append('.')
                 .append(" WF-06 is configuration-only because AIWorkflowGateway has no content-draft method.");
 
-        AiWorkflowProperties.Dify dify = properties.getDify();
-        if (dify != null
-                && StringUtils.hasText(dify.getWorkflowId())
-                && !properties.missingWorkflowCodes().isEmpty()) {
-            message.append(" Legacy dify.workflow-id is retained but is not used as a shared published ID.");
-        }
         String fallbackReason = lastFallbackReason.get();
         if (StringUtils.hasText(fallbackReason)) {
             message.append(" Last fallback reason: ").append(fallbackReason);

@@ -54,7 +54,6 @@ class DifyAIWorkflowGatewayTest {
 
         properties = new AiWorkflowProperties();
         properties.getDify().setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
-        properties.getDify().setApiKey("default-dify-key");
         properties.getDify().setUserPrefix("teacher-project-");
         properties.getDify().setConnectTimeout(Duration.ofSeconds(1));
         properties.getDify().setReadTimeout(Duration.ofSeconds(2));
@@ -68,7 +67,7 @@ class DifyAIWorkflowGatewayTest {
     }
 
     @Test
-    void clarificationUsesPublishedWorkflowIdPathPerWorkflowKeyAndBlockingBody() {
+    void clarificationUsesPublishedWorkflowEndpointPerWorkflowKeyAndContractEnvelope() {
         configure(WorkflowCode.CLARIFICATION, "published-wf-01-v3", "wf-01-key");
         AtomicReference<String> path = new AtomicReference<>();
         AtomicReference<String> authorization = new AtomicReference<>();
@@ -98,34 +97,37 @@ class DifyAIWorkflowGatewayTest {
                 GenerationMode.STANDARD
         ));
 
-        assertThat(path.get()).isEqualTo("/v1/workflows/published-wf-01-v3/run");
+        assertThat(path.get()).isEqualTo("/v1/workflows/run");
         assertThat(authorization.get()).isEqualTo("Bearer wf-01-key");
         assertThat(requestBody.get().path("response_mode").asText()).isEqualTo("blocking");
         assertThat(requestBody.get().path("user").asText()).isEqualTo("teacher-project-78");
         JsonNode inputs = requestBody.get().path("inputs");
-        assertThat(inputs.path("workflowCode").asText()).isEqualTo("WF-01");
-        assertThat(inputs.path("workflowId").asText()).isEqualTo("published-wf-01-v3");
-        assertThat(inputs.path("operation").asText()).isEqualTo("clarification");
-        assertThat(inputs.path("payloadJson").asText()).contains("Create a fraction lesson");
-        assertThat(inputs.path("request_json").asText()).isEqualTo(inputs.path("payloadJson").asText());
+        assertThat(inputs.size()).isEqualTo(1);
+        JsonNode envelope = objectNode(inputs.path("request_json").asText());
+        assertThat(envelope.path("workflowCode").asText()).isEqualTo("WF-01");
+        assertThat(envelope.path("traceHint").asText()).isEqualTo("a12-WF-01-project-78");
+        assertThat(envelope.path("operation").asText()).isEqualTo("clarification");
+        assertThat(envelope.path("input").path("rawRequirement").asText())
+                .isEqualTo("Create a fraction lesson");
         assertThat(response.workflow()).isEqualTo("published-wf-01-v3");
         assertThat(response.missingFields()).containsExactly("targetAudience");
     }
 
     @Test
-    void mapsEveryRemainingGatewayMethodAndUsesDefaultKey() {
-        configure(WorkflowCode.REQUIREMENT_SUMMARY, "published-wf-02", null);
-        configure(WorkflowCode.MATERIAL_ANALYSIS, "published-wf-03", null);
-        configure(WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT, "published-wf-04", null);
-        configure(WorkflowCode.GENERATION_PLAN, "published-wf-05", null);
-        configure(WorkflowCode.REVISION, "published-wf-07", null);
+    void mapsEveryRemainingGatewayMethodWithIndependentApplicationKeys() {
+        configure(WorkflowCode.REQUIREMENT_SUMMARY, "published-wf-02", "wf-02-key");
+        configure(WorkflowCode.MATERIAL_ANALYSIS, "published-wf-03", "wf-03-key");
+        configure(WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT, "published-wf-04", "wf-04-key");
+        configure(WorkflowCode.GENERATION_PLAN, "published-wf-05", "wf-05-key");
+        configure(WorkflowCode.REVISION, "published-wf-07", "wf-07-key");
         Set<String> operations = ConcurrentHashMap.newKeySet();
         Set<String> paths = ConcurrentHashMap.newKeySet();
         List<String> authorizations = new ArrayList<>();
         handler.set(exchange -> {
             JsonNode request = readJson(exchange);
-            String operation = request.path("inputs").path("operation").asText();
-            String workflowId = request.path("inputs").path("workflowId").asText();
+            JsonNode envelope = objectNode(request.path("inputs").path("request_json").asText());
+            String operation = envelope.path("operation").asText();
+            String workflowId = workflowIdForOperation(operation);
             operations.add(operation);
             paths.add(exchange.getRequestURI().getPath());
             authorizations.add(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -191,18 +193,22 @@ class DifyAIWorkflowGatewayTest {
                 "revision"
         );
         assertThat(paths).containsExactlyInAnyOrder(
-                "/v1/workflows/published-wf-02/run",
-                "/v1/workflows/published-wf-03/run",
-                "/v1/workflows/published-wf-04/run",
-                "/v1/workflows/published-wf-05/run",
-                "/v1/workflows/published-wf-07/run"
+                "/v1/workflows/run"
         );
-        assertThat(authorizations).allMatch("Bearer default-dify-key"::equals);
+        assertThat(authorizations).containsExactlyInAnyOrder(
+                "Bearer wf-02-key",
+                "Bearer wf-03-key",
+                "Bearer wf-04-key",
+                "Bearer wf-04-key",
+                "Bearer wf-05-key",
+                "Bearer wf-07-key"
+        );
     }
 
     @Test
-    void missingPublishedWorkflowIdFailsBeforeAnyHttpCall() {
+    void missingPerWorkflowApiKeyFailsBeforeAnyHttpCall() {
         properties.getDify().setWorkflowId("legacy-shared-id-must-not-be-used");
+        properties.getDify().setApiKey("legacy-shared-key-must-not-be-used");
         AtomicInteger calls = new AtomicInteger();
         handler.set(exchange -> calls.incrementAndGet());
 
@@ -213,9 +219,28 @@ class DifyAIWorkflowGatewayTest {
                 GenerationMode.STANDARD
         )))
                 .isInstanceOf(AiWorkflowUnavailableException.class)
-                .hasMessageContaining("published workflow ID is missing for WF-01")
-                .hasMessageNotContaining("legacy-shared-id");
+                .hasMessageContaining("API key is missing for WF-01")
+                .hasMessageNotContaining("legacy-shared-key");
         assertThat(calls).hasValue(0);
+    }
+
+    @Test
+    void expectedWorkflowIdIsOptionalAndReturnedIdBecomesResponseReference() {
+        configure(WorkflowCode.CLARIFICATION, null, "wf-01-key");
+        handler.set(exchange -> sendJson(exchange, 200, successWithObjectOutput(
+                "runtime-wf-01",
+                "result",
+                outputForClarification()
+        )));
+
+        var response = gateway().clarifyRequirement(new ClarificationRequest(
+                78L,
+                "Create a fraction lesson",
+                List.of(),
+                GenerationMode.STANDARD
+        ));
+
+        assertThat(response.workflow()).isEqualTo("runtime-wf-01");
     }
 
     @ParameterizedTest
@@ -238,7 +263,7 @@ class DifyAIWorkflowGatewayTest {
 
     @Test
     void connectionFailureIsReportedAsUnavailableWithoutEndpointDetails() {
-        configure(WorkflowCode.CLARIFICATION, "published-wf-01", null);
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01", "wf-01-key");
         int closedPort = server.getAddress().getPort();
         server.stop(0);
         server = null;
@@ -257,7 +282,7 @@ class DifyAIWorkflowGatewayTest {
 
     @Test
     void invalidJsonAndIncompleteBusinessOutputAreRejected() {
-        configure(WorkflowCode.CLARIFICATION, "published-wf-01", null);
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01", "wf-01-key");
         AtomicInteger calls = new AtomicInteger();
         handler.set(exchange -> {
             if (calls.getAndIncrement() == 0) {
@@ -381,6 +406,28 @@ class DifyAIWorkflowGatewayTest {
                     """);
             default -> throw new IllegalArgumentException("Unexpected operation: " + operation);
         };
+    }
+
+    private String workflowIdForOperation(String operation) {
+        return switch (operation) {
+            case "requirement-summary" -> "published-wf-02";
+            case "material-analysis" -> "published-wf-03";
+            case "knowledge-retrieval", "teaching-intent" -> "published-wf-04";
+            case "generation-plan" -> "published-wf-05";
+            case "revision" -> "published-wf-07";
+            default -> throw new IllegalArgumentException("Unexpected operation: " + operation);
+        };
+    }
+
+    private ObjectNode outputForClarification() {
+        return objectNode("""
+                {
+                  "missingFields": ["targetAudience"],
+                  "questions": ["Which audience?"],
+                  "suggestedFields": {"targetAudience": "Grade 5"},
+                  "nextAction": "Confirm the missing field"
+                }
+                """);
     }
 
     private RequirementSummaryData requirementSummaryData() {
