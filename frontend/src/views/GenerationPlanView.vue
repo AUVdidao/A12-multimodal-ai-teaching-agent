@@ -15,6 +15,13 @@
 
     <template v-else>
       <ProjectWorkspaceNav :project-id="workspace.projectId" />
+      <AiProviderStatusStrip
+        :status="gatewayStatus"
+        :loading="gatewayStatusLoading"
+        :error="gatewayStatusError"
+        compact
+        @refresh="loadGatewayStatus"
+      />
 
       <header class="generation-hero">
         <div class="generation-hero__main">
@@ -191,7 +198,7 @@
             </header>
             <dl class="generation-condition-list">
               <div>
-                <dt>AI 提供方</dt>
+                <dt>本次方案提供方</dt>
                 <dd>{{ providerLabel }}</dd>
               </div>
               <div>
@@ -232,10 +239,12 @@ import {
   type GenerationWorkspace,
   type PlanOutlineItem,
 } from '@/api/generation';
+import AiProviderStatusStrip from '@/components/ai/AiProviderStatusStrip.vue';
 import GenerationOutlineEditor from '@/components/generation/GenerationOutlineEditor.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
+import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
 import { formatDateTime } from '@/utils/presentation';
 import {
   Aim,
@@ -274,6 +283,13 @@ const generating = ref(false);
 const workspaceError = ref('内容生成数据读取失败，请检查服务后重试。');
 const actionError = ref('');
 const lastFailedAction = ref<FailedAction>();
+const {
+  status: gatewayStatus,
+  loading: gatewayStatusLoading,
+  error: gatewayStatusError,
+  presentation: gatewayPresentation,
+  refresh: loadGatewayStatus,
+} = useAiGatewayStatus();
 
 const artifactCount = computed(() => workspace.value?.artifacts?.length || 0);
 const providerLabel = computed(() => {
@@ -311,7 +327,7 @@ const isPlanValid = computed(() => (
   && interactionPlan.value.every((item) => item.trim())
 ));
 
-const canCreatePlan = computed(() => !plan.value && capability(
+const canCreatePlan = computed(() => !gatewayPresentation.value.unavailable && !plan.value && capability(
   ['canGeneratePlan', 'canCreatePlan', 'generatePlan', 'createPlan'],
   ['GENERATE_PLAN', 'CREATE_PLAN'],
   true,
@@ -326,7 +342,7 @@ const canConfirmPlan = computed(() => Boolean(plan.value && !plan.value.confirme
   ['CONFIRM_PLAN'],
   true,
 )));
-const canGenerateContent = computed(() => Boolean(plan.value?.confirmed && capability(
+const canGenerateContent = computed(() => Boolean(!gatewayPresentation.value.unavailable && plan.value?.confirmed && capability(
   ['canGenerate', 'canGenerateArtifacts', 'canGenerateContent', 'generateArtifacts', 'generateContent'],
   ['GENERATE_ARTIFACTS', 'GENERATE_CONTENT'],
   true,
@@ -408,6 +424,10 @@ async function loadWorkspace() {
 }
 
 async function createPlan() {
+  if (gatewayPresentation.value.unavailable) {
+    setActionError('create', undefined, 'AI 工作流当前不可用，请先检查 Dify 或 Mock 配置。');
+    return;
+  }
   creating.value = true;
   clearActionError();
   try {
@@ -418,6 +438,7 @@ async function createPlan() {
   } catch (error) {
     setActionError('create', error, '方案生成失败，请稍后重试。');
   } finally {
+    await loadGatewayStatus();
     creating.value = false;
   }
 }
@@ -469,7 +490,10 @@ async function confirmPlan() {
 }
 
 async function generateContent() {
-  if (!plan.value?.confirmed) return;
+  if (!plan.value?.confirmed || gatewayPresentation.value.unavailable) {
+    if (gatewayPresentation.value.unavailable) setActionError('generate', undefined, 'AI 工作流当前不可用，请先检查 Dify 或 Mock 配置。');
+    return;
+  }
   generating.value = true;
   clearActionError();
   try {
@@ -480,6 +504,7 @@ async function generateContent() {
   } catch (error) {
     setActionError('generate', error, '内容生成失败，请稍后重试。');
   } finally {
+    await loadGatewayStatus();
     generating.value = false;
   }
 }
@@ -513,7 +538,7 @@ function resolveError(error: unknown, fallback: string) {
   return message && !/(Exception|java\.|Axios)/i.test(message) ? message : fallback;
 }
 
-onMounted(loadWorkspace);
+onMounted(() => { void Promise.all([loadWorkspace(), loadGatewayStatus()]); });
 </script>
 
 <style scoped>

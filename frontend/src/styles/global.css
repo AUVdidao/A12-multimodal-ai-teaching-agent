@@ -15,6 +15,41 @@
   --ui-danger: #e65b64;
   --ui-ai: #7357e8;
   --shadow-panel: 0 6px 20px rgba(23, 43, 77, 0.06);
+
+  /* Keep legacy components and Element Plus on the same violet design token set. */
+  --color-primary: var(--ui-primary);
+  --color-primary-hover: #4932dc;
+  --color-primary-soft: var(--ui-primary-soft);
+  --color-primary-border: #c9c0ff;
+  --color-page: var(--ui-canvas);
+  --color-surface: var(--ui-panel);
+  --color-surface-subtle: var(--ui-panel-soft);
+  --color-text: var(--ui-text);
+  --color-text-secondary: #536174;
+  --color-text-muted: var(--ui-muted);
+  --color-border: var(--ui-border);
+  --color-border-strong: var(--ui-border-strong);
+  --color-success: #168957;
+  --color-success-soft: #e8f7ef;
+  --color-warning: #a15c07;
+  --color-warning-soft: #fff5dd;
+  --color-danger: #c43d4b;
+  --color-danger-soft: #fff0f1;
+  --color-ai: var(--ui-ai);
+  --color-ai-soft: var(--ui-primary-soft);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --control-height: 40px;
+  --transition-fast: 160ms ease;
+
+  --el-color-primary: var(--ui-primary);
+  --el-color-primary-light-3: #7b6af8;
+  --el-color-primary-light-5: #9d90fa;
+  --el-color-primary-light-7: #c4bcfc;
+  --el-color-primary-light-8: #d9d3fd;
+  --el-color-primary-light-9: var(--ui-primary-soft);
+  --el-color-primary-dark-2: #4932dc;
 }
 
 * {
@@ -1011,9 +1046,32 @@ textarea {
   border-radius: 8px;
 }
 
-.el-button--primary:not(.is-plain) {
-  background: var(--ui-primary);
-  border-color: var(--ui-primary);
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  --el-button-text-color: #ffffff;
+  --el-button-bg-color: var(--ui-primary);
+  --el-button-border-color: var(--ui-primary);
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: #4932dc;
+  --el-button-hover-border-color: #4932dc;
+  --el-button-active-text-color: #ffffff;
+  --el-button-active-bg-color: #3f2ac5;
+  --el-button-active-border-color: #3f2ac5;
+  --el-button-disabled-text-color: #8c97a9;
+  --el-button-disabled-bg-color: #eef1f6;
+  --el-button-disabled-border-color: #dce2eb;
+}
+
+.el-button--primary.is-text,
+.el-button--primary.is-link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ui-primary);
+}
+
+.el-button--primary.is-text:not(.is-disabled):hover,
+.el-button--primary.is-link:not(.is-disabled):hover {
+  background: var(--ui-primary-soft);
+  color: #4932dc;
 }
 
 .el-card,

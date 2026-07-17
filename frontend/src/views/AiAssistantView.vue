@@ -30,15 +30,12 @@
           <el-icon><MagicStick /></el-icon>
         </header>
 
-        <div class="provider-status" :class="`is-${providerTone}`">
-          <div class="provider-status__icon"><el-icon><component :is="providerIcon" /></el-icon></div>
-          <div>
-            <strong>{{ providerLabel }}</strong>
-            <p>{{ providerMessage }}</p>
-          </div>
-        </div>
-
-        <el-alert v-if="statusError" class="assistant-alert" type="error" :title="statusError" show-icon :closable="false" />
+        <AiProviderStatusStrip
+          :status="gatewayStatus"
+          :loading="statusLoading"
+          :error="statusError"
+          @refresh="loadGatewayStatus"
+        />
 
         <el-form class="assistant-form" label-position="top">
           <el-form-item label="教学项目">
@@ -115,11 +112,13 @@
 </template>
 
 <script setup lang="ts">
-import { getAiGatewayStatus, runClarification, runGenerationPlan, type AiGatewayStatus, type ClarificationResponse, type GenerationPlanResponse, type GenerationMode } from '@/api/aiAssistant';
+import { runClarification, runGenerationPlan, type ClarificationResponse, type GenerationPlanResponse, type GenerationMode } from '@/api/aiAssistant';
 import { listProjects, type TeachingProject } from '@/api/projects';
+import AiProviderStatusStrip from '@/components/ai/AiProviderStatusStrip.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import StatePanel from '@/components/StatePanel.vue';
-import { CircleCheck, DocumentChecked, MagicStick, Refresh, Search, WarningFilled, ArrowRight } from '@element-plus/icons-vue';
+import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
+import { DocumentChecked, MagicStick, Refresh, Search, ArrowRight } from '@element-plus/icons-vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 
@@ -128,36 +127,27 @@ const projects = ref<TeachingProject[]>([]);
 const selectedProjectId = ref<number>();
 const rawRequirement = ref('');
 const outputTypes = ref<string[]>(['PPT', 'DOCX', 'INTERACTION']);
-const gatewayStatus = ref<AiGatewayStatus>();
 const clarificationResult = ref<ClarificationResponse>();
 const planResult = ref<GenerationPlanResponse>();
 const projectsLoading = ref(false);
-const statusLoading = ref(false);
 const clarifying = ref(false);
 const planning = ref(false);
 const projectsError = ref('');
-const statusError = ref('');
 const actionError = ref('');
+const {
+  status: gatewayStatus,
+  loading: statusLoading,
+  error: statusError,
+  presentation: providerPresentation,
+  refresh: loadGatewayStatus,
+} = useAiGatewayStatus();
 
 const selectedProject = computed(() => projects.value.find((project) => project.id === selectedProjectId.value));
 const suggestedFields = computed(() => Object.entries(clarificationResult.value?.suggestedFields || {}));
-const providerIsUnavailable = computed(() => Boolean(gatewayStatus.value && gatewayStatus.value.activeProvider === 'UNAVAILABLE' && !gatewayStatus.value.mockEnabled));
+const providerIsUnavailable = computed(() => providerPresentation.value.unavailable);
 const canRunWorkflow = computed(() => Boolean(selectedProject.value && rawRequirement.value.trim() && outputTypes.value.length && !providerIsUnavailable.value && !clarifying.value && !planning.value));
-const providerLabel = computed(() => {
-  if (statusLoading.value && !gatewayStatus.value) return '正在读取 provider';
-  const provider = gatewayStatus.value?.activeProvider || gatewayStatus.value?.requestedProvider || '';
-  if (provider.toUpperCase().includes('MOCK') || gatewayStatus.value?.mockEnabled) return 'Mock provider';
-  if (provider === 'UNAVAILABLE') return 'AI provider 不可用';
-  return provider || '未知 provider';
-});
-const providerMessage = computed(() => {
-  if (statusError.value) return '无法读取当前 AI provider 状态，请刷新后重试。';
-  return gatewayStatus.value?.message || '正在读取当前工作流状态。';
-});
-const providerTone = computed(() => providerIsUnavailable.value ? 'danger' : gatewayStatus.value?.mockEnabled ? 'warning' : 'success');
-const providerIcon = computed(() => providerIsUnavailable.value ? WarningFilled : gatewayStatus.value?.mockEnabled ? MagicStick : CircleCheck);
 const workflowDisabledReason = computed(() => {
-  if (providerIsUnavailable.value) return '当前选择了 Dify 且 Mock fallback 未启用，工作流不可执行。';
+  if (providerIsUnavailable.value) return 'Dify 尚未达到可调用条件，且 Mock 回退未启用，工作流不可执行。';
   if (!selectedProject.value) return '请选择一个真实教学项目。';
   if (!rawRequirement.value.trim()) return '请先补充当前需求描述。';
   if (!outputTypes.value.length) return '至少选择一种希望生成的产物。';
@@ -179,20 +169,15 @@ watch(selectedProjectId, (projectId) => {
 
 async function loadPage() {
   projectsLoading.value = true;
-  statusLoading.value = true;
   projectsError.value = '';
-  statusError.value = '';
-  const [projectResult, statusResult] = await Promise.allSettled([listProjects(), getAiGatewayStatus()]);
+  const [projectResult] = await Promise.allSettled([listProjects(), loadGatewayStatus()]);
   if (projectResult.status === 'fulfilled') {
     projects.value = projectResult.value;
     if (!projects.value.some((project) => project.id === selectedProjectId.value)) selectedProjectId.value = projects.value[0]?.id;
   } else {
     projectsError.value = resolveError(projectResult.reason, '暂时无法读取教学项目，请稍后重试。');
   }
-  if (statusResult.status === 'fulfilled') gatewayStatus.value = statusResult.value;
-  else statusError.value = resolveError(statusResult.reason, '暂时无法读取 AI provider 状态，请稍后重试。');
   projectsLoading.value = false;
-  statusLoading.value = false;
 }
 
 async function runClarificationCheck() {
@@ -209,6 +194,7 @@ async function runClarificationCheck() {
   } catch (error) {
     actionError.value = resolveError(error, '需求澄清工作流执行失败，请稍后重试。');
   } finally {
+    await loadGatewayStatus();
     clarifying.value = false;
   }
 }
@@ -229,6 +215,7 @@ async function runPlanSuggestion() {
   } catch (error) {
     actionError.value = resolveError(error, '生成方案工作流执行失败，请稍后重试。');
   } finally {
+    await loadGatewayStatus();
     planning.value = false;
   }
 }
@@ -262,12 +249,6 @@ onMounted(loadPage);
 .panel-heading > .el-icon { color: var(--color-primary); font-size: 24px; }
 .panel-heading__eyebrow, .result-heading span { color: var(--color-primary); font-size: 12px; font-weight: 700; }
 .panel-heading h2, .result-heading h2 { margin: 5px 0 0; color: var(--color-text); font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
-.provider-status { display: flex; align-items: flex-start; gap: 11px; padding: 13px; margin: 20px 0 16px; border: 1px solid #bce8db; border-radius: var(--radius-md); background: var(--color-success-soft); }
-.provider-status.is-warning { border-color: #f0d59e; background: var(--color-warning-soft); }
-.provider-status.is-danger { border-color: #f0c4c8; background: var(--color-danger-soft); }
-.provider-status__icon { display: grid; width: 30px; height: 30px; flex: 0 0 30px; place-items: center; border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-success); }
-.is-warning .provider-status__icon { color: var(--color-warning); }.is-danger .provider-status__icon { color: var(--color-danger); }
-.provider-status strong { color: var(--color-text); font-size: 13px; }.provider-status p { margin: 4px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .assistant-form { margin-top: 18px; }.full-width { width: 100%; }
 .project-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; padding: 11px; margin: -4px 0 16px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-subtle); }
 .project-context div { min-width: 0; }.project-context span, .project-context strong { display: block; overflow-wrap: anywhere; }.project-context span { color: var(--color-text-muted); font-size: 11px; }.project-context strong { margin-top: 3px; color: var(--color-text); font-size: 12px; line-height: 1.4; }

@@ -15,6 +15,13 @@
 
     <template v-else>
       <ProjectWorkspaceNav :project-id="projectId" />
+      <AiProviderStatusStrip
+        :status="gatewayStatus"
+        :loading="gatewayStatusLoading"
+        :error="gatewayStatusError"
+        compact
+        @refresh="loadGatewayStatus"
+      />
 
       <header class="preview-hero">
         <div class="preview-hero__main">
@@ -145,17 +152,17 @@
             :rows="3"
             maxlength="4000"
             show-word-limit
-            :disabled="revisionSubmitting || !activeSummary"
+            :disabled="revisionSubmitting || !activeSummary || gatewayPresentation.unavailable"
             placeholder="请输入需要调整的教学内容或表达方式"
             aria-label="版本修改意见"
           />
           <div class="revision-panel__footer">
-            <span>当前提供方：{{ providerLabel }}<template v-if="workspace?.provider?.toUpperCase().includes('MOCK')">（Mock，不代表真实模型）</template></span>
+            <span>本次成果提供方：{{ providerLabel }}<template v-if="workspace?.provider?.toUpperCase().includes('MOCK')">（Mock，不代表真实模型）</template></span>
             <el-button
               type="primary"
               :icon="EditPen"
               :loading="revisionSubmitting"
-              :disabled="!activeSummary || !revisionInstruction.trim()"
+              :disabled="!activeSummary || !revisionInstruction.trim() || gatewayPresentation.unavailable"
               @click="submitRevision"
             >提交修改</el-button>
           </div>
@@ -175,12 +182,14 @@ import {
   type GenerationWorkspace,
   reviseArtifact,
 } from '@/api/generation';
+import AiProviderStatusStrip from '@/components/ai/AiProviderStatusStrip.vue';
 import DocxArtifactPreview from '@/components/generation/DocxArtifactPreview.vue';
 import InteractionArtifactPreview from '@/components/generation/InteractionArtifactPreview.vue';
 import PptArtifactPreview from '@/components/generation/PptArtifactPreview.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
+import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
 import { formatDateTime } from '@/utils/presentation';
 import { ElMessage } from 'element-plus';
 import { Back, ChatDotRound, DataBoard, Document, EditPen, Files, Refresh, View } from '@element-plus/icons-vue';
@@ -204,6 +213,13 @@ const revisionInstruction = ref('');
 const revisionSubmitting = ref(false);
 const revisionError = ref('');
 const revisionSuccess = ref('');
+const {
+  status: gatewayStatus,
+  loading: gatewayStatusLoading,
+  error: gatewayStatusError,
+  presentation: gatewayPresentation,
+  refresh: loadGatewayStatus,
+} = useAiGatewayStatus();
 
 const artifactTabs = [
   { type: 'PPT' as const, label: 'PPT 课件', icon: DataBoard },
@@ -288,6 +304,10 @@ async function loadArtifactList() {
 async function submitRevision() {
   const source = activeSummary.value;
   const instruction = revisionInstruction.value.trim();
+  if (gatewayPresentation.value.unavailable) {
+    revisionError.value = 'AI 工作流当前不可用，请先检查 Dify 或 Mock 配置。';
+    return;
+  }
   if (!source || !instruction) {
     ElMessage.warning('请选择已有成果并填写修改说明');
     return;
@@ -306,6 +326,7 @@ async function submitRevision() {
     revisionError.value = resolveError(error, '成果修改失败，请检查当前版本状态后重试。');
     ElMessage.error(revisionError.value);
   } finally {
+    await loadGatewayStatus();
     revisionSubmitting.value = false;
   }
 }
@@ -326,7 +347,7 @@ async function loadArtifactDetail(type: ArtifactType, force = false) {
 
 async function loadPreview() {
   loading.value = true;
-  await loadWorkspace();
+  await Promise.all([loadWorkspace(), loadGatewayStatus()]);
   await loadArtifactList();
   loading.value = false;
 }
