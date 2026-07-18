@@ -4,6 +4,7 @@ import com.auvdidao.a12teachingagent.domain.knowledge.KnowledgeChunk;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface KnowledgeChunkRepository extends JpaRepository<KnowledgeChunk, Long> {
 
@@ -14,4 +15,6 @@ public interface KnowledgeChunkRepository extends JpaRepository<KnowledgeChunk, 
     long countByProjectId(Long projectId);
 
     void deleteByMaterialId(Long materialId);
+
+    Optional<KnowledgeChunk> findByMaterialIdAndChunkNo(Long materialId, Integer chunkNo);
 }

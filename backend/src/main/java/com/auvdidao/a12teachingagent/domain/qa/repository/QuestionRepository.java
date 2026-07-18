@@ -19,6 +19,12 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     List<Question> findByPublicationIdInOrderByUpdatedAtDesc(Collection<Long> publicationIds);
 
+    Optional<Question> findByPublicationIdAndStudentIdAndTitleIgnoreCase(
+            Long publicationId,
+            Long studentId,
+            String title
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select question from Question question where question.id = :id")
     Optional<Question> findByIdForUpdate(@Param("id") Long id);

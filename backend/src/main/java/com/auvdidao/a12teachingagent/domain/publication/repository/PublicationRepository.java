@@ -16,6 +16,8 @@ public interface PublicationRepository extends JpaRepository<Publication, Long> 
 
     boolean existsByApprovalRequestIdAndClassId(Long approvalRequestId, Long classId);
 
+    Optional<Publication> findByApprovalRequestIdAndClassId(Long approvalRequestId, Long classId);
+
     List<Publication> findByPublishedByOrderByPublishedAtDesc(Long publishedBy);
 
     List<Publication> findByPublishedByAndStatusOrderByPublishedAtDesc(

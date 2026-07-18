@@ -5,6 +5,7 @@ import com.auvdidao.a12teachingagent.domain.teachingtask.TeachingTask;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface TeachingTaskRepository extends JpaRepository<TeachingTask, Long> {
 
@@ -23,4 +24,6 @@ public interface TeachingTaskRepository extends JpaRepository<TeachingTask, Long
     );
 
     boolean existsByCreatedByAndTaskNameIgnoreCase(Long createdBy, String taskName);
+
+    Optional<TeachingTask> findByCreatedByAndTaskNameIgnoreCase(Long createdBy, String taskName);
 }

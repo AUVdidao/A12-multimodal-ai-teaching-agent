@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.domain.generation.repository;
 
 import com.auvdidao.a12teachingagent.domain.generation.GeneratedArtifact;
+import com.auvdidao.a12teachingagent.domain.common.ArtifactType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -15,4 +16,10 @@ public interface GeneratedArtifactRepository extends JpaRepository<GeneratedArti
     List<GeneratedArtifact> findByProjectIdAndVersionIdOrderByCreatedAtAsc(Long projectId, Long versionId);
 
     Optional<GeneratedArtifact> findByIdAndProjectId(Long id, Long projectId);
+
+    Optional<GeneratedArtifact> findByProjectIdAndVersionIdAndArtifactType(
+            Long projectId,
+            Long versionId,
+            ArtifactType artifactType
+    );
 }

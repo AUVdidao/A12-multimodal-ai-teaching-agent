@@ -9,4 +9,6 @@ import java.util.List;
 public interface QuestionAnswerRepository extends JpaRepository<QuestionAnswer, Long> {
 
     List<QuestionAnswer> findByQuestionIdInOrderByCreatedAtAsc(Collection<Long> questionIds);
+
+    boolean existsByQuestionIdAndTeacherId(Long questionId, Long teacherId);
 }

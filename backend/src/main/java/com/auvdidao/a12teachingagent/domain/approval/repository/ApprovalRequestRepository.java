@@ -29,6 +29,8 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
 
     boolean existsByActiveArtifactVersionId(Long artifactVersionId);
 
+    Optional<ApprovalRequest> findByActiveArtifactVersionId(Long artifactVersionId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select request from ApprovalRequest request where request.id = :id")
     Optional<ApprovalRequest> findByIdForUpdate(@Param("id") Long id);

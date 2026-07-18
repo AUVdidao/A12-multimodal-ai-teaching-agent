@@ -11,4 +11,6 @@ public interface UploadedMaterialRepository extends JpaRepository<UploadedMateri
     List<UploadedMaterial> findByProjectIdOrderByCreatedAtAsc(Long projectId);
 
     Optional<UploadedMaterial> findByIdAndProjectId(Long id, Long projectId);
+
+    Optional<UploadedMaterial> findByProjectIdAndOriginalFileNameIgnoreCase(Long projectId, String originalFileName);
 }
