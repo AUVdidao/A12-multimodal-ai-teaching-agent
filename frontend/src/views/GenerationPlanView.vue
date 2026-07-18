@@ -14,6 +14,7 @@
     </StatePanel>
 
     <template v-else>
+      <ProjectContextHeader v-if="projectContext" :project="projectContext" />
       <ProjectWorkspaceNav :project-id="workspace.projectId" />
       <AiProviderStatusStrip
         :status="gatewayStatus"
@@ -239,8 +240,10 @@ import {
   type GenerationWorkspace,
   type PlanOutlineItem,
 } from '@/api/generation';
+import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
 import AiProviderStatusStrip from '@/components/ai/AiProviderStatusStrip.vue';
 import GenerationOutlineEditor from '@/components/generation/GenerationOutlineEditor.vue';
+import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
@@ -270,6 +273,7 @@ const route = useRoute();
 const router = useRouter();
 const projectId = computed(() => Number(route.params.projectId));
 const workspace = ref<GenerationWorkspace>();
+const projectContext = ref<ProjectBrief>();
 const plan = ref<GenerationPlan>();
 const pptOutline = ref<PlanOutlineItem[]>([]);
 const docOutline = ref<PlanOutlineItem[]>([]);
@@ -412,11 +416,16 @@ async function loadWorkspace() {
   workspaceError.value = '';
   actionError.value = '';
   try {
-    const result = await getGenerationWorkspace(projectId.value);
+    const [result, overview] = await Promise.all([
+      getGenerationWorkspace(projectId.value),
+      getProjectWorkspaceOverview(projectId.value),
+    ]);
     workspace.value = result;
+    projectContext.value = overview.project;
     syncPlan(result.latestPlan);
   } catch (error) {
     workspace.value = undefined;
+    projectContext.value = undefined;
     workspaceError.value = resolveError(error, '内容生成数据读取失败，请检查服务后重试。');
   } finally {
     loading.value = false;

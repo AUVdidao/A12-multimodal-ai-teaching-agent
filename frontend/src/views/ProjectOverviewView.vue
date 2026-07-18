@@ -1,7 +1,8 @@
 <template>
   <section class="page overview-page" v-loading="loading">
     <template v-if="overview">
-      <ProjectContextHeader :project="overview.project" />
+      <ProjectContextHeader :project="overview.project" back-to="/projects" back-label="返回项目" />
+      <ProjectWorkspaceNav :project-id="overview.project.id" />
 
       <section class="panel overview-timeline">
         <div class="timeline-track">
@@ -39,23 +40,6 @@
         </section>
 
         <aside class="grid">
-          <section class="panel">
-            <div class="panel__header">
-              <h3>快速操作</h3>
-              <UiStatusPill :label="overview.project.stageLabel" :tone="stageTone(overview.project.stage)" />
-            </div>
-            <div class="quick-actions">
-              <el-button
-                v-for="action in overview.quickActions"
-                :key="action.code"
-                :disabled="!action.enabled"
-                @click="router.push(action.path)"
-              >
-                {{ action.label }}
-              </el-button>
-            </div>
-          </section>
-
           <section class="panel project-details">
             <div class="panel__header"><h3>项目信息</h3></div>
             <dl>
@@ -79,10 +63,10 @@
 <script setup lang="ts">
 import { getProjectWorkspaceOverview, type ProjectOverview } from '@/api/workspace';
 import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
+import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import UiMetricCard from '@/components/ui/UiMetricCard.vue';
 import UiProgressRingCard from '@/components/ui/UiProgressRingCard.vue';
-import UiStatusPill from '@/components/ui/UiStatusPill.vue';
-import { formatDateTime, formatFullDateTime, formatRelativeTime, stageTone } from '@/utils/presentation';
+import { formatDateTime, formatFullDateTime, formatRelativeTime } from '@/utils/presentation';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -225,17 +209,6 @@ onMounted(loadOverview);
   white-space: nowrap;
 }
 
-.quick-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.quick-actions .el-button {
-  height: 46px;
-  margin: 0;
-}
-
 .project-details dl {
   display: grid;
   gap: 12px;
@@ -272,8 +245,7 @@ onMounted(loadOverview);
 }
 
 @media (max-width: 760px) {
-  .overview-metrics,
-  .quick-actions {
+  .overview-metrics {
     grid-template-columns: 1fr;
   }
 

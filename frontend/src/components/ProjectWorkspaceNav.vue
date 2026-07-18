@@ -12,7 +12,6 @@
 <script setup lang="ts">
 import {
   Aim,
-  Collection,
   DocumentChecked,
   Download,
   Files,
@@ -31,7 +30,6 @@ const props = defineProps<{
 const navItems = computed(() => {
   const root = `/projects/${props.projectId}`;
   return [
-    { label: '概览', path: root, icon: Collection },
     { label: '教学需求', path: `${root}/requirements`, icon: Reading },
     { label: '需求摘要', path: `${root}/summary`, icon: DocumentChecked },
     { label: '参考资料', path: `${root}/materials`, icon: Files },

@@ -14,6 +14,7 @@
     </StatePanel>
 
     <template v-else>
+      <ProjectContextHeader v-if="projectContext" :project="projectContext" />
       <ProjectWorkspaceNav :project-id="projectId" />
       <AiProviderStatusStrip
         :status="gatewayStatus"
@@ -182,10 +183,12 @@ import {
   type GenerationWorkspace,
   reviseArtifact,
 } from '@/api/generation';
+import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
 import AiProviderStatusStrip from '@/components/ai/AiProviderStatusStrip.vue';
 import DocxArtifactPreview from '@/components/generation/DocxArtifactPreview.vue';
 import InteractionArtifactPreview from '@/components/generation/InteractionArtifactPreview.vue';
 import PptArtifactPreview from '@/components/generation/PptArtifactPreview.vue';
+import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
@@ -200,6 +203,7 @@ const route = useRoute();
 const router = useRouter();
 const projectId = computed(() => Number(route.params.projectId));
 const workspace = ref<GenerationWorkspace>();
+const projectContext = ref<ProjectBrief>();
 const artifacts = ref<Artifact[]>([]);
 const loading = ref(true);
 const artifactListLoaded = ref(false);
@@ -274,9 +278,15 @@ function chooseInitialType() {
 async function loadWorkspace() {
   workspaceError.value = '';
   try {
-    workspace.value = await getGenerationWorkspace(projectId.value);
+    const [generationWorkspace, overview] = await Promise.all([
+      getGenerationWorkspace(projectId.value),
+      getProjectWorkspaceOverview(projectId.value),
+    ]);
+    workspace.value = generationWorkspace;
+    projectContext.value = overview.project;
   } catch (error) {
     workspace.value = undefined;
+    projectContext.value = undefined;
     workspaceError.value = resolveError(error, '项目信息读取失败，成果预览仍可继续使用。');
   }
 }

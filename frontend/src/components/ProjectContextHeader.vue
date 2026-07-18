@@ -1,8 +1,8 @@
 ﻿<template>
   <section class="project-context">
-    <button class="project-context__back" type="button" @click="router.push('/projects')">
+    <button class="project-context__back" type="button" @click="router.push(backTarget)">
       <el-icon><ArrowLeft /></el-icon>
-      返回项目
+      {{ backLabel }}
     </button>
     <div class="project-context__main">
       <div class="project-context__icon">
@@ -29,11 +29,17 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   project: ProjectBrief;
-}>();
+  backTo?: string;
+  backLabel?: string;
+}>(), {
+  backTo: '',
+  backLabel: '返回概览',
+});
 
 const router = useRouter();
+const backTarget = computed(() => props.backTo || `/projects/${props.project.id}`);
 const modeLabel = computed(() => {
   const labels: Record<string, string> = {
     STANDARD: '标准模式',
