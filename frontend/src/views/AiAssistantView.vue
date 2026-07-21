@@ -49,6 +49,7 @@
           :loading="loading"
           :empty="empty"
           :sending="sending"
+          :teacher-initial="teacherInitial"
           @send="sendComposerMessage"
           @quick-prompt="sendQuickPrompt"
           @action="handleAction"
@@ -90,6 +91,7 @@ import AssistantProjectContext from '@/components/assistant/AssistantProjectCont
 import AssistantSidePanel from '@/components/assistant/AssistantSidePanel.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
+import { useAuthStore } from '@/stores/auth';
 import type {
   AssistantMessage,
   AssistantProgressItem,
@@ -106,6 +108,7 @@ import { useRouter, type RouteLocationRaw } from 'vue-router';
 const ASSISTANT_PROJECT_STORAGE_KEY = 'a12-assistant-project-id';
 
 const router = useRouter();
+const authStore = useAuthStore();
 const projects = ref<TeachingProject[]>([]);
 const recentProjects = ref<RecentProject[]>([]);
 const selectedProjectId = ref<number>();
@@ -125,6 +128,7 @@ const sending = ref(false);
 const activeScenario = ref('overview');
 const sessionId = ref(createSessionId());
 let contextRequestId = 0;
+const pendingDialogueSaves = new Set<Promise<void>>();
 
 const {
   status: gatewayStatus,
@@ -160,6 +164,7 @@ const currentVersion = computed(() => Math.max(0, ...currentArtifacts.value.map(
 const nextVersion = computed(() => currentVersion.value + 1);
 const openQuestions = computed(() => questions.value.filter((question) => question.status === 'OPEN'));
 const answeredQuestions = computed(() => questions.value.filter((question) => question.status === 'ANSWERED'));
+const teacherInitial = computed(() => userInitial(authStore.user?.displayName || authStore.user?.username));
 
 const progressItems = computed<AssistantProgressItem[]>(() => [
   {
@@ -282,6 +287,7 @@ const recentWork = computed<AssistantRecentWorkItem[]>(() => {
 onMounted(loadPage);
 
 async function loadPage() {
+  await waitForPendingDialogueSaves();
   projectsLoading.value = true;
   projectsError.value = '';
   const [projectResult, recentResult] = await Promise.allSettled([
@@ -312,6 +318,7 @@ async function loadPage() {
 
 async function selectProject(projectId: number) {
   if (!projectId) return;
+  await waitForPendingDialogueSaves();
   selectedProjectId.value = projectId;
   localStorage.setItem(ASSISTANT_PROJECT_STORAGE_KEY, String(projectId));
   await loadProjectContext(projectId);
@@ -375,7 +382,7 @@ async function loadProjectContext(projectId: number) {
     sourceState.value.dialogues = 'error';
   }
 
-  messages.value = [buildWelcomeMessage()];
+  restoreMessagesFromDialogues();
   contextLoading.value = false;
 }
 
@@ -387,6 +394,20 @@ function resetContext() {
   questions.value = [];
   dialogues.value = [];
   sourceState.value = {};
+}
+
+function restoreMessagesFromDialogues() {
+  const latestSessionId = latestDialogueSessionId(dialogues.value);
+  if (!latestSessionId) {
+    messages.value = [buildWelcomeMessage()];
+    return;
+  }
+  sessionId.value = latestSessionId;
+  const restored = dialogues.value
+    .filter((dialogue) => dialogue.sessionId === latestSessionId)
+    .sort(sortDialoguesAsc)
+    .map(dialogueToMessage);
+  messages.value = restored.length ? restored : [buildWelcomeMessage()];
 }
 
 function sendComposerMessage() {
@@ -408,9 +429,9 @@ async function handleTeacherIntent(intent: string, content: string) {
   activeScenario.value = intent;
   try {
     if (intent === 'progress') addAssistantMessage(buildProgressMessage());
-    else if (intent === 'requirement') await runRequirementWorkflow();
+    else if (intent === 'requirement') await runRequirementWorkflow(content);
     else if (intent === 'intent') addAssistantMessage(buildIntentMessage());
-    else if (intent === 'generation') await runGenerationWorkflow();
+    else if (intent === 'generation') await runGenerationWorkflow(content);
     else if (intent === 'student-questions') addAssistantMessage(buildQuestionMessage());
     else addAssistantMessage(buildUnsupportedMessage());
   } finally {
@@ -431,6 +452,10 @@ function handleAction(action: AssistantWorkspaceAction) {
   }
   if (action.actionType === 'RETRY') {
     void loadPage();
+    return;
+  }
+  if (action.actionType === 'RETRY_SAVE' && action.messageId) {
+    retryPersistMessage(action.messageId);
   }
 }
 
@@ -439,7 +464,8 @@ function startNewDialogue() {
   messages.value = selectedProject.value ? [buildWelcomeMessage()] : [];
 }
 
-function openHistory() {
+async function openHistory() {
+  await waitForPendingDialogueSaves();
   goToProjectRoute('project-requirements');
 }
 
@@ -452,7 +478,7 @@ function showServiceDetail() {
   void ElMessageBox.alert(detail || '当前没有更多诊断信息。', providerPresentation.value.label, { confirmButtonText: '知道了' });
 }
 
-async function runRequirementWorkflow() {
+async function runRequirementWorkflow(teacherInput: string) {
   if (!selectedProject.value) return;
   if (providerUnavailable.value) {
     addAssistantMessage(buildProviderUnavailableMessage('需求澄清工作流暂时不可用。'));
@@ -462,7 +488,7 @@ async function runRequirementWorkflow() {
   try {
     const result = await runClarification({
       projectId: selectedProject.value.id,
-      rawRequirement: rawRequirementText(),
+      rawRequirement: rawRequirementText(teacherInput),
       knownFields: knownFieldsForProject(selectedProject.value),
       generationMode: generationMode(selectedProject.value.modelMode),
     });
@@ -503,7 +529,7 @@ async function runRequirementWorkflow() {
   }
 }
 
-async function runGenerationWorkflow() {
+async function runGenerationWorkflow(teacherInput: string) {
   if (!selectedProject.value) return;
   if (providerUnavailable.value) {
     addAssistantMessage(buildProviderUnavailableMessage('生成方案工作流暂时不可用。'));
@@ -523,12 +549,16 @@ async function runGenerationWorkflow() {
     addAssistantMessage({
       id: createMessageId(),
       role: 'assistant',
-      content: '我已经根据当前项目上下文生成了一版方案建议，你可以进入生成流程继续编辑和确认。',
+      content: teacherInput && !isDefaultGenerationPrompt(teacherInput)
+        ? '我已调用生成方案工作流。当前接口只接收项目、课程、章节、授课对象和输出类型，因此本轮自由编辑要求不会直接写入生成请求；请进入生成流程继续细化。'
+        : '我已基于当前项目数据调用生成方案工作流，你可以进入生成流程继续编辑和确认。',
       createdAt: new Date().toISOString(),
       status: 'success',
       evidence: buildEvidence(),
-      versionNotice: `本次操作将创建新的成果草稿 V${nextVersion.value}，不会覆盖当前 V${currentVersion.value || 0}。`,
+      versionNotice: `本次方案建议来自当前项目数据。真正生成成果版本需在内容生成页继续确认，不会在副驾驶内覆盖当前 V${currentVersion.value || 0}。`,
       sections: [
+        ...(teacherInput && !isDefaultGenerationPrompt(teacherInput)
+          ? [outlineSection('instruction-boundary', '本轮输入处理', [`已收到：${teacherInput}`, '生成方案接口暂不支持自由编辑指令参数，未篡改课程名或章节主题来伪装传递。'])] : []),
         outlineSection('ppt', 'PPT 大纲', result.pptOutline.map((section) => `${section.title}：${section.points.join('、')}`)),
         outlineSection('doc', 'Word 教案大纲', result.docOutline.map((section) => `${section.title}：${section.points.join('、')}`)),
         outlineSection('interaction', '互动安排', result.interactionPlan),
@@ -718,24 +748,100 @@ function addTeacherMessage(content: string) {
     content,
     createdAt: new Date().toISOString(),
     status: 'success',
+    persistenceStatus: 'pending',
+    persistRetryCount: 0,
   };
   messages.value.push(message);
-  persistDialogue('TEACHER', content);
+  persistMessage(message, 'TEACHER');
 }
 
 function addAssistantMessage(message: AssistantMessage) {
+  message.persistenceStatus = 'pending';
+  message.persistRetryCount = message.persistRetryCount ?? 0;
   messages.value.push(message);
-  persistDialogue('ASSISTANT', message.content);
+  persistMessage(message, 'ASSISTANT');
 }
 
-function persistDialogue(sender: DialogueSender, content: string) {
-  if (!selectedProject.value || !content.trim()) return;
-  void saveDialogueMessage(selectedProject.value.id, {
-    sessionId: sessionId.value,
+function persistMessage(message: AssistantMessage, sender: DialogueSender) {
+  if (!selectedProject.value || !message.content.trim()) {
+    updateMessage(message.id, { persistenceStatus: 'not_required' });
+    return;
+  }
+  updateMessage(message.id, { persistenceStatus: 'pending', persistenceError: '' });
+  const projectId = selectedProject.value.id;
+  const currentSessionId = sessionId.value;
+  const savePromise = saveDialogueMessage(projectId, {
+    sessionId: currentSessionId,
     sender,
-    content,
-    roundNo: messages.value.length,
-  }).catch(() => undefined);
+    content: message.content,
+    roundNo: messageRoundNo(message.id),
+  })
+    .then((saved) => {
+      updateMessage(message.id, { persistenceStatus: 'saved', persistenceError: '' });
+      dialogues.value = mergeSavedDialogue(dialogues.value, saved);
+    })
+    .catch((error) => {
+      const persistenceError = resolveError(error, '对话保存失败，刷新后这条消息可能丢失。');
+      updateMessage(message.id, { persistenceStatus: 'failed', persistenceError });
+      ElMessage.error(persistenceError);
+    });
+  trackDialogueSave(savePromise);
+}
+
+function retryPersistMessage(messageId: string) {
+  const message = messages.value.find((item) => item.id === messageId);
+  if (!message || message.persistenceStatus !== 'failed') return;
+  if ((message.persistRetryCount || 0) >= 1) return;
+  updateMessage(message.id, { persistRetryCount: (message.persistRetryCount || 0) + 1 });
+  persistMessage(message, message.role === 'teacher' ? 'TEACHER' : 'ASSISTANT');
+}
+
+function updateMessage(messageId: string, patch: Partial<AssistantMessage>) {
+  const index = messages.value.findIndex((item) => item.id === messageId);
+  if (index === -1) return;
+  messages.value[index] = { ...messages.value[index], ...patch };
+}
+
+function trackDialogueSave(promise: Promise<void>) {
+  pendingDialogueSaves.add(promise);
+  void promise.finally(() => pendingDialogueSaves.delete(promise));
+}
+
+async function waitForPendingDialogueSaves() {
+  if (!pendingDialogueSaves.size) return;
+  await Promise.allSettled([...pendingDialogueSaves]);
+}
+
+function messageRoundNo(messageId: string) {
+  const index = messages.value.findIndex((message) => message.id === messageId);
+  return index >= 0 ? index + 1 : messages.value.length + 1;
+}
+
+function mergeSavedDialogue(items: DialogueMessage[], saved: DialogueMessage) {
+  const next = items.filter((item) => item.id !== saved.id);
+  next.push(saved);
+  return next.sort(sortDialoguesAsc);
+}
+
+function latestDialogueSessionId(items: DialogueMessage[]) {
+  const latestBySession = new Map<string, DialogueMessage>();
+  for (const item of items) {
+    const current = latestBySession.get(item.sessionId);
+    if (!current || sortDialoguesAsc(current, item) < 0) latestBySession.set(item.sessionId, item);
+  }
+  return [...latestBySession.values()].sort(sortDialoguesAsc).at(-1)?.sessionId;
+}
+
+function dialogueToMessage(dialogue: DialogueMessage): AssistantMessage {
+  return {
+    id: `dialogue-${dialogue.id}`,
+    role: dialogue.sender === 'TEACHER' ? 'teacher' : 'assistant',
+    content: dialogue.content,
+    createdAt: dialogue.createdAt,
+    status: 'success',
+    persistenceStatus: 'saved',
+    persistRetryCount: 0,
+  };
 }
 
 function buildEvidence() {
@@ -784,11 +890,21 @@ function inferIntent(content: string) {
   return 'unknown';
 }
 
-function rawRequirementText() {
-  if (requirement.value?.rawRequirementText?.trim()) return requirement.value.rawRequirementText.trim();
-  if (selectedProject.value?.description?.trim()) return selectedProject.value.description.trim();
-  if (!selectedProject.value) return '';
-  return `${selectedProject.value.courseName}，章节主题：${selectedProject.value.chapterTitle}，面向${selectedProject.value.targetStudents || '目标学生'}。`;
+function rawRequirementText(teacherInput = '') {
+  const savedParts = [
+    requirement.value?.rawRequirementText?.trim(),
+    requirement.value?.teachingGoals ? `教学目标：${requirement.value.teachingGoals}` : '',
+    requirement.value?.keyPoints ? `重点：${requirement.value.keyPoints}` : '',
+    requirement.value?.difficultPoints ? `难点：${requirement.value.difficultPoints}` : '',
+    selectedProject.value?.description?.trim(),
+  ].filter(Boolean);
+  const base = savedParts.length
+    ? savedParts.join('\n')
+    : selectedProject.value
+      ? `${selectedProject.value.courseName}，章节主题：${selectedProject.value.chapterTitle}，面向${selectedProject.value.targetStudents || '目标学生'}。`
+      : '';
+  const currentInput = teacherInput.trim();
+  return currentInput ? `${base}\n\n本轮教师补充：${currentInput}` : base;
 }
 
 function knownFieldsForProject(project: TeachingProject) {
@@ -804,6 +920,10 @@ function knownFieldsForProject(project: TeachingProject) {
 
 function generationMode(value?: string): GenerationMode {
   return value === 'QUALITY' || value === 'HIGH_QUALITY' || value === 'ECONOMY' || value === 'MOCK' ? value : 'STANDARD';
+}
+
+function isDefaultGenerationPrompt(value: string) {
+  return value.trim() === '生成教学方案';
 }
 
 function projectRoute(name: string): RouteLocationRaw | undefined {
@@ -840,8 +960,19 @@ function statusTextForQuestion(status: Question['status']) {
   return status === 'OPEN' ? '待回答' : status === 'ANSWERED' ? '已回答' : '已关闭';
 }
 
+function sortDialoguesAsc(a: DialogueMessage, b: DialogueMessage) {
+  return (a.roundNo || 0) - (b.roundNo || 0)
+    || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    || a.id - b.id;
+}
+
 function sortByCreatedAtDesc(a: { createdAt: string }, b: { createdAt: string }) {
   return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+}
+
+function userInitial(value?: string) {
+  const first = Array.from((value || '').trim()).find((char) => /\S/.test(char));
+  return first || '师';
 }
 
 function formatTime(value?: string) {

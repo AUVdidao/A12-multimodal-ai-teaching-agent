@@ -24,7 +24,8 @@ export interface AssistantWorkspaceAction {
   label: string;
   route?: RouteLocationRaw;
   tone: 'primary' | 'secondary' | 'success';
-  actionType: 'NAVIGATE' | 'START_WORKFLOW' | 'CREATE_VERSION' | 'RETRY';
+  actionType: 'NAVIGATE' | 'START_WORKFLOW' | 'CREATE_VERSION' | 'RETRY' | 'RETRY_SAVE';
+  messageId?: string;
   disabled?: boolean;
   disabledReason?: string;
 }
@@ -49,6 +50,9 @@ export interface AssistantMessage {
   content: string;
   createdAt: string;
   status: AssistantMessageStatus;
+  persistenceStatus?: 'pending' | 'saved' | 'failed' | 'not_required';
+  persistenceError?: string;
+  persistRetryCount?: number;
   evidence?: AssistantEvidence[];
   actions?: AssistantWorkspaceAction[];
   sections?: AssistantResponseSection[];

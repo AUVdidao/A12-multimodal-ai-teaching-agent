@@ -8,7 +8,7 @@
       </div>
       <div class="assistant-conversation__tools">
         <el-button plain :icon="CirclePlus" :disabled="empty || loading" @click="$emit('new-dialogue')">新建对话</el-button>
-        <el-button plain :icon="Clock" :disabled="empty || loading" @click="$emit('history')">历史对话</el-button>
+        <el-button plain :icon="Clock" :disabled="empty || loading" @click="$emit('history')">需求对话记录</el-button>
       </div>
     </header>
 
@@ -46,7 +46,7 @@
         >
           <div class="assistant-message__avatar">
             <A12AssetIcon v-if="message.role !== 'teacher'" name="sparkle" :size="22" />
-            <span v-else>王</span>
+            <span v-else>{{ teacherInitial }}</span>
           </div>
           <div class="assistant-message__content">
             <section v-if="message.role === 'assistant'" class="assistant-ai-card">
@@ -116,6 +116,17 @@
               />
             </section>
             <p v-else class="assistant-teacher-bubble">{{ message.content }}</p>
+            <div v-if="message.persistenceStatus && message.persistenceStatus !== 'saved' && message.persistenceStatus !== 'not_required'" :class="['assistant-message__persistence', `is-${message.persistenceStatus}`]">
+              <span>{{ persistenceText(message) }}</span>
+              <button
+                v-if="message.persistenceStatus === 'failed'"
+                type="button"
+                :disabled="Boolean(message.persistRetryCount && message.persistRetryCount > 0)"
+                @click="$emit('action', retrySaveAction(message.id))"
+              >
+                {{ message.persistRetryCount && message.persistRetryCount > 0 ? '已重试' : '重新保存' }}
+              </button>
+            </div>
           </div>
         </article>
       </template>
@@ -123,7 +134,6 @@
 
     <footer class="assistant-composer">
       <div class="assistant-composer__row">
-        <el-button class="assistant-composer__attach" :disabled="empty || loading || sending" aria-label="添加附件" :icon="Paperclip" />
         <textarea
           ref="inputEl"
           :value="modelValue"
@@ -160,7 +170,7 @@
 <script setup lang="ts">
 import type { AssistantMessage, AssistantWorkspaceAction } from '@/types/assistant';
 import A12AssetIcon, { type A12AssetIconName } from '@/components/ui/A12AssetIcon.vue';
-import { ArrowRight, Check, CirclePlus, Clock, Close, Document, InfoFilled, Paperclip, Position } from '@element-plus/icons-vue';
+import { ArrowRight, Check, CirclePlus, Clock, Close, Document, InfoFilled, Position } from '@element-plus/icons-vue';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = withDefaults(defineProps<{
@@ -170,8 +180,10 @@ const props = withDefaults(defineProps<{
   loading?: boolean;
   empty?: boolean;
   sending?: boolean;
+  teacherInitial?: string;
   maxLength?: number;
 }>(), {
+  teacherInitial: '师',
   maxLength: 1000,
 });
 
@@ -209,6 +221,21 @@ function handleKeydown(event: KeyboardEvent) {
   event.preventDefault();
   if (!props.modelValue.trim() || props.empty || props.loading || props.sending) return;
   emit('send');
+}
+
+function persistenceText(message: AssistantMessage) {
+  if (message.persistenceStatus === 'pending') return '正在保存对话';
+  return message.persistenceError || '对话保存失败，刷新后这条消息可能丢失。';
+}
+
+function retrySaveAction(messageId: string): AssistantWorkspaceAction {
+  return {
+    id: `retry-save-${messageId}`,
+    label: '重新保存',
+    tone: 'secondary',
+    actionType: 'RETRY_SAVE',
+    messageId,
+  };
 }
 </script>
 
@@ -514,7 +541,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 .assistant-composer__row {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  grid-template-columns: minmax(0, 1fr) 42px;
   gap: 10px;
   align-items: end;
 }
@@ -542,11 +569,41 @@ function handleKeydown(event: KeyboardEvent) {
   color: var(--ui-faint);
 }
 
-.assistant-composer__attach,
 .assistant-composer__send {
   width: 42px;
   height: 42px;
   padding: 0;
+}
+
+.assistant-message__persistence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
+.assistant-message__persistence.is-failed {
+  color: var(--ui-danger);
+}
+
+.assistant-message__persistence button {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-message__persistence button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .assistant-composer__meta {
