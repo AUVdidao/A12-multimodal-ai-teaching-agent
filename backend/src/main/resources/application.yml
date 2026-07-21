@@ -61,26 +61,26 @@ a12:
       base-url: ${A12_AI_DIFY_BASE_URL:${DIFY_BASE_URL:https://api.dify.ai/v1}}
       user-prefix: ${A12_AI_DIFY_USER_PREFIX:a12-project-}
       connect-timeout: ${A12_AI_DIFY_CONNECT_TIMEOUT:5s}
-      read-timeout: ${A12_AI_DIFY_READ_TIMEOUT:60s}
+      read-timeout: ${A12_AI_DIFY_READ_TIMEOUT:600s}
       workflows:
         clarification:
-          workflow-id: ${DIFY_WF01_WORKFLOW_ID:}
-          api-key: ${DIFY_WF01_API_KEY:}
+          workflow-id: ${DIFY_APP01_REQUIREMENT_WORKFLOW_ID:${DIFY_WF01_WORKFLOW_ID:}}
+          api-key: ${DIFY_APP01_REQUIREMENT_API_KEY:${DIFY_WF01_API_KEY:}}
         summary:
-          workflow-id: ${DIFY_WF02_WORKFLOW_ID:}
-          api-key: ${DIFY_WF02_API_KEY:}
+          workflow-id: ${DIFY_APP01_REQUIREMENT_WORKFLOW_ID:${DIFY_WF02_WORKFLOW_ID:}}
+          api-key: ${DIFY_APP01_REQUIREMENT_API_KEY:${DIFY_WF02_API_KEY:}}
         material:
-          workflow-id: ${DIFY_WF03_WORKFLOW_ID:}
-          api-key: ${DIFY_WF03_API_KEY:}
+          workflow-id: ${DIFY_APP02_MATERIAL_INTENT_WORKFLOW_ID:${DIFY_WF03_WORKFLOW_ID:}}
+          api-key: ${DIFY_APP02_MATERIAL_INTENT_API_KEY:${DIFY_WF03_API_KEY:}}
         knowledge-intent:
-          workflow-id: ${DIFY_WF04_WORKFLOW_ID:}
-          api-key: ${DIFY_WF04_API_KEY:}
+          workflow-id: ${DIFY_APP02_MATERIAL_INTENT_WORKFLOW_ID:${DIFY_WF04_WORKFLOW_ID:}}
+          api-key: ${DIFY_APP02_MATERIAL_INTENT_API_KEY:${DIFY_WF04_API_KEY:}}
         generation-plan:
-          workflow-id: ${DIFY_WF05_WORKFLOW_ID:}
-          api-key: ${DIFY_WF05_API_KEY:}
+          workflow-id: ${DIFY_APP03_GENERATION_PLAN_WORKFLOW_ID:${DIFY_WF05_WORKFLOW_ID:}}
+          api-key: ${DIFY_APP03_GENERATION_PLAN_API_KEY:${DIFY_WF05_API_KEY:}}
         content-draft:
-          workflow-id: ${DIFY_WF06_WORKFLOW_ID:}
-          api-key: ${DIFY_WF06_API_KEY:}
+          workflow-id: ${DIFY_APP04_CONTENT_DRAFT_WORKFLOW_ID:${DIFY_WF06_WORKFLOW_ID:}}
+          api-key: ${DIFY_APP04_CONTENT_DRAFT_API_KEY:${DIFY_WF06_API_KEY:}}
         revision:
-          workflow-id: ${DIFY_WF07_WORKFLOW_ID:}
-          api-key: ${DIFY_WF07_API_KEY:}
+          workflow-id: ${DIFY_APP05_REVISION_WORKFLOW_ID:${DIFY_WF07_WORKFLOW_ID:}}
+          api-key: ${DIFY_APP05_REVISION_API_KEY:${DIFY_WF07_API_KEY:}}

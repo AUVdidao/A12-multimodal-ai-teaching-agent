@@ -18,6 +18,7 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -59,18 +60,37 @@ class DifyWorkflowContractAdapterTest {
                         78L,
                         "Create a fraction lesson",
                         List.of(new DialogTurn("teacher", "Use a visual explanation")),
-                        GenerationMode.HIGH_QUALITY
+                        GenerationMode.HIGH_QUALITY,
+                        new RequirementSummaryData(
+                                "Mathematics",
+                                "Fractions",
+                                "Grade 5",
+                                45,
+                                List.of("Explain fractions"),
+                                List.of("Part-whole relationship"),
+                                List.of("PPT", "LESSON_PLAN"),
+                                "VISUAL",
+                                "QUESTION_AND_ANSWER"
+                        )
                 )
         );
 
         assertThat(input.path("projectInfo").path("projectRef").asText()).isEqualTo("78");
+        assertThat(input.path("projectInfo").path("courseName").asText()).isEqualTo("Mathematics");
+        assertThat(input.path("projectInfo").path("chapterTitle").asText()).isEqualTo("Fractions");
+        assertThat(input.path("projectInfo").path("targetStudents").asText()).isEqualTo("Grade 5");
+        assertThat(input.path("projectInfo").path("lessonDuration").asInt()).isEqualTo(45);
         assertThat(input.path("projectInfo").path("generationMode").asText()).isEqualTo("HIGH_QUALITY");
         assertThat(input.path("rawRequirement").asText()).isEqualTo("Create a fraction lesson");
         assertThat(input.path("dialogHistory").get(0).path("role").asText()).isEqualTo("teacher");
         assertThat(input.path("defaultValues").path("coursewareStyle").path("value").asText())
-                .isEqualTo("CLEAR_VISUAL");
+                .isEqualTo("VISUAL");
         assertThat(input.path("defaultValues").path("coursewareStyle").path("source").asText())
-                .isEqualTo("system-default");
+                .isEqualTo("teacher-structured-input");
+        assertThat(input.path("defaultValues").path("teachingGoals").path("value").get(0).asText())
+                .isEqualTo("Explain fractions");
+        assertThat(input.path("defaultValues").path("outputTypes").path("value").get(1).asText())
+                .isEqualTo("LESSON_PLAN");
     }
 
     @Test
@@ -241,6 +261,68 @@ class DifyWorkflowContractAdapterTest {
     }
 
     @Test
+    void normalizesWf04TextFieldsToTeachingIntentLists() throws Exception {
+        JsonNode intentOutput = objectMapper.readTree("""
+                {
+                  "intentId": "intent-wf04-161",
+                  "teachingIntent": {
+                    "teachingGoals": ["Explain photosynthesis"],
+                    "contentPriorities": ["Evidence before explanation"],
+                    "teachingOrganization": "Use observation, prediction, and group discussion.",
+                    "interactionPlan": "Students compare evidence in groups and report conclusions.",
+                    "outputTypes": ["PPT", "DOCX"]
+                  },
+                  "conflictWarnings": []
+                }
+                """);
+
+        JsonNode intent = adapter.responsePayload(
+                WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT,
+                "teaching-intent",
+                (com.fasterxml.jackson.databind.node.ObjectNode) intentOutput
+        );
+
+        assertThat(intent.path("contentBasis").get(1).asText())
+                .contains("Use observation, prediction, and group discussion.");
+        assertThat(intent.path("interactionIdeas").get(0).asText())
+                .isEqualTo("Students compare evidence in groups and report conclusions.");
+    }
+
+    @Test
+    void normalizesWf04StructuredInteractionPlanToTeachingIntentLists() throws Exception {
+        JsonNode intentOutput = objectMapper.readTree("""
+                {
+                  "intentId": "intent-wf04-164",
+                  "teachingIntent": {
+                    "teachingGoals": ["Explain photosynthesis"],
+                    "contentPriorities": ["Evidence before explanation"],
+                    "teachingOrganization": "Prediction, inquiry, discussion, and feedback.",
+                    "interactionPlan": {
+                      "prediction": "Students predict variables before inquiry",
+                      "observation": "Students observe oxygen-production evidence",
+                      "discussion": "Groups explain matter and energy conversion",
+                      "feedback": "A short quiz checks understanding"
+                    },
+                    "outputTypes": ["PPT", "LESSON_PLAN"]
+                  },
+                  "conflictWarnings": []
+                }
+                """);
+
+        JsonNode intent = adapter.responsePayload(
+                WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT,
+                "teaching-intent",
+                (com.fasterxml.jackson.databind.node.ObjectNode) intentOutput
+        );
+
+        assertThat(intent.path("interactionIdeas")).hasSize(4);
+        assertThat(intent.path("interactionIdeas").get(0).asText())
+                .isEqualTo("prediction: Students predict variables before inquiry");
+        assertThat(intent.path("interactionIdeas").get(3).asText())
+                .isEqualTo("feedback: A short quiz checks understanding");
+    }
+
+    @Test
     void buildsAndMapsWf05GenerationPlanContract() throws Exception {
         JsonNode input = adapter.requestInput(
                 WorkflowCode.GENERATION_PLAN,
@@ -357,6 +439,64 @@ class DifyWorkflowContractAdapterTest {
         assertThat(response.path("fallbackToBackendDrafts").asBoolean()).isFalse();
         assertThat(response.path("pptContent").path("contentJson").path("slides")).hasSize(1);
         assertThat(response.path("docContent").path("artifactType").asText()).isEqualTo("DOCX");
+    }
+
+    @Test
+    void normalizesWf06DocTextFieldsToLists() throws Exception {
+        ObjectNode output = (ObjectNode) objectMapper.readTree("""
+                {
+                  "pptContent": {"artifactType":"PPT","title":"Slides","contentJson":{"slides":[]},"assetSuggestions":[]},
+                  "docContent": {
+                    "artifactType": "DOCX",
+                    "title": "Lesson plan",
+                    "contentJson": {
+                      "sections": [],
+                      "courseInfo": {
+                        "projectName": "Photosynthesis lesson",
+                        "courseName": "Biology",
+                        "chapterTopic": "Photosynthesis",
+                        "targetAudience": "Grade 8",
+                        "lessonDurationMinutes": 45,
+                        "generationMode": "STANDARD"
+                      },
+                      "teachingGoals": "Explain photosynthesis",
+                      "keyPoints": "Energy conversion",
+                      "difficultPoints": "Experimental conditions",
+                      "methods": "Guided inquiry",
+                      "teachingProcess": [{
+                        "stage": "Observation",
+                        "durationMinutes": 15,
+                        "content": "Observe evidence.",
+                        "teacherActivity": "Prompt comparison.",
+                        "studentActivity": "Record findings."
+                      }],
+                      "classroomActivities": "Small-group discussion",
+                      "homework": "Draw a concept map",
+                      "resourceNotes": "Use confirmed evidence"
+                    },
+                    "assetSuggestions": []
+                  },
+                  "interactionContent": {"artifactType":"INTERACTION","title":"Quiz","contentJson":{"questions":[]},"assetSuggestions":[]}
+                }
+                """);
+
+        JsonNode response = adapter.responsePayload(
+                WorkflowCode.CONTENT_DRAFT,
+                "structured-content",
+                output
+        );
+        JsonNode doc = response.path("docContent").path("contentJson");
+
+        for (String field : List.of(
+                "teachingGoals", "keyPoints", "difficultPoints", "methods",
+                "classroomActivities", "homework", "resourceNotes"
+        )) {
+            assertThat(doc.path(field).isArray()).isTrue();
+            assertThat(doc.path(field)).hasSize(1);
+        }
+        assertThat(doc.path("sections")).hasSize(9);
+        assertThat(doc.path("sections").get(0).path("title").asText()).isEqualTo("Course information");
+        assertThat(doc.path("sections").get(8).path("title").asText()).isEqualTo("Teaching resources");
     }
 
     @Test

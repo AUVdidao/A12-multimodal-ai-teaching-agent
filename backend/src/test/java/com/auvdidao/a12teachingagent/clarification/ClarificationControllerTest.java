@@ -4,6 +4,8 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
+import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
+import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
 import com.auvdidao.a12teachingagent.security.A12SecurityProperties;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
@@ -21,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
@@ -63,7 +66,37 @@ class ClarificationControllerTest {
 
     @BeforeEach
     void setUp() {
-        when(projectRepository.existsById(anyLong())).thenReturn(true);
+        Project project = new Project();
+        project.setId(1L);
+        project.setGenerationMode(GenerationMode.STANDARD);
+        when(projectRepository.findById(anyLong())).thenReturn(Optional.of(project));
+    }
+
+    @Test
+    void persistedProjectContextSatisfiesMatchingRequirementFields() throws Exception {
+        Project project = new Project();
+        project.setId(1L);
+        project.setCourseName("Biology");
+        project.setChapterTopic("Photosynthesis");
+        project.setTargetAudience("Grade 8");
+        project.setLessonDurationMinutes(45);
+        project.setGenerationMode(GenerationMode.STANDARD);
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+
+        mockMvc.perform(post("/api/projects/1/clarification/check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "topic": "Photosynthesis",
+                                  "rawRequirementText": "Use classroom examples",
+                                  "outputTypes": []
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.complete", is(false)))
+                .andExpect(jsonPath("$.data.missingFields[*].field", contains(
+                        "teachingGoals", "outputTypes"
+                )));
     }
 
     @Test
@@ -206,6 +239,12 @@ class ClarificationControllerTest {
         verify(aiWorkflowGateway).clarifyRequirement(requestCaptor.capture());
         org.assertj.core.api.Assertions.assertThat(requestCaptor.getValue().requestedMissingFields())
                 .containsExactly("gradeLevel");
+        org.assertj.core.api.Assertions.assertThat(requestCaptor.getValue().projectContext().courseName())
+                .isEqualTo("数学");
+        org.assertj.core.api.Assertions.assertThat(requestCaptor.getValue().projectContext().chapterTopic())
+                .isEqualTo("分数的意义");
+        org.assertj.core.api.Assertions.assertThat(requestCaptor.getValue().projectContext().lessonDurationMinutes())
+                .isEqualTo(45);
     }
 
     @Test
@@ -259,7 +298,7 @@ class ClarificationControllerTest {
 
     @Test
     void missingProjectReturnsNotFound() throws Exception {
-        when(projectRepository.existsById(999999L)).thenReturn(false);
+        when(projectRepository.findById(999999L)).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/projects/999999/clarification/check")
                         .contentType(MediaType.APPLICATION_JSON)

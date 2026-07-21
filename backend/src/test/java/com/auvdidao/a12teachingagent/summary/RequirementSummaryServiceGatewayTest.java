@@ -100,6 +100,13 @@ class RequirementSummaryServiceGatewayTest {
         assertThat(gatewayRequest.getValue().dialogTurns())
                 .containsExactly(new DialogTurn("TEACHER", "请保持循序渐进"));
         assertThat(gatewayRequest.getValue().generationMode()).isEqualTo(GenerationMode.QUALITY);
+        assertThat(gatewayRequest.getValue().projectContext().courseName()).isEqualTo("生物");
+        assertThat(gatewayRequest.getValue().projectContext().chapterTopic()).isEqualTo("光合作用");
+        assertThat(gatewayRequest.getValue().projectContext().targetAudience()).isEqualTo("八年级");
+        assertThat(gatewayRequest.getValue().projectContext().lessonDurationMinutes()).isEqualTo(45);
+        assertThat(gatewayRequest.getValue().projectContext().teachingGoals()).containsExactly("解释光合作用");
+        assertThat(gatewayRequest.getValue().projectContext().keyDifficulties())
+                .containsExactly("反应条件", "能量转化");
 
         ArgumentCaptor<RequirementSummary> savedSummary = ArgumentCaptor.forClass(RequirementSummary.class);
         verify(summaryRepository).save(savedSummary.capture());

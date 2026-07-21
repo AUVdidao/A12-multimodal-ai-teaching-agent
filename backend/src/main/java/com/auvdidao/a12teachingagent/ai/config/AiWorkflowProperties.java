@@ -91,7 +91,7 @@ public class AiWorkflowProperties {
         private String apiKey;
         private String userPrefix = "a12-project-";
         private Duration connectTimeout = Duration.ofSeconds(5);
-        private Duration readTimeout = Duration.ofSeconds(60);
+        private Duration readTimeout = Duration.ofSeconds(600);
         private Workflows workflows = new Workflows();
 
         public String getBaseUrl() {

@@ -1,9 +1,9 @@
 app:
-  description: Generate structured content drafts, not binary PPTX or DOCX files. Pending target-instance import validation.
+  description: Physical app for the WF-06 structured-content operation. Pending target-instance import validation.
   icon: '6'
   icon_background: '#E8F3FF'
   mode: workflow
-  name: A12 WF-06 Structured Content Draft
+  name: A12 APP-04 Structured Content Draft
   use_icon_as_answer_icon: false
 dependencies: []
 kind: app
@@ -74,7 +74,7 @@ workflow:
         - id: wf06-system
           role: system
           text: |-
-            You generate structured teaching content drafts from a confirmed generationPlan. Produce previewable JSON only; do not create, encode, or claim to create PPTX, DOCX, ZIP, image, or other binary files. Use referenceContext only when a source identifier is present. This application always requests PPT, DOCX, and INTERACTION together; return all three when all three targetTypes are present. Keep each draft consistent with the plan.
+            Parse the request envelope and require operation="structured-content" and workflowCode="WF-06". You generate structured teaching content drafts from a confirmed generationPlan. Produce previewable JSON only; do not create, encode, or claim to create PPTX, DOCX, ZIP, image, or other binary files. Use referenceContext only when a source identifier is present. This application always requests PPT, DOCX, and INTERACTION together; return all three when all three targetTypes are present. Keep each draft consistent with the plan. If the operation or workflowCode does not match, return success=false with data=null and an INVALID_OPERATION error.
 
             Return exactly one valid JSON object. Do not use Markdown or code fences. Do not add text before or after the JSON. The root object must contain workflowCode="WF-06", success, data, warnings, errors, confidence, and traceHint. On success, data must contain pptContent, docContent, and interactionContent. Each content object must contain artifactType, title, contentJson, and assetSuggestions.
 

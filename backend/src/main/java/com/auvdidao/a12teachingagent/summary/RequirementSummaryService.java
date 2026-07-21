@@ -84,7 +84,8 @@ public class RequirementSummaryService {
                 projectId,
                 buildRawRequirement(requirement, project),
                 toDialogTurns(messages),
-                generationMode
+                generationMode,
+                toAiProjectContext(requirement, project, resolveStylePreference(messages))
         ));
         RequirementSummaryData aiSummary = requireValidAiSummary(aiResponse);
         boolean hasNarrativeInput = hasText(requirement.getRawRequirementText()) || hasText(requirement.getContent());
@@ -239,6 +240,53 @@ public class RequirementSummaryService {
                 .filter(message -> message.getRole() != null && hasText(message.getContent()))
                 .map(message -> new DialogTurn(message.getRole().name(), message.getContent().trim()))
                 .toList();
+    }
+
+    private static RequirementSummaryData toAiProjectContext(
+            RequirementInput requirement,
+            Project project,
+            String dialogStylePreference
+    ) {
+        return new RequirementSummaryData(
+                firstNonBlank(requirement.getSubject(), project.getCourseName()),
+                firstNonBlank(requirement.getTopic(), project.getChapterTopic()),
+                firstNonBlank(requirement.getGradeLevel(), project.getTargetAudience()),
+                resolveLessonDurationMinutes(requirement.getLessonDuration(), project.getLessonDurationMinutes()),
+                textValues(requirement.getTeachingGoals()),
+                textValues(requirement.getKeyPoints(), requirement.getDifficultPoints()),
+                normalizeOutputTypes(requirement.getOutputTypes()),
+                firstNonBlank(requirement.getStylePreference(), dialogStylePreference),
+                trimToNull(requirement.getInteractionType())
+        );
+    }
+
+    private static Integer resolveLessonDurationMinutes(String lessonDuration, Integer fallback) {
+        String normalized = trimToNull(lessonDuration);
+        if (normalized != null) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d+)").matcher(normalized);
+            if (matcher.find()) {
+                try {
+                    int minutes = Integer.parseInt(matcher.group(1));
+                    if (minutes > 0) {
+                        return minutes;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Use the persisted project duration below.
+                }
+            }
+        }
+        return fallback != null && fallback > 0 ? fallback : null;
+    }
+
+    private static List<String> textValues(String... values) {
+        List<String> normalized = new ArrayList<>();
+        for (String value : values) {
+            String text = trimToNull(value);
+            if (text != null) {
+                normalized.add(text);
+            }
+        }
+        return List.copyOf(normalized);
     }
 
     private static String buildRawRequirement(RequirementInput requirement, Project project) {

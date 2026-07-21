@@ -64,10 +64,12 @@ workflow:
         context: {enabled: false, variable_selector: []}
         desc: Branch by operation to rank supplied knowledge candidates or build a traceable teaching intent.
         model:
-          completion_params: {temperature: 0.15}
+          completion_params:
+            max_tokens: 4096
+            temperature: 0.2
           mode: chat
-          name: gpt-4o-mini
-          provider: langgenius/openai/openai
+          name: GPT-5.6 Sol
+          provider: langgenius/openai_api_compatible/openai_api_compatible
         prompt_template:
         - id: wf04-system
           role: system
