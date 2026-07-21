@@ -37,7 +37,7 @@
             <el-select v-model="selectedProjectId" placeholder="选择教学项目">
               <el-option v-for="entry in entries" :key="entry.id" :label="entry.projectName" :value="entry.id" />
             </el-select>
-            <el-button type="primary" :disabled="!selectedProject" @click="openKnowledge">进入项目检索</el-button>
+            <el-button type="primary" :disabled="!selectedProject" @click="openSelectedKnowledge">进入项目检索</el-button>
           </div>
           <div v-if="selectedProject" class="knowledge-library__selected">
             <strong>{{ selectedProject.projectName }}</strong>
@@ -47,13 +47,25 @@
         </section>
 
         <section class="panel knowledge-library__table">
-          <el-table :data="entries" table-layout="fixed" @row-click="selectProject">
+          <div class="knowledge-library__table-heading">
+            <div>
+              <h3>项目知识索引</h3>
+              <p>从项目所在行进入检索，检索范围仅限该项目的真实知识片段。</p>
+            </div>
+            <span>共 {{ entries.length }} 个项目</span>
+          </div>
+          <el-table :data="entries" table-layout="fixed">
             <el-table-column label="教学项目" min-width="250">
-              <template #default="{ row }"><strong>{{ row.projectName }}</strong><span class="knowledge-library__chapter">{{ row.courseName }} · {{ row.chapterTitle }}</span></template>
+              <template #default="{ row }">
+                <el-tooltip :content="row.projectName" placement="top" :show-after="400">
+                  <strong class="knowledge-library__project-name">{{ row.projectName }}</strong>
+                </el-tooltip>
+                <span class="knowledge-library__chapter">{{ row.courseName }} · {{ row.chapterTitle }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="已索引资料" width="130"><template #default="{ row }">{{ row.indexedMaterialCount }}</template></el-table-column>
             <el-table-column label="知识片段" width="120"><template #default="{ row }"><strong>{{ row.knowledgeChunkCount }}</strong></template></el-table-column>
-            <el-table-column label="检索状态" width="130"><template #default="{ row }"><span :class="['tag-soft', row.knowledgeChunkCount ? 'success' : 'warning']">{{ row.knowledgeChunkCount ? '可进入检索' : '暂无片段' }}</span></template></el-table-column>
+            <el-table-column label="检索状态" width="130"><template #default="{ row }"><span :class="['tag-soft', row.knowledgeChunkCount ? 'success' : 'warning']">{{ row.knowledgeChunkCount ? '可检索' : '待建立索引' }}</span></template></el-table-column>
             <el-table-column label="操作" width="130" fixed="right"><template #default="{ row }"><el-button text type="primary" @click.stop="openKnowledge(row.id)">进入检索</el-button></template></el-table-column>
           </el-table>
         </section>
@@ -63,8 +75,8 @@
 </template>
 
 <script setup lang="ts">
+import { getKnowledgeOverview } from '@/api/knowledge';
 import { listProjects } from '@/api/projects';
-import { getProjectWorkspaceOverview } from '@/api/workspace';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAuthStore } from '@/stores/auth';
 import { computed, ref, watch } from 'vue';
@@ -104,14 +116,14 @@ async function loadLibrary() {
   errorMessage.value = '';
   try {
     const projects = await listProjects();
-    const overviews = await Promise.all(projects.map((project) => getProjectWorkspaceOverview(project.id)));
-    entries.value = overviews.map((overview) => ({
-      id: overview.project.id,
-      projectName: overview.project.projectName,
-      courseName: overview.project.courseName,
-      chapterTitle: overview.project.chapterTitle,
-      indexedMaterialCount: overview.metrics.indexedMaterialCount,
-      knowledgeChunkCount: overview.metrics.knowledgeChunkCount,
+    const overviews = await Promise.all(projects.map((project) => getKnowledgeOverview(project.id)));
+    entries.value = projects.map((project, index) => ({
+      id: project.id,
+      projectName: project.projectName,
+      courseName: project.courseName,
+      chapterTitle: project.chapterTitle,
+      indexedMaterialCount: overviews[index].indexedMaterialCount,
+      knowledgeChunkCount: overviews[index].chunkCount,
     }));
     if (!entries.value.some((entry) => entry.id === selectedProjectId.value)) selectedProjectId.value = entries.value[0]?.id;
   } catch (error) {
@@ -121,12 +133,14 @@ async function loadLibrary() {
   }
 }
 
-function selectProject(entry: KnowledgeLibraryEntry) {
-  selectedProjectId.value = entry.id;
+function openSelectedKnowledge() {
+  if (selectedProject.value) openKnowledge(selectedProject.value.id);
 }
 
-function openKnowledge(projectId = selectedProjectId.value) {
-  if (projectId) router.push({ name: 'project-knowledge', params: { projectId } });
+function openKnowledge(projectId: number) {
+  if (Number.isSafeInteger(projectId) && projectId > 0) {
+    router.push({ name: 'project-knowledge', params: { projectId } });
+  }
 }
 
 function resolveError(error: unknown, fallback: string) {
@@ -147,6 +161,10 @@ function resolveError(error: unknown, fallback: string) {
 .knowledge-library__controls h3 { margin: 5px 0 0; }
 .knowledge-library__selected { display: grid; gap: 4px; margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--ui-border); color: var(--ui-muted); font-size: 13px; }
 .knowledge-library__selected strong { color: var(--ui-text); }
+.knowledge-library__table-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.knowledge-library__table-heading h3, .knowledge-library__table-heading p { margin: 0; }
+.knowledge-library__table-heading p, .knowledge-library__table-heading > span { margin-top: 5px; color: var(--ui-muted); font-size: 12px; }
+.knowledge-library__project-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .knowledge-library__chapter { display: block; margin-top: 4px; color: var(--ui-muted); font-size: 12px; }
 @media (max-width: 760px) { .knowledge-library__metrics { grid-template-columns: 1fr; } .knowledge-library__controls { grid-template-columns: 1fr; align-items: stretch; } .knowledge-library__controls .el-button { width: 100%; } .knowledge-library__table { overflow-x: auto; } .knowledge-library__table :deep(.el-table) { min-width: 720px; } }
 </style>
