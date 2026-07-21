@@ -145,7 +145,7 @@ const routes: RouteRecordRaw[] = [
     path: '/assistant',
     name: 'ai-assistant',
     component: () => import('@/views/AiAssistantView.vue'),
-    meta: { title: 'AI 助手', roles: ['TEACHER'] },
+    meta: { title: 'AI 教学工作副驾驶', roles: ['TEACHER'] },
   },
   {
     path: '/projects',

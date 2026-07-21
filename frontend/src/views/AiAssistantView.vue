@@ -1,139 +1,135 @@
 <template>
   <section class="page assistant-page">
-    <PageHeader
-      eyebrow="AI 工作流助手"
-      title="把项目推进到下一步"
-      description="选择一个真实教学项目，调用当前 AI 工作流检查需求或生成方案建议。这里不是通用聊天，结果只来自项目接口。"
+    <header class="assistant-page__header">
+      <div>
+        <span>AI 教学工作副驾驶</span>
+        <h1>围绕当前项目推进教学设计</h1>
+        <p>AI 会读取项目、需求、资料、知识库、生成进度与学生问题，并把可执行的下一步放回真实工作区。</p>
+      </div>
+      <el-tooltip content="刷新项目上下文与 AI 状态" placement="bottom">
+        <el-button circle :icon="Refresh" :loading="loading" aria-label="刷新项目上下文与 AI 状态" @click="loadPage" />
+      </el-tooltip>
+    </header>
+
+    <StatePanel
+      v-if="projectsError && projects.length === 0"
+      type="error"
+      title="项目读取失败"
+      :description="projectsError"
     >
-      <template #actions>
-        <el-tooltip content="刷新项目与 AI provider 状态" placement="bottom">
-          <el-button circle :icon="Refresh" :loading="projectsLoading || statusLoading" aria-label="刷新项目与 AI 状态" @click="loadPage" />
-        </el-tooltip>
+      <template #action>
+        <el-button type="primary" :icon="Refresh" @click="loadPage">重新加载</el-button>
       </template>
-    </PageHeader>
-
-    <StatePanel v-if="projectsLoading && projects.length === 0" type="loading" title="正在读取 AI 工作流入口" description="正在读取你的教学项目和当前 provider 状态。" />
-    <StatePanel v-else-if="projectsError && projects.length === 0" type="error" title="项目读取失败" :description="projectsError">
-      <template #action><el-button type="primary" :icon="Refresh" @click="loadPage">重新加载</el-button></template>
-    </StatePanel>
-    <StatePanel v-else-if="projects.length === 0" type="empty" title="还没有可使用的教学项目" description="创建真实教学项目后，AI 助手才能基于项目字段调用澄清和生成方案工作流。">
-      <template #action><RouterLink class="state-link" :to="{ name: 'project-create' }">创建教学项目</RouterLink></template>
     </StatePanel>
 
-    <div v-else class="assistant-layout">
-      <section class="surface-panel assistant-control-panel">
-        <header class="panel-heading">
-          <div>
-            <span class="panel-heading__eyebrow">工作流入口</span>
-            <h2>选择项目并发起操作</h2>
-          </div>
-          <el-icon><MagicStick /></el-icon>
-        </header>
+    <div v-else class="assistant-shell">
+      <AssistantProjectContext
+        :empty="empty"
+        :loading="loading"
+        :projects="projects"
+        :selected-project-id="selectedProjectId"
+        :project-name="selectedProject?.projectName"
+        :course-name="selectedProject?.courseName"
+        :chapter-title="selectedProject?.chapterTitle"
+        :target-students="selectedProject?.targetStudents"
+        :lesson-duration="lessonDurationLabel"
+        :stage-label="stageLabel"
+        @create-project="goToCreateProject"
+        @view-projects="goToProjects"
+        @select-project="selectProject"
+        @open-switch="goToProjects"
+        @overview="goToProjectRoute('project-overview')"
+      />
 
-        <AiProviderStatusStrip
-          :status="gatewayStatus"
-          :loading="statusLoading"
-          :error="statusError"
-          @refresh="loadGatewayStatus"
+      <main class="assistant-workspace">
+        <AssistantConversation
+          v-model="composerText"
+          :messages="messages"
+          :quick-prompts="quickPrompts"
+          :loading="loading"
+          :empty="empty"
+          :sending="sending"
+          :teacher-initial="teacherInitial"
+          @send="sendComposerMessage"
+          @quick-prompt="sendQuickPrompt"
+          @action="handleAction"
+          @new-dialogue="startNewDialogue"
+          @history="openHistory"
+          @create-project="goToCreateProject"
+          @view-projects="goToProjects"
         />
 
-        <el-form class="assistant-form" label-position="top">
-          <el-form-item label="教学项目">
-            <el-select v-model="selectedProjectId" class="full-width" filterable :loading="projectsLoading" placeholder="选择一个真实教学项目">
-              <el-option v-for="project in projects" :key="project.id" :label="projectLabel(project)" :value="project.id" />
-            </el-select>
-          </el-form-item>
-
-          <div v-if="selectedProject" class="project-context">
-            <div><span>课程</span><strong>{{ selectedProject.courseName }}</strong></div>
-            <div><span>章节</span><strong>{{ selectedProject.chapterTitle }}</strong></div>
-            <div><span>模式</span><strong>{{ modeLabel(selectedProject.modelMode) }}</strong></div>
-          </div>
-
-          <el-form-item label="当前需求描述" required>
-            <el-input v-model="rawRequirement" type="textarea" :rows="6" maxlength="5000" show-word-limit resize="vertical" placeholder="补充课程、章节、学生对象、课时和希望生成的产物。" />
-          </el-form-item>
-
-          <el-form-item label="希望生成的产物">
-            <el-checkbox-group v-model="outputTypes" class="output-types">
-              <el-checkbox value="PPT">课件 PPT</el-checkbox>
-              <el-checkbox value="DOCX">Word 教案</el-checkbox>
-              <el-checkbox value="INTERACTION">互动内容</el-checkbox>
-            </el-checkbox-group>
-          </el-form-item>
-
-          <el-alert v-if="actionError" class="assistant-alert" type="error" :title="actionError" show-icon :closable="false" />
-          <div class="assistant-actions">
-            <el-button type="primary" :icon="Search" :loading="clarifying" :disabled="!canRunWorkflow" @click="runClarificationCheck">检查需求澄清</el-button>
-            <el-button type="success" :icon="DocumentChecked" :loading="planning" :disabled="!canRunWorkflow" @click="runPlanSuggestion">生成方案建议</el-button>
-          </div>
-          <p v-if="workflowDisabledReason" class="workflow-hint">{{ workflowDisabledReason }}</p>
-        </el-form>
-      </section>
-
-      <section class="assistant-results">
-        <StatePanel v-if="!clarificationResult && !planResult" type="info" title="等待一次真实工作流操作" description="先检查需求澄清，或基于当前项目字段生成方案建议。返回结果后可以进入项目的对应流程继续处理。" />
-
-        <section v-if="clarificationResult" class="surface-panel result-panel">
-          <header class="result-heading">
-            <div><span>需求澄清结果 · {{ clarificationResult.workflow }}</span><h2>下一步需要确认什么</h2></div>
-            <el-tag :type="clarificationResult.missingFields.length ? 'warning' : 'success'" effect="light">
-              {{ clarificationResult.missingFields.length ? `缺少 ${clarificationResult.missingFields.length} 项` : '信息已足够' }}
-            </el-tag>
-          </header>
-          <p class="result-next-action">{{ clarificationResult.nextAction }}</p>
-          <div v-if="clarificationResult.questions.length" class="result-block">
-            <h3>需要回答的问题</h3>
-            <ol class="result-list"><li v-for="question in clarificationResult.questions" :key="question">{{ question }}</li></ol>
-          </div>
-          <div v-if="suggestedFields.length" class="result-block">
-            <h3>工作流返回的建议字段</h3>
-            <dl class="suggestion-list"><div v-for="field in suggestedFields" :key="field[0]"><dt>{{ field[0] }}</dt><dd>{{ field[1] }}</dd></div></dl>
-          </div>
-          <div class="result-actions"><el-button type="primary" plain :icon="ArrowRight" @click="goToRequirements">进入项目需求页</el-button></div>
-        </section>
-
-        <section v-if="planResult" class="surface-panel result-panel">
-          <header class="result-heading">
-            <div><span>生成方案建议 · {{ planResult.workflow }}</span><h2>AI 返回的结构化方案</h2></div>
-            <el-tag type="success" effect="light">{{ planResult.estimatedDuration || '已返回' }}</el-tag>
-          </header>
-          <p class="result-next-action">{{ planResult.nextAction }}</p>
-          <div class="plan-columns">
-            <section class="plan-block"><h3>PPT 大纲</h3><StatePanel v-if="planResult.pptOutline.length === 0" type="empty" title="暂无 PPT 大纲" description="工作流没有返回 PPT 段落。" /><ol v-else class="plan-list"><li v-for="section in planResult.pptOutline" :key="section.title"><strong>{{ section.title }}</strong><span v-for="point in section.points" :key="point">{{ point }}</span><small v-if="section.materialReference">依据：{{ section.materialReference }}</small></li></ol></section>
-            <section class="plan-block"><h3>Word 教案大纲</h3><StatePanel v-if="planResult.docOutline.length === 0" type="empty" title="暂无教案大纲" description="工作流没有返回教案段落。" /><ol v-else class="plan-list"><li v-for="section in planResult.docOutline" :key="section.title"><strong>{{ section.title }}</strong><span v-for="point in section.points" :key="point">{{ point }}</span><small v-if="section.materialReference">依据：{{ section.materialReference }}</small></li></ol></section>
-          </div>
-          <div v-if="planResult.interactionPlan.length" class="result-block"><h3>互动安排</h3><ul class="result-list"><li v-for="item in planResult.interactionPlan" :key="item">{{ item }}</li></ul></div>
-          <div class="result-actions"><el-button type="primary" plain :icon="ArrowRight" @click="goToGenerationPlan">打开项目生成流程</el-button></div>
-        </section>
-      </section>
+        <AssistantSidePanel
+          :progress-items="progressItems"
+          :sources="sourceStatuses"
+          :recent-work="recentWork"
+          :loading="loading"
+          :syncing="contextLoading"
+          :project-synced="projectSynced"
+          :student-mode="activeScenario === 'student-questions'"
+          :service-state="serviceState"
+          :service-label="providerPresentation.label"
+          @navigate="router.push"
+          @show-service-detail="showServiceDetail"
+        />
+      </main>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { runClarification, runGenerationPlan, type ClarificationResponse, type GenerationPlanResponse, type GenerationMode } from '@/api/aiAssistant';
-import { listProjects, type TeachingProject } from '@/api/projects';
-import AiProviderStatusStrip from '@/components/ai/AiProviderStatusStrip.vue';
-import PageHeader from '@/components/PageHeader.vue';
+import { runClarification, runGenerationPlan, type GenerationMode } from '@/api/aiAssistant';
+import { listProjectDialogues, saveDialogueMessage, type DialogueMessage, type DialogueSender } from '@/api/dialogues';
+import { getGenerationWorkspace, type GenerationWorkspace } from '@/api/generation';
+import { getKnowledgeOverview, type KnowledgeOverview } from '@/api/knowledge';
+import { listMaterials, type MaterialRecord } from '@/api/materials';
+import { listProjects, listRecentProjects, type RecentProject, type TeachingProject } from '@/api/projects';
+import { listQuestions, type Question } from '@/api/questions';
+import { getLatestTeachingRequirement, type TeachingRequirement } from '@/api/requirements';
+import AssistantConversation from '@/components/assistant/AssistantConversation.vue';
+import AssistantProjectContext from '@/components/assistant/AssistantProjectContext.vue';
+import AssistantSidePanel from '@/components/assistant/AssistantSidePanel.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
-import { DocumentChecked, MagicStick, Refresh, Search, ArrowRight } from '@element-plus/icons-vue';
-import { computed, onMounted, ref, watch } from 'vue';
-import { RouterLink, useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import type {
+  AssistantMessage,
+  AssistantProgressItem,
+  AssistantRecentWorkItem,
+  AssistantResponseSection,
+  AssistantSourceStatus,
+  AssistantWorkspaceAction,
+} from '@/types/assistant';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { Refresh } from '@element-plus/icons-vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter, type RouteLocationRaw } from 'vue-router';
+
+const ASSISTANT_PROJECT_STORAGE_KEY = 'a12-assistant-project-id';
 
 const router = useRouter();
+const authStore = useAuthStore();
 const projects = ref<TeachingProject[]>([]);
+const recentProjects = ref<RecentProject[]>([]);
 const selectedProjectId = ref<number>();
-const rawRequirement = ref('');
-const outputTypes = ref<string[]>(['PPT', 'DOCX', 'INTERACTION']);
-const clarificationResult = ref<ClarificationResponse>();
-const planResult = ref<GenerationPlanResponse>();
+const requirement = ref<TeachingRequirement | null>(null);
+const materials = ref<MaterialRecord[]>([]);
+const knowledgeOverview = ref<KnowledgeOverview | null>(null);
+const generationWorkspace = ref<GenerationWorkspace | null>(null);
+const questions = ref<Question[]>([]);
+const dialogues = ref<DialogueMessage[]>([]);
+const sourceState = ref<Record<string, AssistantSourceStatus['state']>>({});
 const projectsLoading = ref(false);
-const clarifying = ref(false);
-const planning = ref(false);
+const contextLoading = ref(false);
 const projectsError = ref('');
-const actionError = ref('');
+const composerText = ref('');
+const messages = ref<AssistantMessage[]>([]);
+const sending = ref(false);
+const activeScenario = ref('overview');
+const sessionId = ref(createSessionId());
+let contextRequestId = 0;
+const pendingDialogueSaves = new Set<Promise<void>>();
+
 const {
   status: gatewayStatus,
   loading: statusLoading,
@@ -142,118 +138,942 @@ const {
   refresh: loadGatewayStatus,
 } = useAiGatewayStatus();
 
+const quickPrompts = [
+  { id: 'progress', label: '检查项目进度' },
+  { id: 'requirement', label: '完善教学需求' },
+  { id: 'intent', label: '检查教学意图' },
+  { id: 'generation', label: '生成教学方案' },
+  { id: 'student-questions', label: '汇总学生问题' },
+];
+
 const selectedProject = computed(() => projects.value.find((project) => project.id === selectedProjectId.value));
-const suggestedFields = computed(() => Object.entries(clarificationResult.value?.suggestedFields || {}));
-const providerIsUnavailable = computed(() => providerPresentation.value.unavailable);
-const canRunWorkflow = computed(() => Boolean(selectedProject.value && rawRequirement.value.trim() && outputTypes.value.length && !providerIsUnavailable.value && !clarifying.value && !planning.value));
-const workflowDisabledReason = computed(() => {
-  if (providerIsUnavailable.value) return 'Dify 尚未达到可调用条件，且 Mock 回退未启用，工作流不可执行。';
-  if (!selectedProject.value) return '请选择一个真实教学项目。';
-  if (!rawRequirement.value.trim()) return '请先补充当前需求描述。';
-  if (!outputTypes.value.length) return '至少选择一种希望生成的产物。';
-  return '';
+const loading = computed(() => projectsLoading.value || contextLoading.value || statusLoading.value);
+const empty = computed(() => !loading.value && projects.value.length === 0);
+const lessonDurationLabel = computed(() => selectedProject.value?.lessonDuration ? `${selectedProject.value.lessonDuration} 分钟` : undefined);
+const stageLabel = computed(() => statusLabel(selectedProject.value?.status));
+const projectSynced = computed(() => Boolean(selectedProject.value && !contextLoading.value && Object.values(sourceState.value).every((state) => state !== 'error')));
+const providerUnavailable = computed(() => providerPresentation.value.unavailable);
+const serviceState = computed<'ok' | 'error' | 'unknown'>(() => {
+  if (providerPresentation.value.tone === 'danger' || statusError.value) return 'error';
+  if (!gatewayStatus.value) return 'unknown';
+  return 'ok';
 });
 
-watch(selectedProjectId, (projectId) => {
-  const project = projects.value.find((item) => item.id === projectId);
-  clarificationResult.value = undefined;
-  planResult.value = undefined;
-  actionError.value = '';
-  if (!project) {
-    rawRequirement.value = '';
-    return;
+const currentArtifacts = computed(() => generationWorkspace.value?.artifacts ?? []);
+const currentVersion = computed(() => Math.max(0, ...currentArtifacts.value.map((artifact) => artifact.versionNumber || 0)));
+const nextVersion = computed(() => currentVersion.value + 1);
+const openQuestions = computed(() => questions.value.filter((question) => question.status === 'OPEN'));
+const answeredQuestions = computed(() => questions.value.filter((question) => question.status === 'ANSWERED'));
+const teacherInitial = computed(() => userInitial(authStore.user?.displayName || authStore.user?.username));
+
+const progressItems = computed<AssistantProgressItem[]>(() => [
+  {
+    id: 'requirement',
+    label: '教学需求',
+    value: requirement.value ? '已填写' : '待完善',
+    tone: requirement.value ? 'green' : 'orange',
+    route: projectRoute('project-requirements'),
+  },
+  {
+    id: 'material',
+    label: '参考资料',
+    value: `${materials.value.length} 份`,
+    tone: materials.value.length ? 'green' : 'gray',
+    route: projectRoute('project-materials'),
+  },
+  {
+    id: 'knowledge',
+    label: '知识切片',
+    value: `${knowledgeOverview.value?.chunkCount ?? 0} 条`,
+    tone: (knowledgeOverview.value?.chunkCount ?? 0) > 0 ? 'purple' : 'gray',
+    route: projectRoute('project-knowledge'),
+  },
+  {
+    id: 'intent',
+    label: '教学意图',
+    value: generationWorkspace.value?.teachingIntent?.status === 'CONFIRMED' ? '已确认' : generationWorkspace.value?.teachingIntent ? '待确认' : '未生成',
+    tone: generationWorkspace.value?.teachingIntent?.status === 'CONFIRMED' ? 'green' : 'orange',
+    route: projectRoute('project-intent'),
+  },
+  {
+    id: 'artifact',
+    label: '成果版本',
+    value: currentVersion.value ? `V${currentVersion.value}` : '未生成',
+    tone: currentVersion.value ? 'purple' : 'gray',
+    route: projectRoute(currentVersion.value ? 'project-preview' : 'project-plan'),
+  },
+  {
+    id: 'question',
+    label: '学生问题',
+    value: openQuestions.value.length ? `${openQuestions.value.length} 个待答` : `${answeredQuestions.value.length} 个已答`,
+    tone: openQuestions.value.length ? 'orange' : 'green',
+    route: { name: 'teacher-questions' },
+  },
+]);
+
+const sourceStatuses = computed<AssistantSourceStatus[]>(() => {
+  if (!selectedProject.value) {
+    return [
+      { id: 'project', label: '项目基础信息', state: 'empty', detail: '等待项目' },
+      { id: 'requirement', label: '教学需求', state: 'empty', detail: '未读取' },
+      { id: 'materials', label: '参考资料', state: 'empty', detail: '未读取' },
+      { id: 'knowledge', label: '知识库', state: 'empty', detail: '未读取' },
+    ];
   }
-  rawRequirement.value = project.description?.trim() || `${project.courseName}，章节主题：${project.chapterTitle}，面向${project.targetStudents || '目标学生'}。`;
-  outputTypes.value = ['PPT', 'DOCX', 'INTERACTION'];
+
+  return [
+    { id: 'project', label: '项目基础信息', state: 'loaded', detail: selectedProject.value.courseName },
+    { id: 'requirement', label: '教学需求', state: sourceState.value.requirement || 'loading', detail: requirement.value ? '已读取' : '暂无' },
+    { id: 'materials', label: '参考资料', state: sourceState.value.materials || 'loading', detail: `${materials.value.length} 份` },
+    { id: 'knowledge', label: '知识库', state: sourceState.value.knowledge || 'loading', detail: `${knowledgeOverview.value?.chunkCount ?? 0} 条` },
+    { id: 'generation', label: '生成工作区', state: sourceState.value.generation || 'loading', detail: currentVersion.value ? `V${currentVersion.value}` : '待生成' },
+    { id: 'questions', label: '学生问题', state: sourceState.value.questions || 'loading', detail: `${openQuestions.value.length} 个待答` },
+  ];
 });
+
+const recentWork = computed<AssistantRecentWorkItem[]>(() => {
+  const items: AssistantRecentWorkItem[] = [];
+  const lastDialogue = [...dialogues.value].sort(sortByCreatedAtDesc)[0];
+  if (lastDialogue) {
+    items.push({
+      id: `dialogue-${lastDialogue.id}`,
+      title: truncate(lastDialogue.content, 18),
+      time: formatTime(lastDialogue.createdAt),
+      route: projectRoute('project-requirements'),
+      icon: 'target',
+    });
+  }
+  if (materials.value[0]) {
+    items.push({
+      id: `material-${materials.value[0].id}`,
+      title: truncate(materials.value[0].originalFilename, 18),
+      time: formatTime(materials.value[0].updatedAt || materials.value[0].createdAt),
+      route: projectRoute('project-materials'),
+      icon: 'document',
+    });
+  }
+  if (currentVersion.value) {
+    items.push({
+      id: `version-${currentVersion.value}`,
+      title: `成果版本 V${currentVersion.value}`,
+      time: generationWorkspace.value?.latestPlan ? formatTime(generationWorkspace.value.latestPlan.updatedAt) : '刚刚',
+      route: projectRoute('project-preview'),
+      icon: 'layers',
+    });
+  }
+  if (openQuestions.value.length) {
+    items.push({
+      id: 'open-questions',
+      title: `${openQuestions.value.length} 个学生问题待处理`,
+      time: formatTime(openQuestions.value[0].updatedAt),
+      route: { name: 'teacher-questions' },
+      icon: 'question-help',
+    });
+  }
+  for (const item of recentProjects.value) {
+    if (items.length >= 4) break;
+    if (item.project.id === selectedProjectId.value) continue;
+    items.push({
+      id: `recent-${item.project.id}`,
+      title: truncate(item.project.projectName, 18),
+      time: formatTime(item.lastVisitedAt),
+      route: { name: 'project-overview', params: { projectId: item.project.id } },
+      icon: 'document',
+    });
+  }
+  return items.slice(0, 4);
+});
+
+onMounted(loadPage);
 
 async function loadPage() {
+  await waitForPendingDialogueSaves();
   projectsLoading.value = true;
   projectsError.value = '';
-  const [projectResult] = await Promise.allSettled([listProjects(), loadGatewayStatus()]);
+  const [projectResult, recentResult] = await Promise.allSettled([
+    listProjects(),
+    listRecentProjects(),
+    loadGatewayStatus(),
+  ]);
+
   if (projectResult.status === 'fulfilled') {
     projects.value = projectResult.value;
-    if (!projects.value.some((project) => project.id === selectedProjectId.value)) selectedProjectId.value = projects.value[0]?.id;
+    const storedId = Number(localStorage.getItem(ASSISTANT_PROJECT_STORAGE_KEY));
+    const nextProjectId = projects.value.some((project) => project.id === storedId) ? storedId : projects.value[0]?.id;
+    selectedProjectId.value = nextProjectId;
   } else {
     projectsError.value = resolveError(projectResult.reason, '暂时无法读取教学项目，请稍后重试。');
   }
-  projectsLoading.value = false;
-}
 
-async function runClarificationCheck() {
-  if (!selectedProject.value || !canRunWorkflow.value) return;
-  clarifying.value = true;
-  actionError.value = '';
-  try {
-    clarificationResult.value = await runClarification({
-      projectId: selectedProject.value.id,
-      rawRequirement: rawRequirement.value.trim(),
-      knownFields: knownFieldsForProject(selectedProject.value),
-      generationMode: generationMode(selectedProject.value.modelMode),
-    });
-  } catch (error) {
-    actionError.value = resolveError(error, '需求澄清工作流执行失败，请稍后重试。');
-  } finally {
-    await loadGatewayStatus();
-    clarifying.value = false;
+  if (recentResult.status === 'fulfilled') recentProjects.value = recentResult.value;
+  projectsLoading.value = false;
+
+  if (selectedProjectId.value) {
+    await loadProjectContext(selectedProjectId.value);
+  } else {
+    resetContext();
+    messages.value = [];
   }
 }
 
-async function runPlanSuggestion() {
-  if (!selectedProject.value || !canRunWorkflow.value) return;
-  planning.value = true;
-  actionError.value = '';
+async function selectProject(projectId: number) {
+  if (!projectId) return;
+  await waitForPendingDialogueSaves();
+  selectedProjectId.value = projectId;
+  localStorage.setItem(ASSISTANT_PROJECT_STORAGE_KEY, String(projectId));
+  await loadProjectContext(projectId);
+}
+
+async function loadProjectContext(projectId: number) {
+  const requestId = ++contextRequestId;
+  contextLoading.value = true;
+  activeScenario.value = 'overview';
+  resetContext();
+
+  const [requirementResult, materialResult, knowledgeResult, generationResult, questionResult, dialogueResult] = await Promise.allSettled([
+    getLatestTeachingRequirement(projectId),
+    listMaterials(projectId),
+    getKnowledgeOverview(projectId),
+    getGenerationWorkspace(projectId),
+    listQuestions(),
+    listProjectDialogues(projectId),
+  ]);
+  if (requestId !== contextRequestId) return;
+
+  if (requirementResult.status === 'fulfilled') {
+    requirement.value = requirementResult.value;
+    sourceState.value.requirement = requirementResult.value ? 'loaded' : 'empty';
+  } else {
+    sourceState.value.requirement = 'error';
+  }
+
+  if (materialResult.status === 'fulfilled') {
+    materials.value = materialResult.value;
+    sourceState.value.materials = materialResult.value.length ? 'loaded' : 'empty';
+  } else {
+    sourceState.value.materials = 'error';
+  }
+
+  if (knowledgeResult.status === 'fulfilled') {
+    knowledgeOverview.value = knowledgeResult.value;
+    sourceState.value.knowledge = knowledgeResult.value.chunkCount ? 'loaded' : 'empty';
+  } else {
+    sourceState.value.knowledge = 'error';
+  }
+
+  if (generationResult.status === 'fulfilled') {
+    generationWorkspace.value = generationResult.value;
+    sourceState.value.generation = generationResult.value.latestPlan || generationResult.value.artifacts.length ? 'loaded' : 'empty';
+  } else {
+    sourceState.value.generation = 'error';
+  }
+
+  if (questionResult.status === 'fulfilled') {
+    questions.value = questionResult.value.filter((question) => question.projectId === projectId);
+    sourceState.value.questions = questions.value.length ? 'loaded' : 'empty';
+  } else {
+    sourceState.value.questions = 'error';
+  }
+
+  if (dialogueResult.status === 'fulfilled') {
+    dialogues.value = dialogueResult.value;
+    sourceState.value.dialogues = dialogueResult.value.length ? 'loaded' : 'empty';
+  } else {
+    sourceState.value.dialogues = 'error';
+  }
+
+  restoreMessagesFromDialogues();
+  contextLoading.value = false;
+}
+
+function resetContext() {
+  requirement.value = null;
+  materials.value = [];
+  knowledgeOverview.value = null;
+  generationWorkspace.value = null;
+  questions.value = [];
+  dialogues.value = [];
+  sourceState.value = {};
+}
+
+function restoreMessagesFromDialogues() {
+  const latestSessionId = latestDialogueSessionId(dialogues.value);
+  if (!latestSessionId) {
+    messages.value = [buildWelcomeMessage()];
+    return;
+  }
+  sessionId.value = latestSessionId;
+  const restored = dialogues.value
+    .filter((dialogue) => dialogue.sessionId === latestSessionId)
+    .sort(sortDialoguesAsc)
+    .map(dialogueToMessage);
+  messages.value = restored.length ? restored : [buildWelcomeMessage()];
+}
+
+function sendComposerMessage() {
+  const content = composerText.value.trim();
+  if (!content || !selectedProject.value || sending.value) return;
+  composerText.value = '';
+  void handleTeacherIntent(inferIntent(content), content);
+}
+
+function sendQuickPrompt(promptId: string) {
+  const prompt = quickPrompts.find((item) => item.id === promptId);
+  if (!prompt || !selectedProject.value || sending.value) return;
+  void handleTeacherIntent(promptId, prompt.label);
+}
+
+async function handleTeacherIntent(intent: string, content: string) {
+  addTeacherMessage(content);
+  sending.value = true;
+  activeScenario.value = intent;
   try {
-    planResult.value = await runGenerationPlan({
+    if (intent === 'progress') addAssistantMessage(buildProgressMessage());
+    else if (intent === 'requirement') await runRequirementWorkflow(content);
+    else if (intent === 'intent') addAssistantMessage(buildIntentMessage());
+    else if (intent === 'generation') await runGenerationWorkflow(content);
+    else if (intent === 'student-questions') addAssistantMessage(buildQuestionMessage());
+    else addAssistantMessage(buildUnsupportedMessage());
+  } finally {
+    sending.value = false;
+  }
+}
+
+function handleAction(action: AssistantWorkspaceAction) {
+  if (action.disabled) return;
+  if (action.actionType === 'NAVIGATE' && action.route) {
+    void router.push(action.route);
+    return;
+  }
+  if (action.actionType === 'START_WORKFLOW') {
+    const prompt = action.id === 'start-generation' ? '生成教学方案' : '完善教学需求';
+    void handleTeacherIntent(action.id === 'start-generation' ? 'generation' : 'requirement', prompt);
+    return;
+  }
+  if (action.actionType === 'RETRY') {
+    void loadPage();
+    return;
+  }
+  if (action.actionType === 'RETRY_SAVE' && action.messageId) {
+    retryPersistMessage(action.messageId);
+  }
+}
+
+function startNewDialogue() {
+  sessionId.value = createSessionId();
+  messages.value = selectedProject.value ? [buildWelcomeMessage()] : [];
+}
+
+async function openHistory() {
+  await waitForPendingDialogueSaves();
+  goToProjectRoute('project-requirements');
+}
+
+function showServiceDetail() {
+  const detail = [
+    providerPresentation.value.summary,
+    providerPresentation.value.diagnostic,
+    statusError.value,
+  ].filter(Boolean).join('\n');
+  void ElMessageBox.alert(detail || '当前没有更多诊断信息。', providerPresentation.value.label, { confirmButtonText: '知道了' });
+}
+
+async function runRequirementWorkflow(teacherInput: string) {
+  if (!selectedProject.value) return;
+  if (providerUnavailable.value) {
+    addAssistantMessage(buildProviderUnavailableMessage('需求澄清工作流暂时不可用。'));
+    return;
+  }
+
+  try {
+    const result = await runClarification({
+      projectId: selectedProject.value.id,
+      rawRequirement: rawRequirementText(teacherInput),
+      knownFields: knownFieldsForProject(selectedProject.value),
+      generationMode: generationMode(selectedProject.value.modelMode),
+    });
+
+    addAssistantMessage({
+      id: createMessageId(),
+      role: 'assistant',
+      content: result.missingFields.length
+        ? `我检查了当前项目需求，还有 ${result.missingFields.length} 项信息建议补齐。`
+        : '我检查了当前项目需求，现有信息已经足够进入下一步。',
+      createdAt: new Date().toISOString(),
+      status: 'success',
+      evidence: buildEvidence(),
+      sections: [
+        {
+          id: 'missing',
+          title: result.missingFields.length ? '需要补齐的信息' : '需求状态',
+          tone: result.missingFields.length ? 'orange' : 'green',
+          items: result.missingFields.length
+            ? result.missingFields.map((field) => ({ id: field, title: field, description: '建议回到教学需求页补充确认。', status: 'warning' }))
+            : [{ id: 'ready', title: '信息已足够', description: result.nextAction, status: 'done' }],
+        },
+        {
+          id: 'questions',
+          title: 'AI 建议追问',
+          content: result.questions.length ? result.questions.map((question, index) => `${index + 1}. ${question}`).join('\n') : '暂无额外追问。',
+        },
+      ],
+      actions: [
+        routeAction('open-requirement', '进入需求页补充', projectRoute('project-requirements'), 'primary'),
+        workflowAction('start-generation', '继续生成教学方案', 'success'),
+      ],
+    });
+  } catch (error) {
+    addAssistantMessage(buildErrorMessage(resolveError(error, '需求澄清工作流执行失败，请稍后重试。'), 'requirement'));
+  } finally {
+    await loadGatewayStatus();
+  }
+}
+
+async function runGenerationWorkflow(teacherInput: string) {
+  if (!selectedProject.value) return;
+  if (providerUnavailable.value) {
+    addAssistantMessage(buildProviderUnavailableMessage('生成方案工作流暂时不可用。'));
+    return;
+  }
+
+  try {
+    const result = await runGenerationPlan({
       projectId: selectedProject.value.id,
       courseName: selectedProject.value.courseName,
       chapterTopic: selectedProject.value.chapterTitle,
       targetAudience: selectedProject.value.targetStudents,
-      outputTypes: outputTypes.value,
+      outputTypes: requirement.value?.outputTypes?.length ? requirement.value.outputTypes : ['PPT', 'DOCX', 'INTERACTION'],
       generationMode: generationMode(selectedProject.value.modelMode),
     });
+
+    addAssistantMessage({
+      id: createMessageId(),
+      role: 'assistant',
+      content: teacherInput && !isDefaultGenerationPrompt(teacherInput)
+        ? '我已调用生成方案工作流。当前接口只接收项目、课程、章节、授课对象和输出类型，因此本轮自由编辑要求不会直接写入生成请求；请进入生成流程继续细化。'
+        : '我已基于当前项目数据调用生成方案工作流，你可以进入生成流程继续编辑和确认。',
+      createdAt: new Date().toISOString(),
+      status: 'success',
+      evidence: buildEvidence(),
+      versionNotice: `本次方案建议来自当前项目数据。真正生成成果版本需在内容生成页继续确认，不会在副驾驶内覆盖当前 V${currentVersion.value || 0}。`,
+      sections: [
+        ...(teacherInput && !isDefaultGenerationPrompt(teacherInput)
+          ? [outlineSection('instruction-boundary', '本轮输入处理', [`已收到：${teacherInput}`, '生成方案接口暂不支持自由编辑指令参数，未篡改课程名或章节主题来伪装传递。'])] : []),
+        outlineSection('ppt', 'PPT 大纲', result.pptOutline.map((section) => `${section.title}：${section.points.join('、')}`)),
+        outlineSection('doc', 'Word 教案大纲', result.docOutline.map((section) => `${section.title}：${section.points.join('、')}`)),
+        outlineSection('interaction', '互动安排', result.interactionPlan),
+      ],
+      actions: [
+        routeAction('open-plan', '打开生成流程', projectRoute('project-plan'), 'primary'),
+        routeAction('open-preview', '查看已有成果', projectRoute('project-preview'), 'secondary', !currentVersion.value, '当前项目还没有已生成成果。'),
+      ],
+    });
   } catch (error) {
-    actionError.value = resolveError(error, '生成方案工作流执行失败，请稍后重试。');
+    addAssistantMessage(buildErrorMessage(resolveError(error, '生成方案工作流执行失败，请稍后重试。'), 'generation'));
   } finally {
     await loadGatewayStatus();
-    planning.value = false;
   }
 }
 
-function goToRequirements() {
-  if (selectedProject.value) void router.push({ name: 'project-requirements', params: { projectId: selectedProject.value.id } });
+function buildWelcomeMessage(): AssistantMessage {
+  const project = selectedProject.value;
+  const missing = [
+    requirement.value ? '' : '教学需求',
+    materials.value.length ? '' : '参考资料',
+    generationWorkspace.value?.teachingIntent ? '' : '教学意图',
+  ].filter(Boolean);
+
+  return {
+    id: createMessageId(),
+    role: 'assistant',
+    content: project
+      ? `我已读取「${project.projectName}」的上下文。你可以让我检查进度、完善需求、生成教学方案，或汇总学生问题。`
+      : '请先选择一个教学项目，我会读取项目上下文后继续协助你。',
+    createdAt: new Date().toISOString(),
+    status: 'success',
+    evidence: buildEvidence(),
+    sections: [
+      {
+        id: 'context',
+        title: missing.length ? '当前需要关注' : '当前状态',
+        tone: missing.length ? 'orange' : 'green',
+        content: missing.length ? `${missing.join('、')}还需要继续完善。` : '项目关键上下文已具备，可以继续推进生成与发布前检查。',
+      },
+      {
+        id: 'workflows',
+        title: '可以直接开始',
+        items: [
+          { id: 'requirement', title: '完善教学需求', description: '检查缺失字段和建议追问。', status: requirement.value ? 'done' : 'pending', action: workflowAction('start-requirement', '开始检查', 'primary') },
+          { id: 'generation', title: '生成教学方案', description: '生成 PPT、教案和互动安排建议。', status: currentVersion.value ? 'done' : 'pending', action: workflowAction('start-generation', '生成方案', 'success') },
+        ],
+      },
+    ],
+    actions: [
+      routeAction('overview', '查看项目概览', projectRoute('project-overview'), 'secondary'),
+      routeAction('materials', '管理参考资料', projectRoute('project-materials'), 'secondary'),
+    ],
+  };
 }
 
-function goToGenerationPlan() {
-  if (selectedProject.value) void router.push({ name: 'project-plan', params: { projectId: selectedProject.value.id } });
+function buildProgressMessage(): AssistantMessage {
+  return {
+    id: createMessageId(),
+    role: 'assistant',
+    content: '我按项目流程检查了一遍，下面是当前最值得处理的环节。',
+    createdAt: new Date().toISOString(),
+    status: 'success',
+    evidence: buildEvidence(),
+    sections: [
+      {
+        id: 'progress',
+        title: '项目进度',
+        items: progressItems.value.map((item) => ({
+          id: item.id,
+          title: item.label,
+          description: item.value,
+          status: item.tone === 'green' || item.tone === 'purple' ? 'done' : item.tone === 'orange' ? 'warning' : 'pending',
+          action: item.route ? routeAction(`route-${item.id}`, '去处理', item.route, item.tone === 'orange' ? 'primary' : 'secondary') : undefined,
+        })),
+      },
+    ],
+    actions: [routeAction('overview', '打开项目概览', projectRoute('project-overview'), 'primary')],
+  };
 }
 
-function projectLabel(project: TeachingProject) { return `${project.projectName} · ${project.courseName} · ${project.chapterTitle}`; }
-function knownFieldsForProject(project: TeachingProject) { return ['courseName', 'chapterTopic', ...(project.targetStudents ? ['targetAudience'] : []), ...(project.lessonDuration ? ['lessonDurationMinutes'] : [])]; }
-function generationMode(value?: string): GenerationMode { return value === 'QUALITY' || value === 'HIGH_QUALITY' || value === 'ECONOMY' || value === 'MOCK' ? value : 'STANDARD'; }
-function modeLabel(value?: string) { return value === 'HIGH_QUALITY' ? '高质量' : value === 'QUALITY' ? '质量优先' : value === 'ECONOMY' ? '经济模式' : value === 'MOCK' ? 'Mock' : '标准模式'; }
+function buildIntentMessage(): AssistantMessage {
+  const intent = generationWorkspace.value?.teachingIntent;
+  return {
+    id: createMessageId(),
+    role: 'assistant',
+    content: intent ? '我找到了当前教学意图，请确认它是否仍符合本节课目标。' : '当前项目还没有可用的教学意图，建议先从资料与需求生成教学意图。',
+    createdAt: new Date().toISOString(),
+    status: 'success',
+    evidence: buildEvidence(),
+    sections: [
+      {
+        id: 'intent',
+        title: intent ? '教学意图摘要' : '下一步建议',
+        tone: intent?.status === 'CONFIRMED' ? 'green' : 'orange',
+        content: intent
+          ? [
+              intent.generationGoal || (Array.isArray(intent.generationGoals) ? intent.generationGoals.join('、') : ''),
+              intent.contentBasis || intent.primaryBasis || '',
+              intent.teachingApproach || '',
+            ].filter(Boolean).join('\n')
+          : '先确认需求摘要与参考资料，再进入教学意图页生成并确认。',
+      },
+    ],
+    actions: [routeAction('open-intent', '打开教学意图', projectRoute('project-intent'), 'primary')],
+  };
+}
+
+function buildQuestionMessage(): AssistantMessage {
+  return {
+    id: createMessageId(),
+    role: 'assistant',
+    content: openQuestions.value.length
+      ? `当前项目有 ${openQuestions.value.length} 个学生问题等待处理，我已按状态汇总。`
+      : '当前项目没有待处理的学生问题。',
+    createdAt: new Date().toISOString(),
+    status: 'success',
+    evidence: [
+      { id: 'open', label: '待答问题', value: `${openQuestions.value.length}`, source: 'STUDENT_QUESTION', tone: 'orange' },
+      { id: 'answered', label: '已回答', value: `${answeredQuestions.value.length}`, source: 'STUDENT_QUESTION', tone: 'green' },
+    ],
+    sections: [
+      {
+        id: 'questions',
+        title: '问题概览',
+        items: questions.value.slice(0, 5).map((question) => ({
+          id: String(question.id),
+          title: question.title,
+          description: `${question.studentName} · ${statusTextForQuestion(question.status)}`,
+          status: question.status === 'ANSWERED' ? 'done' : question.status === 'OPEN' ? 'warning' : 'pending',
+        })),
+      },
+    ],
+    actions: [routeAction('open-questions', '进入学生问答', { name: 'teacher-questions' }, 'primary')],
+  };
+}
+
+function buildUnsupportedMessage(): AssistantMessage {
+  return {
+    id: createMessageId(),
+    role: 'assistant',
+    content: '当前后端还没有开放任意连续聊天接口。我可以基于真实项目数据执行这些工作流：检查进度、完善需求、检查教学意图、生成教学方案、汇总学生问题。',
+    createdAt: new Date().toISOString(),
+    status: 'success',
+    evidence: buildEvidence(),
+    actions: [
+      workflowAction('start-requirement', '完善教学需求', 'primary'),
+      workflowAction('start-generation', '生成教学方案', 'success'),
+      routeAction('open-overview', '查看项目概览', projectRoute('project-overview'), 'secondary'),
+    ],
+  };
+}
+
+function buildProviderUnavailableMessage(content: string): AssistantMessage {
+  return {
+    id: createMessageId(),
+    role: 'assistant',
+    content: `${content}\n${providerPresentation.value.summary}`,
+    createdAt: new Date().toISOString(),
+    status: 'error',
+    evidence: buildEvidence(),
+    actions: [retryAction()],
+  };
+}
+
+function buildErrorMessage(content: string, intent: string): AssistantMessage {
+  return {
+    id: createMessageId(),
+    role: 'assistant',
+    content,
+    createdAt: new Date().toISOString(),
+    status: 'error',
+    evidence: buildEvidence(),
+    actions: [
+      {
+        ...retryAction(),
+        id: `retry-${intent}`,
+      },
+    ],
+  };
+}
+
+function addTeacherMessage(content: string) {
+  const message: AssistantMessage = {
+    id: createMessageId(),
+    role: 'teacher',
+    content,
+    createdAt: new Date().toISOString(),
+    status: 'success',
+    persistenceStatus: 'pending',
+    persistRetryCount: 0,
+  };
+  messages.value.push(message);
+  persistMessage(message, 'TEACHER');
+}
+
+function addAssistantMessage(message: AssistantMessage) {
+  message.persistenceStatus = 'pending';
+  message.persistRetryCount = message.persistRetryCount ?? 0;
+  messages.value.push(message);
+  persistMessage(message, 'ASSISTANT');
+}
+
+function persistMessage(message: AssistantMessage, sender: DialogueSender) {
+  if (!selectedProject.value || !message.content.trim()) {
+    updateMessage(message.id, { persistenceStatus: 'not_required' });
+    return;
+  }
+  updateMessage(message.id, { persistenceStatus: 'pending', persistenceError: '' });
+  const projectId = selectedProject.value.id;
+  const currentSessionId = sessionId.value;
+  const savePromise = saveDialogueMessage(projectId, {
+    sessionId: currentSessionId,
+    sender,
+    content: message.content,
+    roundNo: messageRoundNo(message.id),
+  })
+    .then((saved) => {
+      updateMessage(message.id, { persistenceStatus: 'saved', persistenceError: '' });
+      dialogues.value = mergeSavedDialogue(dialogues.value, saved);
+    })
+    .catch((error) => {
+      const persistenceError = resolveError(error, '对话保存失败，刷新后这条消息可能丢失。');
+      updateMessage(message.id, { persistenceStatus: 'failed', persistenceError });
+      ElMessage.error(persistenceError);
+    });
+  trackDialogueSave(savePromise);
+}
+
+function retryPersistMessage(messageId: string) {
+  const message = messages.value.find((item) => item.id === messageId);
+  if (!message || message.persistenceStatus !== 'failed') return;
+  if ((message.persistRetryCount || 0) >= 1) return;
+  updateMessage(message.id, { persistRetryCount: (message.persistRetryCount || 0) + 1 });
+  persistMessage(message, message.role === 'teacher' ? 'TEACHER' : 'ASSISTANT');
+}
+
+function updateMessage(messageId: string, patch: Partial<AssistantMessage>) {
+  const index = messages.value.findIndex((item) => item.id === messageId);
+  if (index === -1) return;
+  messages.value[index] = { ...messages.value[index], ...patch };
+}
+
+function trackDialogueSave(promise: Promise<void>) {
+  pendingDialogueSaves.add(promise);
+  void promise.finally(() => pendingDialogueSaves.delete(promise));
+}
+
+async function waitForPendingDialogueSaves() {
+  if (!pendingDialogueSaves.size) return;
+  await Promise.allSettled([...pendingDialogueSaves]);
+}
+
+function messageRoundNo(messageId: string) {
+  const index = messages.value.findIndex((message) => message.id === messageId);
+  return index >= 0 ? index + 1 : messages.value.length + 1;
+}
+
+function mergeSavedDialogue(items: DialogueMessage[], saved: DialogueMessage) {
+  const next = items.filter((item) => item.id !== saved.id);
+  next.push(saved);
+  return next.sort(sortDialoguesAsc);
+}
+
+function latestDialogueSessionId(items: DialogueMessage[]) {
+  const latestBySession = new Map<string, DialogueMessage>();
+  for (const item of items) {
+    const current = latestBySession.get(item.sessionId);
+    if (!current || sortDialoguesByRecencyAsc(current, item) < 0) latestBySession.set(item.sessionId, item);
+  }
+  return [...latestBySession.values()].sort(sortDialoguesByRecencyAsc).at(-1)?.sessionId;
+}
+
+function dialogueToMessage(dialogue: DialogueMessage): AssistantMessage {
+  return {
+    id: `dialogue-${dialogue.id}`,
+    role: dialogue.sender === 'TEACHER' ? 'teacher' : 'assistant',
+    content: dialogue.content,
+    createdAt: dialogue.createdAt,
+    status: 'success',
+    persistenceStatus: 'saved',
+    persistRetryCount: 0,
+  };
+}
+
+function buildEvidence() {
+  return [
+    { id: 'project', label: '项目', value: selectedProject.value?.projectName || '未选择', source: 'PROJECT' as const, tone: 'purple' as const },
+    { id: 'requirement', label: '需求', value: requirement.value ? '已读取' : '暂无', source: 'REQUIREMENT' as const, tone: requirement.value ? 'green' as const : 'orange' as const },
+    { id: 'materials', label: '资料', value: `${materials.value.length} 份`, source: 'MATERIAL' as const, tone: materials.value.length ? 'green' as const : 'gray' as const },
+    { id: 'knowledge', label: '知识切片', value: `${knowledgeOverview.value?.chunkCount ?? 0}`, source: 'KNOWLEDGE' as const, tone: (knowledgeOverview.value?.chunkCount ?? 0) ? 'purple' as const : 'gray' as const },
+  ];
+}
+
+function routeAction(
+  id: string,
+  label: string,
+  route: RouteLocationRaw | undefined,
+  tone: AssistantWorkspaceAction['tone'],
+  disabled = false,
+  disabledReason = '',
+): AssistantWorkspaceAction {
+  return { id, label, route, tone, actionType: 'NAVIGATE', disabled: disabled || !route, disabledReason };
+}
+
+function workflowAction(id: string, label: string, tone: AssistantWorkspaceAction['tone']): AssistantWorkspaceAction {
+  return { id, label, tone, actionType: 'START_WORKFLOW' };
+}
+
+function retryAction(): AssistantWorkspaceAction {
+  return { id: 'retry', label: '重新读取上下文', tone: 'primary', actionType: 'RETRY' };
+}
+
+function outlineSection(id: string, title: string, rows: string[]): AssistantResponseSection {
+  return {
+    id,
+    title,
+    tone: rows.length ? 'purple' : 'gray',
+    content: rows.length ? rows.map((row, index) => `${index + 1}. ${row}`).join('\n') : '本次工作流没有返回该部分内容。',
+  };
+}
+
+function inferIntent(content: string) {
+  if (/问题|答疑|学生|提问/.test(content)) return 'student-questions';
+  if (/生成|方案|PPT|教案|课件|互动/.test(content)) return 'generation';
+  if (/需求|澄清|补充|字段/.test(content)) return 'requirement';
+  if (/意图|目标|依据/.test(content)) return 'intent';
+  if (/进度|状态|下一步|现在/.test(content)) return 'progress';
+  return 'unknown';
+}
+
+function rawRequirementText(teacherInput = '') {
+  const savedParts = [
+    requirement.value?.rawRequirementText?.trim(),
+    requirement.value?.teachingGoals ? `教学目标：${requirement.value.teachingGoals}` : '',
+    requirement.value?.keyPoints ? `重点：${requirement.value.keyPoints}` : '',
+    requirement.value?.difficultPoints ? `难点：${requirement.value.difficultPoints}` : '',
+    selectedProject.value?.description?.trim(),
+  ].filter(Boolean);
+  const base = savedParts.length
+    ? savedParts.join('\n')
+    : selectedProject.value
+      ? `${selectedProject.value.courseName}，章节主题：${selectedProject.value.chapterTitle}，面向${selectedProject.value.targetStudents || '目标学生'}。`
+      : '';
+  const currentInput = teacherInput.trim();
+  return currentInput ? `${base}\n\n本轮教师补充：${currentInput}` : base;
+}
+
+function knownFieldsForProject(project: TeachingProject) {
+  return [
+    'courseName',
+    'chapterTopic',
+    ...(project.targetStudents ? ['targetAudience'] : []),
+    ...(project.lessonDuration ? ['lessonDurationMinutes'] : []),
+    ...(requirement.value?.teachingGoals ? ['teachingGoals'] : []),
+    ...(requirement.value?.outputTypes?.length ? ['outputTypes'] : []),
+  ];
+}
+
+function generationMode(value?: string): GenerationMode {
+  return value === 'QUALITY' || value === 'HIGH_QUALITY' || value === 'ECONOMY' || value === 'MOCK' ? value : 'STANDARD';
+}
+
+function isDefaultGenerationPrompt(value: string) {
+  return value.trim() === '生成教学方案';
+}
+
+function projectRoute(name: string): RouteLocationRaw | undefined {
+  if (!selectedProject.value) return undefined;
+  return { name, params: { projectId: selectedProject.value.id } };
+}
+
+function goToProjectRoute(name: string) {
+  const route = projectRoute(name);
+  if (route) void router.push(route);
+}
+
+function goToCreateProject() {
+  void router.push({ name: 'project-create' });
+}
+
+function goToProjects() {
+  void router.push({ name: 'projects' });
+}
+
+function statusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    CREATED: '项目已创建',
+    REQUIREMENT_CONFIRMED: '需求已确认',
+    MATERIAL_READY: '资料已准备',
+    INTENT_CONFIRMED: '意图已确认',
+    GENERATED: '成果已生成',
+    FINALIZED: '已定稿',
+  };
+  return status ? labels[status] || status : '待选择项目';
+}
+
+function statusTextForQuestion(status: Question['status']) {
+  return status === 'OPEN' ? '待回答' : status === 'ANSWERED' ? '已回答' : '已关闭';
+}
+
+function sortDialoguesAsc(a: DialogueMessage, b: DialogueMessage) {
+  return (a.roundNo || 0) - (b.roundNo || 0)
+    || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    || a.id - b.id;
+}
+
+function sortDialoguesByRecencyAsc(a: DialogueMessage, b: DialogueMessage) {
+  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    || a.id - b.id;
+}
+
+function sortByCreatedAtDesc(a: { createdAt: string }, b: { createdAt: string }) {
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+}
+
+function userInitial(value?: string) {
+  const first = Array.from((value || '').trim()).find((char) => /\S/.test(char));
+  return first || '师';
+}
+
+function formatTime(value?: string) {
+  if (!value) return '刚刚';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '刚刚';
+  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function truncate(value: string, length: number) {
+  return value.length > length ? `${value.slice(0, length)}...` : value;
+}
+
 function resolveError(error: unknown, fallback: string) {
   const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
-  return message && !/(Exception|java\.|Axios)/i.test(message) ? message : fallback;
+  return message && !/(Exception|java\.|Axios|Error)/i.test(message) ? message : fallback;
 }
 
-onMounted(loadPage);
+function createSessionId() {
+  return `assistant-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function createMessageId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
 </script>
 
 <style scoped>
-.assistant-page { min-width: 0; }
-.assistant-layout { display: grid; grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr); align-items: start; gap: 20px; }
-.assistant-control-panel, .result-panel { min-width: 0; padding: 20px; }
-.assistant-results { display: grid; min-width: 0; gap: 16px; }
-.panel-heading, .result-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.panel-heading > .el-icon { color: var(--color-primary); font-size: 24px; }
-.panel-heading__eyebrow, .result-heading span { color: var(--color-primary); font-size: 12px; font-weight: 700; }
-.panel-heading h2, .result-heading h2 { margin: 5px 0 0; color: var(--color-text); font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
-.assistant-form { margin-top: 18px; }.full-width { width: 100%; }
-.project-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; padding: 11px; margin: -4px 0 16px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-subtle); }
-.project-context div { min-width: 0; }.project-context span, .project-context strong { display: block; overflow-wrap: anywhere; }.project-context span { color: var(--color-text-muted); font-size: 11px; }.project-context strong { margin-top: 3px; color: var(--color-text); font-size: 12px; line-height: 1.4; }
-.output-types { display: flex; flex-wrap: wrap; gap: 8px 14px; }.assistant-alert { margin-bottom: 14px; }.assistant-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }.workflow-hint { margin: 10px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
-.result-heading { padding-bottom: 15px; border-bottom: 1px solid var(--color-border); }.result-next-action { padding: 12px; margin: 16px 0 0; border-left: 3px solid var(--color-primary); background: var(--color-primary-soft); color: var(--color-text-secondary); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }.result-block { margin-top: 18px; }.result-block h3, .plan-block h3 { margin: 0 0 9px; color: var(--color-text); font-size: 14px; }.result-list { display: grid; gap: 8px; padding-left: 21px; margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.65; }.suggestion-list { display: grid; gap: 8px; margin: 0; }.suggestion-list div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--color-border); }.suggestion-list dt { color: var(--color-text-muted); font-size: 12px; overflow-wrap: anywhere; }.suggestion-list dd { margin: 0; color: var(--color-text-secondary); font-size: 13px; overflow-wrap: anywhere; }.plan-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }.plan-block { min-width: 0; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-subtle); }.plan-list { display: grid; gap: 10px; padding-left: 20px; margin: 0; }.plan-list li { display: grid; gap: 5px; color: var(--color-text-secondary); font-size: 12px; line-height: 1.5; }.plan-list strong { color: var(--color-text); font-size: 13px; }.plan-list small { color: var(--color-text-muted); }.result-actions { display: flex; justify-content: flex-end; margin-top: 18px; }.state-link { display: inline-flex; min-height: var(--control-height); align-items: center; padding: 0 14px; border-radius: var(--radius-md); background: var(--color-primary); color: #fff; font-size: 13px; font-weight: 700; text-decoration: none; }
-@media (max-width: 980px) { .assistant-layout { grid-template-columns: 1fr; } }
-@media (max-width: 600px) { .assistant-control-panel, .result-panel { padding: 16px; }.project-context, .plan-columns { grid-template-columns: 1fr; }.assistant-actions, .assistant-actions .el-button, .result-actions, .result-actions .el-button { width: 100%; }.suggestion-list div { grid-template-columns: 1fr; gap: 3px; }.result-heading { flex-direction: column; } }
+.assistant-page {
+  display: grid;
+  min-width: 0;
+  min-height: calc(100vh - 116px);
+  gap: 18px;
+}
+
+.assistant-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.assistant-page__header span {
+  color: var(--ui-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assistant-page__header h1 {
+  margin: 4px 0 0;
+  color: var(--ui-text);
+  font-size: 24px;
+  line-height: 1.35;
+}
+
+.assistant-page__header p {
+  max-width: 780px;
+  margin: 8px 0 0;
+  color: var(--ui-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.assistant-shell {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  gap: 16px;
+}
+
+.assistant-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  min-width: 0;
+  min-height: min(720px, calc(100vh - 268px));
+  gap: 16px;
+}
+
+@media (max-width: 1180px) {
+  .assistant-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .assistant-page {
+    min-height: auto;
+  }
+
+  .assistant-page__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .assistant-workspace {
+    min-height: 680px;
+  }
+}
 </style>
