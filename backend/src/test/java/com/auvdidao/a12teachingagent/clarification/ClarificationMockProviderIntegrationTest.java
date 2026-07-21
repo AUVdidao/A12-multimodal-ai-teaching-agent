@@ -15,7 +15,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
@@ -49,9 +48,10 @@ class ClarificationMockProviderIntegrationTest {
                         .content("{\"rawRequirementText\":\"帮我生成一份数学课件\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.complete", is(false)))
-                .andExpect(jsonPath("$.data.missingFields[*].field", not(hasItem("outputTypes"))))
-                .andExpect(jsonPath("$.data.questions", hasSize(4)))
-                .andExpect(jsonPath("$.data.questions[0]", is("请补充本节课面向哪个年级学生？")));
+                .andExpect(jsonPath("$.data.missingFields", hasSize(1)))
+                .andExpect(jsonPath("$.data.missingFields[0].field", is("teachingGoals")))
+                .andExpect(jsonPath("$.data.questions", hasSize(1)))
+                .andExpect(jsonPath("$.data.questions[0]", not("")));
     }
 
     private Long createProject() {

@@ -71,15 +71,7 @@ public class DifyWorkflowContractAdapter {
 
         ObjectNode input = objectMapper.createObjectNode();
         ObjectNode projectInfo = input.putObject("projectInfo");
-        projectInfo.put("projectRef", String.valueOf(request.projectId()));
-        projectInfo.putNull("courseName");
-        projectInfo.putNull("chapterTitle");
-        projectInfo.putNull("targetStudents");
-        projectInfo.putNull("lessonDuration");
-        projectInfo.put(
-                "generationMode",
-                request.generationMode() == null ? "STANDARD" : request.generationMode().name()
-        );
+        writeProjectInfo(projectInfo, request.projectId(), request.generationMode(), request.projectContext());
         input.put("rawRequirement", request.rawRequirement());
         input.set("knownFields", objectMapper.valueToTree(request.knownFields()));
         input.set("requestedMissingFields", objectMapper.valueToTree(request.requestedMissingFields()));
@@ -94,22 +86,64 @@ public class DifyWorkflowContractAdapter {
 
         ObjectNode input = objectMapper.createObjectNode();
         ObjectNode projectInfo = input.putObject("projectInfo");
-        projectInfo.put("projectRef", String.valueOf(request.projectId()));
-        projectInfo.putNull("courseName");
-        projectInfo.putNull("chapterTitle");
-        projectInfo.putNull("targetStudents");
-        projectInfo.putNull("lessonDuration");
-        projectInfo.put(
-                "generationMode",
-                request.generationMode() == null ? "STANDARD" : request.generationMode().name()
-        );
+        writeProjectInfo(projectInfo, request.projectId(), request.generationMode(), request.projectContext());
         input.put("rawRequirement", request.rawRequirement());
         input.set("dialogHistory", objectMapper.valueToTree(request.dialogTurns()));
         ObjectNode defaults = input.putObject("defaultValues");
-        ObjectNode style = defaults.putObject("coursewareStyle");
-        style.put("value", "CLEAR_VISUAL");
-        style.put("source", "system-default");
+        RequirementSummaryData context = request.projectContext();
+        putSourcedDefault(defaults, "teachingGoals", context == null ? null : context.teachingGoals(), "teacher-structured-input");
+        putSourcedDefault(defaults, "keyDifficulties", context == null ? null : context.keyDifficulties(), "teacher-structured-input");
+        putSourcedDefault(defaults, "outputTypes", context == null ? null : context.outputTypes(), "teacher-structured-input");
+        putSourcedDefault(defaults, "interactionType", context == null ? null : context.interactionType(), "teacher-structured-input");
+        String styleValue = context == null ? null : context.coursewareStyle();
+        putSourcedDefault(
+                defaults,
+                "coursewareStyle",
+                StringUtils.hasText(styleValue) ? styleValue.strip() : "CLEAR_VISUAL",
+                StringUtils.hasText(styleValue) ? "teacher-structured-input" : "system-default"
+        );
         return input;
+    }
+
+    private void writeProjectInfo(
+            ObjectNode projectInfo,
+            Long projectId,
+            com.auvdidao.a12teachingagent.domain.common.GenerationMode generationMode,
+            RequirementSummaryData context
+    ) {
+        projectInfo.put("projectRef", String.valueOf(projectId));
+        putOrNull(projectInfo, "courseName", context == null ? null : context.courseName());
+        putOrNull(projectInfo, "chapterTitle", context == null ? null : context.chapterTopic());
+        putOrNull(projectInfo, "targetStudents", context == null ? null : context.targetAudience());
+        if (context == null || context.lessonDurationMinutes() == null) {
+            projectInfo.putNull("lessonDuration");
+        } else {
+            projectInfo.put("lessonDuration", context.lessonDurationMinutes());
+        }
+        projectInfo.put("generationMode", generationMode == null ? "STANDARD" : generationMode.name());
+    }
+
+    private void putSourcedDefault(ObjectNode defaults, String field, Object value, String source) {
+        if (value == null) {
+            return;
+        }
+        if (value instanceof String text && !StringUtils.hasText(text)) {
+            return;
+        }
+        if (value instanceof List<?> values && values.isEmpty()) {
+            return;
+        }
+        ObjectNode entry = defaults.putObject(field);
+        entry.set("value", objectMapper.valueToTree(value));
+        entry.put("source", source);
+    }
+
+    private static void putOrNull(ObjectNode node, String field, String value) {
+        if (StringUtils.hasText(value)) {
+            node.put(field, value.strip());
+        } else {
+            node.putNull(field);
+        }
     }
 
     private JsonNode materialAnalysisInput(Object payload) {
@@ -511,13 +545,13 @@ public class DifyWorkflowContractAdapter {
 
         ObjectNode response = objectMapper.createObjectNode();
         copy(response, "intentId", payload.get("intentId"));
-        response.set("generationGoals", arrayCopy(intent.get("teachingGoals")));
+        response.set("generationGoals", textArray(intent.get("teachingGoals")));
 
         ArrayNode contentBasis = response.putArray("contentBasis");
         appendTextValues(contentBasis, intent.get("contentPriorities"), "");
         appendTextValues(contentBasis, intent.get("teachingOrganization"), "教学组织：");
-        response.set("interactionIdeas", arrayCopy(intent.get("interactionPlan")));
-        response.set("outputTypes", arrayCopy(intent.get("outputTypes")));
+        response.set("interactionIdeas", structuredTextArray(intent.get("interactionPlan")));
+        response.set("outputTypes", textArray(intent.get("outputTypes")));
 
         List<String> conflicts = textValues(payload.get("conflictWarnings"));
         response.put(
@@ -596,8 +630,125 @@ public class DifyWorkflowContractAdapter {
             return payload.deepCopy();
         }
         ObjectNode response = payload.deepCopy();
+        JsonNode docContent = response.path("docContent").path("contentJson");
+        if (docContent.isObject()) {
+            normalizeTextLists(
+                    (ObjectNode) docContent,
+                    List.of(
+                            "teachingGoals", "keyPoints", "difficultPoints", "methods",
+                            "classroomActivities", "homework", "resourceNotes"
+                    )
+            );
+            ensureCanonicalDocSections((ObjectNode) docContent);
+        }
         response.put("fallbackToBackendDrafts", false);
         return response;
+    }
+
+    private void normalizeTextLists(ObjectNode content, List<String> fields) {
+        for (String field : fields) {
+            JsonNode value = content.get(field);
+            if (value != null && value.isTextual()) {
+                content.set(field, textArray(value));
+            }
+        }
+    }
+
+    private void ensureCanonicalDocSections(ObjectNode content) {
+        JsonNode sections = content.path("sections");
+        if (sections.isArray() && sections.size() >= 9) {
+            return;
+        }
+        if (!content.path("courseInfo").isObject()
+                || !content.path("teachingProcess").isArray()
+                || !hasTextArrays(content, List.of(
+                        "teachingGoals", "keyPoints", "difficultPoints", "methods",
+                        "classroomActivities", "homework", "resourceNotes"
+                ))) {
+            return;
+        }
+
+        ArrayNode canonical = objectMapper.createArrayNode();
+        addDocSection(canonical, "Course information", courseInfoParagraphs(content.path("courseInfo")));
+        addDocSection(canonical, "Teaching goals", paragraphValues(content.path("teachingGoals")));
+        addDocSection(canonical, "Key teaching points", paragraphValues(content.path("keyPoints")));
+        addDocSection(canonical, "Difficult teaching points", paragraphValues(content.path("difficultPoints")));
+        addDocSection(canonical, "Teaching methods", paragraphValues(content.path("methods")));
+        addDocSection(canonical, "Teaching process", teachingProcessParagraphs(content.path("teachingProcess")));
+        addDocSection(canonical, "Classroom activities", paragraphValues(content.path("classroomActivities")));
+        addDocSection(canonical, "Homework", paragraphValues(content.path("homework")));
+        addDocSection(canonical, "Teaching resources", paragraphValues(content.path("resourceNotes")));
+        content.set("sections", canonical);
+    }
+
+    private static boolean hasTextArrays(ObjectNode content, List<String> fields) {
+        return fields.stream().allMatch(field -> content.path(field).isArray());
+    }
+
+    private void addDocSection(ArrayNode sections, String title, ArrayNode paragraphs) {
+        ObjectNode section = sections.addObject();
+        section.put("order", sections.size());
+        section.put("title", title);
+        if (paragraphs.isEmpty()) {
+            paragraphs.add("Not specified");
+        }
+        section.set("paragraphs", paragraphs);
+    }
+
+    private ArrayNode courseInfoParagraphs(JsonNode courseInfo) {
+        ArrayNode paragraphs = objectMapper.createArrayNode();
+        addLabeledParagraph(paragraphs, "Project", courseInfo.path("projectName"));
+        addLabeledParagraph(paragraphs, "Course", courseInfo.path("courseName"));
+        addLabeledParagraph(paragraphs, "Topic", courseInfo.path("chapterTopic"));
+        addLabeledParagraph(paragraphs, "Audience", courseInfo.path("targetAudience"));
+        addLabeledParagraph(paragraphs, "Duration", courseInfo.path("lessonDurationMinutes"));
+        addLabeledParagraph(paragraphs, "Generation mode", courseInfo.path("generationMode"));
+        return paragraphs;
+    }
+
+    private static void addLabeledParagraph(ArrayNode paragraphs, String label, JsonNode value) {
+        if (value != null && !value.isMissingNode() && !value.isNull() && StringUtils.hasText(value.asText())) {
+            paragraphs.add(label + ": " + value.asText());
+        }
+    }
+
+    private ArrayNode teachingProcessParagraphs(JsonNode process) {
+        ArrayNode paragraphs = objectMapper.createArrayNode();
+        for (JsonNode step : process) {
+            if (!step.isObject()) {
+                continue;
+            }
+            String stage = step.path("stage").asText("Teaching stage");
+            String duration = step.path("durationMinutes").asText("");
+            String content = step.path("content").asText("");
+            String teacher = step.path("teacherActivity").asText("");
+            String student = step.path("studentActivity").asText("");
+            StringBuilder paragraph = new StringBuilder(stage);
+            if (StringUtils.hasText(duration)) {
+                paragraph.append(" (").append(duration).append(" min)");
+            }
+            if (StringUtils.hasText(content)) {
+                paragraph.append(": ").append(content);
+            }
+            if (StringUtils.hasText(teacher)) {
+                paragraph.append(" Teacher: ").append(teacher);
+            }
+            if (StringUtils.hasText(student)) {
+                paragraph.append(" Student: ").append(student);
+            }
+            paragraphs.add(paragraph.toString());
+        }
+        return paragraphs;
+    }
+
+    private ArrayNode paragraphValues(JsonNode values) {
+        ArrayNode paragraphs = objectMapper.createArrayNode();
+        for (JsonNode value : values) {
+            if (value.isValueNode() && StringUtils.hasText(value.asText())) {
+                paragraphs.add(value.asText());
+            }
+        }
+        return paragraphs;
     }
 
     private ObjectNode revisionResponse(ObjectNode payload) {
@@ -667,8 +818,37 @@ public class DifyWorkflowContractAdapter {
                 : objectMapper.createArrayNode();
     }
 
+    private ArrayNode textArray(JsonNode value) {
+        ArrayNode result = objectMapper.createArrayNode();
+        textValues(value).forEach(result::add);
+        return result;
+    }
+
+    private ArrayNode structuredTextArray(JsonNode value) {
+        ArrayNode result = textArray(value);
+        if (value == null || !value.isObject()) {
+            return result;
+        }
+
+        value.fields().forEachRemaining(entry -> {
+            String displayed = displayValue(entry.getValue()).strip();
+            if (StringUtils.hasText(displayed)) {
+                result.add(entry.getKey() + ": " + displayed);
+            }
+        });
+        return result;
+    }
+
     private List<String> textValues(JsonNode value) {
-        if (value == null || !value.isArray()) {
+        if (value == null) {
+            return List.of();
+        }
+        if (value.isTextual()) {
+            return StringUtils.hasText(value.asText())
+                    ? List.of(value.asText().strip())
+                    : List.of();
+        }
+        if (!value.isArray()) {
             return List.of();
         }
         LinkedHashSet<String> values = new LinkedHashSet<>();

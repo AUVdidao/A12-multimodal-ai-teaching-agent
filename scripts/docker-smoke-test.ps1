@@ -3,6 +3,13 @@ $ErrorActionPreference = "Stop"
 
 $frontendPort = if ([string]::IsNullOrWhiteSpace($env:FRONTEND_PORT)) { "8081" } else { $env:FRONTEND_PORT }
 $baseUrl = "http://localhost:$frontendPort"
+$aiTimeoutSeconds = if ([string]::IsNullOrWhiteSpace($env:A12_SMOKE_AI_TIMEOUT_SECONDS)) {
+    600
+}
+else {
+    [int]$env:A12_SMOKE_AI_TIMEOUT_SECONDS
+}
+$requireDify = $env:A12_SMOKE_REQUIRE_DIFY -eq "true"
 $readinessUrl = "$baseUrl/api/health"
 $deadline = [DateTime]::UtcNow.AddSeconds(60)
 $lastReadinessError = "No response received"
@@ -13,7 +20,8 @@ function Invoke-A12Api {
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][string]$Method,
         [Parameter(Mandatory = $true)][string]$Path,
-        [object]$Body = $null
+        [object]$Body = $null,
+        [int]$TimeoutSec = 20
     )
 
     $url = "$baseUrl$Path"
@@ -22,7 +30,7 @@ function Invoke-A12Api {
         $parameters = @{
             Uri = $url
             Method = $Method
-            TimeoutSec = 20
+            TimeoutSec = $TimeoutSec
         }
         if (-not [string]::IsNullOrWhiteSpace($script:authToken)) {
             $parameters.Headers = @{ Authorization = "Bearer $script:authToken" }
@@ -56,8 +64,33 @@ function Invoke-A12Api {
     }
     catch {
         $status = if ($null -ne $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { "n/a" }
+        $responseBody = $null
+        if ($null -ne $_.Exception.Response) {
+            try {
+                $stream = $_.Exception.Response.GetResponseStream()
+                if ($null -ne $stream) {
+                    $responseReader = New-Object System.IO.StreamReader(
+                        $stream,
+                        [System.Text.Encoding]::UTF8,
+                        $true
+                    )
+                    try {
+                        $responseBody = $responseReader.ReadToEnd()
+                    }
+                    finally {
+                        $responseReader.Dispose()
+                    }
+                }
+            }
+            catch {
+                $responseBody = $null
+            }
+        }
         $errorDetails = $_.ErrorDetails
-        $details = if (
+        $details = if (-not [string]::IsNullOrWhiteSpace([string]$responseBody)) {
+            [string]$responseBody
+        }
+        elseif (
             $null -ne $errorDetails -and
             $errorDetails.PSObject.Properties.Name -contains "Message" -and
             -not [string]::IsNullOrWhiteSpace([string]$errorDetails.Message)
@@ -183,7 +216,23 @@ if ($currentUser.username -ne "teacher" -or $currentUser.activeRole -ne "TEACHER
     throw "Authenticated user profile does not match the teacher demo account"
 }
 
-$null = Invoke-A12Api -Name "AI workflow status" -Method "GET" -Path "/api/ai-workflow/status"
+$aiStatus = Invoke-A12Api -Name "AI workflow status" -Method "GET" -Path "/api/ai-workflow/status"
+if ($requireDify -and ($aiStatus.requestedProvider -ne "DIFY" -or $aiStatus.activeProvider -ne "DIFY")) {
+    throw "Strict Dify smoke requires requestedProvider=DIFY and activeProvider=DIFY. $($aiStatus.message)"
+}
+
+function Assert-A12DifyActive {
+    param([Parameter(Mandatory = $true)][string]$Stage)
+
+    if (-not $requireDify) {
+        return
+    }
+
+    $status = Invoke-A12Api -Name "$Stage provider status" -Method "GET" -Path "/api/ai-workflow/status"
+    if ($status.requestedProvider -ne "DIFY" -or $status.activeProvider -ne "DIFY") {
+        throw "Strict Dify smoke detected a fallback after $Stage. Active provider: $($status.activeProvider)"
+    }
+}
 $null = Invoke-A12Api -Name "model modes" -Method "GET" -Path "/api/model-modes"
 
 $project = Invoke-A12Api -Name "project creation" -Method "POST" -Path "/api/projects" -Body @{
@@ -234,10 +283,11 @@ if ($clarificationCheck.complete -or $clarificationCheck.missingFields.Count -eq
     throw "Incomplete requirement was not identified"
 }
 
-$clarificationQuestions = Invoke-A12Api -Name "clarification questions" -Method "POST" -Path "/api/projects/$projectId/clarification/questions" -Body $incompletePayload
+$clarificationQuestions = Invoke-A12Api -Name "clarification questions" -Method "POST" -Path "/api/projects/$projectId/clarification/questions" -Body $incompletePayload -TimeoutSec $aiTimeoutSeconds
 if ($clarificationQuestions.questions.Count -eq 0) {
     throw "Clarification questions were not generated"
 }
+Assert-A12DifyActive -Stage "clarification"
 
 $sessionId = "project-$projectId-clarification"
 $aiContent = "Please add the learner profile, prior knowledge, teaching style, interaction design, and expected outputs."
@@ -288,7 +338,8 @@ if (-not $completeCheck.complete) {
     throw "Completed requirement was still marked incomplete"
 }
 
-$summary = Invoke-A12Api -Name "summary generation" -Method "POST" -Path "/api/projects/$projectId/requirement-summaries/generate"
+$summary = Invoke-A12Api -Name "summary generation" -Method "POST" -Path "/api/projects/$projectId/requirement-summaries/generate" -TimeoutSec $aiTimeoutSeconds
+Assert-A12DifyActive -Stage "requirement summary"
 $latestSummary = Invoke-A12Api -Name "summary latest" -Method "GET" -Path "/api/projects/$projectId/requirement-summaries/latest"
 if ($latestSummary.id -ne $summary.id) {
     throw "Summary latest did not return the generated summary"
@@ -359,7 +410,8 @@ Students predict variables, observe evidence, explain energy conversion, and com
         throw "Material usages were not persisted"
     }
 
-    $parse = Invoke-A12Api -Name "M2 prototype parsing" -Method "POST" -Path "/api/projects/$projectId/materials/$materialId/parse"
+    $parse = Invoke-A12Api -Name "M2 prototype parsing" -Method "POST" -Path "/api/projects/$projectId/materials/$materialId/parse" -TimeoutSec $aiTimeoutSeconds
+    Assert-A12DifyActive -Stage "material analysis"
     if ($parse.parseStatus -ne "SUCCEEDED" -or [string]::IsNullOrWhiteSpace($parse.summary) -or $parse.keywords.Count -lt 3) {
         throw "Prototype parse result is incomplete"
     }
@@ -384,7 +436,8 @@ Students predict variables, observe evidence, explain energy conversion, and com
     $search = Invoke-A12Api -Name "M2 knowledge search" -Method "POST" -Path "/api/projects/$projectId/knowledge/search" -Body @{
         query = "Photosynthesis investigation"
         limit = 5
-    }
+    } -TimeoutSec $aiTimeoutSeconds
+    Assert-A12DifyActive -Stage "knowledge retrieval"
 
     $workspaceSearch = Invoke-A12Api -Name "UI V6 knowledge workspace search" -Method "POST" -Path "/api/projects/$projectId/knowledge/workspace-search" -Body @{
         query = "Photosynthesis investigation"
@@ -392,7 +445,7 @@ Students predict variables, observe evidence, explain energy conversion, and com
         caseSensitive = $false
         page = 0
         size = 10
-    }
+    } -TimeoutSec $aiTimeoutSeconds
     if ($workspaceSearch.totalElements -lt 1 -or $workspaceSearch.hits.Count -lt 1) {
         throw "Knowledge workspace search did not return a real-source hit"
     }
@@ -400,7 +453,8 @@ Students predict variables, observe evidence, explain energy conversion, and com
         throw "Knowledge search did not return an explainable real-source hit"
     }
 
-    $intent = Invoke-A12Api -Name "M2 teaching intent generation" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/generate"
+    $intent = Invoke-A12Api -Name "M2 teaching intent generation" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/generate" -TimeoutSec $aiTimeoutSeconds
+    Assert-A12DifyActive -Stage "teaching intent"
     if ($intent.status -ne "DRAFT" -or $intent.evidenceItems.Count -lt 1) {
         throw "Teaching intent draft did not contain evidence"
     }
@@ -451,7 +505,7 @@ Students predict variables, observe evidence, explain energy conversion, and com
         throw "Teaching intent workspace did not restore the confirmed intent"
     }
 
-    $intentRevision = Invoke-A12Api -Name "M2 confirmed teaching intent revision" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/$intentId/revisions"
+    $intentRevision = Invoke-A12Api -Name "M2 confirmed teaching intent revision" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/$intentId/revisions" -TimeoutSec $aiTimeoutSeconds
     if ($intentRevision.status -ne "DRAFT" -or $intentRevision.id -eq $intentId -or $intentRevision.evidenceItems.Count -lt 1) {
         throw "Teaching intent revision did not create an independent evidence-backed draft"
     }
@@ -475,15 +529,24 @@ Students predict variables, observe evidence, explain energy conversion, and com
         throw "Generation workspace did not expose the confirmed teaching intent"
     }
 
-    $plan = Invoke-A12Api -Name "M3 generation plan creation" -Method "POST" -Path "/api/projects/$projectId/generation-plans"
-    if ($null -eq $plan.id -or $plan.confirmed -or $plan.provider -ne "MOCK") {
+    $plan = Invoke-A12Api -Name "M3 generation plan creation" -Method "POST" -Path "/api/projects/$projectId/generation-plans" -TimeoutSec $aiTimeoutSeconds
+    Assert-A12DifyActive -Stage "generation plan"
+    $planProviderStatus = Invoke-A12Api -Name "M3 generation provider status" -Method "GET" -Path "/api/ai-workflow/status"
+    if ($null -eq $plan.id -or $plan.confirmed -or $plan.provider -ne $planProviderStatus.activeProvider) {
         throw "Generation plan creation returned an invalid plan"
+    }
+    if ($requireDify -and $plan.provider -ne "DIFY") {
+        throw "Strict Dify smoke detected a generation-plan fallback to $($plan.provider)"
     }
     $planId = [long]$plan.id
 
     $pptOutline = @($plan.pptOutline)
     $docOutline = @($plan.docOutline)
     $interactionPlan = @($plan.interactionPlan)
+    if ($pptOutline.Count -lt 2) {
+        throw "Generation plan must contain at least two PPT outline sections"
+    }
+    $expectedSecondTitle = [string]$pptOutline[1].title
     $pptOutline[0].title = "Photosynthesis learning journey"
     $editedPlan = Invoke-A12Api -Name "M3 generation plan edit" -Method "PUT" -Path "/api/projects/$projectId/generation-plans/$planId" -Body @{
         pptOutline = $pptOutline
@@ -493,10 +556,6 @@ Students predict variables, observe evidence, explain energy conversion, and com
     if ($editedPlan.pptOutline[0].title -ne "Photosynthesis learning journey") {
         throw "Generation plan edit was not persisted"
     }
-    # Windows PowerShell 5 reads UTF-8 scripts without a BOM through the
-    # active ANSI code page. Build the expected Chinese title from code points
-    # so the assertion verifies the API round trip instead of the script parser.
-    $expectedSecondTitle = -join @([char]0x60C5, [char]0x5883, [char]0x5BFC, [char]0x5165)
     if ($editedPlan.pptOutline[1].title -ne $expectedSecondTitle) {
         throw "Generation plan UTF-8 content was corrupted during the edit round trip"
     }
@@ -508,7 +567,8 @@ Students predict variables, observe evidence, explain energy conversion, and com
 
     $artifacts = @(Invoke-A12Api -Name "M3 artifact generation" -Method "POST" -Path "/api/projects/$projectId/artifacts/generate" -Body @{
         planId = $planId
-    })
+    } -TimeoutSec $aiTimeoutSeconds)
+    Assert-A12DifyActive -Stage "structured content"
     if ($artifacts.Count -ne 3) {
         throw "Artifact generation did not return all three artifact types"
     }
@@ -528,7 +588,7 @@ Students predict variables, observe evidence, explain energy conversion, and com
 
     $repeatedArtifacts = @(Invoke-A12Api -Name "M3 idempotent artifact generation" -Method "POST" -Path "/api/projects/$projectId/artifacts/generate" -Body @{
         planId = $planId
-    })
+    } -TimeoutSec $aiTimeoutSeconds)
     $firstIds = @($artifacts | ForEach-Object { [long]$_.id }) -join ","
     $repeatedIds = @($repeatedArtifacts | ForEach-Object { [long]$_.id }) -join ","
     if ($firstIds -ne $repeatedIds) {
@@ -539,10 +599,27 @@ Students predict variables, observe evidence, explain energy conversion, and com
     if ($generatedWorkspace.projectStatus -ne "GENERATED" -or -not $generatedWorkspace.capabilities.canPreview -or @($generatedWorkspace.artifacts).Count -ne 3) {
         throw "Generated workspace did not restore the M3 result"
     }
+
+    $revision = Invoke-A12Api -Name "M4 artifact revision" -Method "POST" -Path "/api/v1/projects/$projectId/artifacts/$($pptArtifact.id)/revisions" -Body @{
+        instruction = "Simplify slide 3 and add one observable classroom example without changing the learning objective."
+    } -TimeoutSec $aiTimeoutSeconds
+    Assert-A12DifyActive -Stage "artifact revision"
+    if ($revision.activeProvider -ne "DIFY" -and $requireDify) {
+        throw "Strict Dify smoke detected an artifact-revision fallback to $($revision.activeProvider)"
+    }
+    if ($revision.version.versionNumber -le 1 -or @($revision.artifacts).Count -ne 3) {
+        throw "Artifact revision did not create a complete new version"
+    }
+    if ([string]::IsNullOrWhiteSpace($revision.changeSummary) -or @($revision.changedSections).Count -lt 1) {
+        throw "Artifact revision did not return a usable change summary"
+    }
+    if ($null -eq $revision.editRecord.id) {
+        throw "Artifact revision did not persist an edit record"
+    }
 }
 finally {
     Remove-Item -LiteralPath $temporaryMaterial -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "M1 to M3 Docker smoke test passed."
+Write-Host "M1 to M4 Docker smoke test passed, including all five Dify apps."
 Write-Host "projectId=$projectId requirementId=$($completeRequirement.id) summaryId=$($summary.id) materialId=$materialId intentId=$intentId planId=$planId versionId=$versionId sessionId=$sessionId"

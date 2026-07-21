@@ -2,11 +2,13 @@ package com.auvdidao.a12teachingagent.clarification;
 
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
+import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
@@ -50,15 +52,15 @@ public class ClarificationService {
 
     @Transactional(readOnly = true)
     public ClarificationResult check(Long projectId, ClarificationCheckRequest request) {
-        requireProject(projectId);
-        Evaluation evaluation = evaluate(request);
+        Project project = requireProject(projectId);
+        Evaluation evaluation = evaluate(project, request);
         return new ClarificationResult(evaluation.complete(), evaluation.missingFields(), List.of());
     }
 
     @Transactional(readOnly = true)
     public ClarificationResult questions(Long projectId, ClarificationCheckRequest request) {
-        requireProject(projectId);
-        Evaluation evaluation = evaluate(request);
+        Project project = requireProject(projectId);
+        Evaluation evaluation = evaluate(project, request);
         if (evaluation.complete()) {
             return new ClarificationResult(true, List.of(), List.of());
         }
@@ -70,14 +72,15 @@ public class ClarificationService {
                 projectId,
                 normalizedRawRequirement(request),
                 evaluation.knownFields(),
-                GenerationMode.MOCK,
-                missingCodes
+                project.getGenerationMode() == null ? GenerationMode.STANDARD : project.getGenerationMode(),
+                missingCodes,
+                projectContext(project, request)
         ));
 
         return new ClarificationResult(false, evaluation.missingFields(), adaptQuestions(missingCodes, response));
     }
 
-    private Evaluation evaluate(ClarificationCheckRequest request) {
+    private Evaluation evaluate(Project project, ClarificationCheckRequest request) {
         if (request == null) {
             throw new BadRequestException("Request body is required");
         }
@@ -87,13 +90,21 @@ public class ClarificationService {
         List<String> knownFields = new ArrayList<>();
 
         evaluateField(missingFields, knownFields, ClarificationField.GRADE_LEVEL,
-                hasText(request.gradeLevel()) || GRADE_PATTERN.matcher(rawText).find());
+                hasText(request.gradeLevel())
+                        || hasText(project.getTargetAudience())
+                        || GRADE_PATTERN.matcher(rawText).find());
         evaluateField(missingFields, knownFields, ClarificationField.SUBJECT,
-                hasText(request.subject()) || containsAny(rawText, KNOWN_SUBJECTS));
+                hasText(request.subject())
+                        || hasText(project.getCourseName())
+                        || containsAny(rawText, KNOWN_SUBJECTS));
         evaluateField(missingFields, knownFields, ClarificationField.TOPIC,
-                hasText(request.topic()) || looksLikeTopicInRawText(rawText));
+                hasText(request.topic())
+                        || hasText(project.getChapterTopic())
+                        || looksLikeTopicInRawText(rawText));
         evaluateField(missingFields, knownFields, ClarificationField.LESSON_DURATION,
-                hasText(request.lessonDuration()) || DURATION_PATTERN.matcher(rawText).find());
+                hasText(request.lessonDuration())
+                        || (project.getLessonDurationMinutes() != null && project.getLessonDurationMinutes() > 0)
+                        || DURATION_PATTERN.matcher(rawText).find());
         evaluateField(missingFields, knownFields, ClarificationField.TEACHING_GOALS,
                 hasText(request.teachingGoals()));
         evaluateField(missingFields, knownFields, ClarificationField.OUTPUT_TYPES,
@@ -145,14 +156,66 @@ public class ClarificationService {
         return List.copyOf(questions);
     }
 
-    private void requireProject(Long projectId) {
+    private Project requireProject(Long projectId) {
         if (projectId == null || projectId <= 0) {
             throw new BadRequestException("projectId must be greater than 0");
         }
-        if (!projectRepository.existsById(projectId)) {
-            throw new ResourceNotFoundException("Project not found: " + projectId);
-        }
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
         projectAccessService.requireAccess(projectId);
+        return project;
+    }
+
+    private static RequirementSummaryData projectContext(Project project, ClarificationCheckRequest request) {
+        return new RequirementSummaryData(
+                firstNonBlank(request.subject(), project.getCourseName()),
+                firstNonBlank(request.topic(), project.getChapterTopic()),
+                firstNonBlank(request.gradeLevel(), project.getTargetAudience()),
+                lessonDurationMinutes(request.lessonDuration(), project.getLessonDurationMinutes()),
+                textValues(request.teachingGoals()),
+                textValues(request.keyPoints(), request.difficultPoints()),
+                normalizedValues(request.outputTypes()),
+                null,
+                null
+        );
+    }
+
+    private static Integer lessonDurationMinutes(String value, Integer fallback) {
+        if (hasText(value)) {
+            java.util.regex.Matcher matcher = Pattern.compile("(\\d+)").matcher(value);
+            if (matcher.find()) {
+                try {
+                    int minutes = Integer.parseInt(matcher.group(1));
+                    if (minutes > 0) {
+                        return minutes;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Use the persisted project duration below.
+                }
+            }
+        }
+        return fallback != null && fallback > 0 ? fallback : null;
+    }
+
+    private static List<String> textValues(String... values) {
+        List<String> normalized = new ArrayList<>();
+        for (String value : values) {
+            if (hasText(value)) {
+                normalized.add(value.trim());
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    private static List<String> normalizedValues(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream().filter(ClarificationService::hasText).map(String::trim).distinct().toList();
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        return hasText(preferred) ? preferred.trim() : (hasText(fallback) ? fallback.trim() : null);
     }
 
     private static String normalizedRawRequirement(ClarificationCheckRequest request) {

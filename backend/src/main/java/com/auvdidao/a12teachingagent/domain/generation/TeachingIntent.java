@@ -51,9 +51,14 @@ public class TeachingIntent extends BaseAuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String teachingApproach;
 
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String interactionMode;
     private String targetAudience;
     private Integer totalHours;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String teachingFormat;
 
     @ElementCollection(fetch = FetchType.EAGER)

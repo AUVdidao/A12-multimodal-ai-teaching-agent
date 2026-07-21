@@ -43,13 +43,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class DifyAIWorkflowGateway {
 
     private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration PROVIDER_RETRY_DELAY = Duration.ofSeconds(3);
+    private static final int MAX_PROVIDER_ATTEMPTS = 2;
     private static final String DEFAULT_USER_PREFIX = "a12-project-";
+    private static final Pattern DIFY_ERROR_CODE = Pattern.compile("\\\"code\\\"\\s*:\\s*\\\"([A-Z0-9_]{2,64})\\\"");
 
     private final AiWorkflowProperties properties;
     private final ObjectMapper objectMapper;
@@ -168,26 +173,44 @@ public class DifyAIWorkflowGateway {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("inputs", inputs);
         body.put("user", userId(dify.getUserPrefix(), projectId));
-        body.put("response_mode", "blocking");
+        body.put("response_mode", "streaming");
 
-        String responseBody;
-        try {
-            responseBody = restClient.post()
-                    .uri(workflowUri(dify.getBaseUrl(), workflowCode))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .headers(headers -> headers.setBearerAuth(apiKey))
-                    .body(body)
-                    .retrieve()
-                    .body(String.class);
-        } catch (RestClientResponseException exception) {
-            throw unavailable(
-                    workflowCode,
-                    "Dify returned HTTP " + exception.getStatusCode().value()
-            );
-        } catch (RestClientException exception) {
-            throw unavailable(workflowCode, "Dify is unavailable or timed out");
-        } catch (IllegalArgumentException exception) {
-            throw unavailable(workflowCode, "Dify endpoint configuration is invalid");
+        String responseBody = null;
+        for (int attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt++) {
+            try {
+                responseBody = restClient.post()
+                        .uri(workflowUri(dify.getBaseUrl(), workflowCode))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.TEXT_EVENT_STREAM)
+                        .headers(headers -> headers.setBearerAuth(apiKey))
+                        .body(body)
+                        .retrieve()
+                        .body(String.class);
+            } catch (RestClientResponseException exception) {
+                if (isRetryableHttpStatus(exception.getStatusCode().value())
+                        && attempt < MAX_PROVIDER_ATTEMPTS) {
+                    pauseBeforeProviderRetry(workflowCode);
+                    continue;
+                }
+                throw unavailable(
+                        workflowCode,
+                        "Dify returned HTTP " + exception.getStatusCode().value()
+                );
+            } catch (RestClientException exception) {
+                if (attempt < MAX_PROVIDER_ATTEMPTS) {
+                    pauseBeforeProviderRetry(workflowCode);
+                    continue;
+                }
+                throw unavailable(workflowCode, "Dify is unavailable or timed out");
+            } catch (IllegalArgumentException exception) {
+                throw unavailable(workflowCode, "Dify endpoint configuration is invalid");
+            }
+
+            if (isRetryableProviderFailure(responseBody) && attempt < MAX_PROVIDER_ATTEMPTS) {
+                pauseBeforeProviderRetry(workflowCode);
+                continue;
+            }
+            break;
         }
 
         T response = mapResponse(responseBody, workflowCode, operation, expectedWorkflowId, responseType);
@@ -202,14 +225,12 @@ public class DifyAIWorkflowGateway {
             String expectedWorkflowId,
             Class<T> responseType
     ) {
-        JsonNode root = parseJson(responseBody, workflowCode);
+        JsonNode root = parseResponseEnvelope(responseBody, workflowCode);
         JsonNode data = root.get("data");
         require(data != null && data.isObject(), workflowCode, "Dify response data is missing");
-        require(
-                "succeeded".equalsIgnoreCase(data.path("status").asText()),
-                workflowCode,
-                "Dify run did not succeed"
-        );
+        if (!"succeeded".equalsIgnoreCase(data.path("status").asText())) {
+            throw unavailable(workflowCode, failedRunReason(data));
+        }
 
         JsonNode returnedWorkflowId = data.get("workflow_id");
         if (StringUtils.hasText(expectedWorkflowId)
@@ -274,12 +295,120 @@ public class DifyAIWorkflowGateway {
         return null;
     }
 
+    private JsonNode parseResponseEnvelope(String responseBody, WorkflowCode workflowCode) {
+        if (!StringUtils.hasText(responseBody)) {
+            throw unavailable(workflowCode, "Dify returned an empty response");
+        }
+
+        String stripped = responseBody.strip();
+        if (stripped.startsWith("{")) {
+            JsonNode root = parseJson(stripped, workflowCode);
+            if (!"workflow_finished".equals(root.path("event").asText())) {
+                return root;
+            }
+            return workflowFinishedEnvelope(root, workflowCode);
+        }
+
+        boolean hasServerSentEvent = responseBody.lines()
+                .map(String::strip)
+                .anyMatch(line -> line.startsWith("data:"));
+        if (!hasServerSentEvent) {
+            return parseJson(stripped, workflowCode);
+        }
+
+        JsonNode finishedEvent = null;
+        for (String line : responseBody.lines().toList()) {
+            String eventLine = line.strip();
+            if (!eventLine.startsWith("data:")) {
+                continue;
+            }
+            String eventJson = eventLine.substring("data:".length()).strip();
+            if (!StringUtils.hasText(eventJson) || "[DONE]".equals(eventJson)) {
+                continue;
+            }
+            JsonNode event = parseJson(eventJson, workflowCode);
+            String eventName = event.path("event").asText();
+            if ("error".equals(eventName)) {
+                throw unavailable(workflowCode, "Dify stream reported an error");
+            }
+            if ("workflow_finished".equals(eventName)) {
+                finishedEvent = event;
+            }
+        }
+
+        require(
+                finishedEvent != null,
+                workflowCode,
+                "Dify stream ended before workflow_finished"
+        );
+        return workflowFinishedEnvelope(finishedEvent, workflowCode);
+    }
+
+    private JsonNode workflowFinishedEnvelope(JsonNode event, WorkflowCode workflowCode) {
+        JsonNode data = event.get("data");
+        require(data != null && data.isObject(), workflowCode, "Dify workflow_finished data is missing");
+        ObjectNode root = objectMapper.createObjectNode();
+        root.set("data", data);
+        return root;
+    }
+
+    private static String failedRunReason(JsonNode data) {
+        String providerError = data.path("error").asText("").replace("\\\"", "\"");
+        if (isProviderOverloaded(providerError)) {
+            return "Dify provider is overloaded";
+        }
+        Matcher matcher = DIFY_ERROR_CODE.matcher(providerError);
+        if (matcher.find()) {
+            return "Dify run failed with provider code " + matcher.group(1);
+        }
+        return "Dify run did not succeed";
+    }
+
+    private static boolean isProviderOverloaded(String value) {
+        if (!StringUtils.hasText(value)) {
+            return false;
+        }
+        String normalized = value.toLowerCase();
+        return normalized.contains("engine_overloaded_error")
+                || normalized.contains("status code 429");
+    }
+
+    private static boolean isRetryableProviderFailure(String value) {
+        if (!StringUtils.hasText(value)) {
+            return false;
+        }
+        String normalized = value.toLowerCase();
+        return isProviderOverloaded(value)
+                || normalized.contains("status code 500")
+                || normalized.contains("status code 502")
+                || normalized.contains("status code 503")
+                || normalized.contains("status code 504")
+                || normalized.contains("internal_server_error")
+                || normalized.contains("service_unavailable")
+                || normalized.contains("bad_gateway")
+                || normalized.contains("gateway_timeout")
+                || normalized.contains("upstream request timeout");
+    }
+
+    private static boolean isRetryableHttpStatus(int status) {
+        return status == 429 || status == 500 || status == 502 || status == 503 || status == 504;
+    }
+
+    private static void pauseBeforeProviderRetry(WorkflowCode workflowCode) {
+        try {
+            Thread.sleep(PROVIDER_RETRY_DELAY.toMillis());
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw unavailable(workflowCode, "Dify provider retry was interrupted");
+        }
+    }
+
     private JsonNode parseResult(JsonNode result, WorkflowCode workflowCode) {
         require(result != null && !result.isNull(), workflowCode, "Dify business output is missing");
         if (!result.isTextual()) {
             return result;
         }
-        return parseJson(stripCodeFence(result.asText()), workflowCode);
+        return parseJson(stripCodeFence(stripModelReasoning(result.asText())), workflowCode);
     }
 
     private JsonNode parseJson(String value, WorkflowCode workflowCode) {
@@ -386,6 +515,15 @@ public class DifyAIWorkflowGateway {
             return stripped;
         }
         return stripped.substring(firstLineBreak + 1, closingFence).strip();
+    }
+
+    private static String stripModelReasoning(String value) {
+        String stripped = value == null ? "" : value.strip();
+        int closingThinkTag = stripped.lastIndexOf("</think>");
+        if (closingThinkTag < 0) {
+            return stripped;
+        }
+        return stripped.substring(closingThinkTag + "</think>".length()).strip();
     }
 
     private static void validateClarification(ClarificationResponse response, WorkflowCode workflowCode) {

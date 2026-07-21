@@ -62,8 +62,19 @@ public final class AiWorkflowDtos {
             @NotBlank String rawRequirement,
             List<String> knownFields,
             GenerationMode generationMode,
-            List<String> requestedMissingFields
+            List<String> requestedMissingFields,
+            RequirementSummaryData projectContext
     ) {
+
+        public ClarificationRequest(
+                Long projectId,
+                String rawRequirement,
+                List<String> knownFields,
+                GenerationMode generationMode,
+                List<String> requestedMissingFields
+        ) {
+            this(projectId, rawRequirement, knownFields, generationMode, requestedMissingFields, null);
+        }
 
         public ClarificationRequest(
                 Long projectId,
@@ -71,7 +82,7 @@ public final class AiWorkflowDtos {
                 List<String> knownFields,
                 GenerationMode generationMode
         ) {
-            this(projectId, rawRequirement, knownFields, generationMode, List.of());
+            this(projectId, rawRequirement, knownFields, generationMode, List.of(), null);
         }
 
         public ClarificationRequest {
@@ -95,8 +106,22 @@ public final class AiWorkflowDtos {
             @NotNull Long projectId,
             @NotBlank String rawRequirement,
             List<DialogTurn> dialogTurns,
-            GenerationMode generationMode
+            GenerationMode generationMode,
+            RequirementSummaryData projectContext
     ) {
+
+        public RequirementSummaryRequest(
+                Long projectId,
+                String rawRequirement,
+                List<DialogTurn> dialogTurns,
+                GenerationMode generationMode
+        ) {
+            this(projectId, rawRequirement, dialogTurns, generationMode, null);
+        }
+
+        public RequirementSummaryRequest {
+            dialogTurns = dialogTurns == null ? List.of() : List.copyOf(dialogTurns);
+        }
     }
 
     public record RequirementSummaryResponse(

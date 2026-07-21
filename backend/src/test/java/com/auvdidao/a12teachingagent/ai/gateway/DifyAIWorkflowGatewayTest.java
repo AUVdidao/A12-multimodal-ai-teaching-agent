@@ -116,7 +116,7 @@ class DifyAIWorkflowGatewayTest {
 
         assertThat(path.get()).isEqualTo("/v1/workflows/run");
         assertThat(authorization.get()).isEqualTo("Bearer wf-01-key");
-        assertThat(requestBody.get().path("response_mode").asText()).isEqualTo("blocking");
+        assertThat(requestBody.get().path("response_mode").asText()).isEqualTo("streaming");
         assertThat(requestBody.get().path("user").asText()).isEqualTo("teacher-project-78");
         JsonNode inputs = requestBody.get().path("inputs");
         assertThat(inputs.size()).isEqualTo(1);
@@ -131,6 +131,62 @@ class DifyAIWorkflowGatewayTest {
         assertThat(response.questions()).containsExactly("Which audience?");
         assertThat(response.suggestedFields()).containsEntry("courseName", "Mathematics");
         assertThat(response.nextAction()).isEqualTo("ANSWER_CLARIFICATION_QUESTIONS");
+    }
+
+    @Test
+    void mapsWorkflowFinishedFromServerSentEvents() {
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01-v3", "wf-01-key");
+        AtomicReference<String> accept = new AtomicReference<>();
+        handler.set(exchange -> {
+            accept.set(exchange.getRequestHeaders().getFirst("Accept"));
+            readJson(exchange);
+            ObjectNode business = outputForClarification();
+            ObjectNode finished = objectMapper.createObjectNode();
+            finished.put("event", "workflow_finished");
+            finished.set(
+                    "data",
+                    successWithObjectOutput("published-wf-01-v3", "result", business).path("data")
+            );
+            sendSse(
+                    exchange,
+                    objectNode("""
+                            {"event":"workflow_started","workflow_run_id":"run-1"}
+                            """),
+                    finished
+            );
+        });
+
+        var response = gateway().clarifyRequirement(new ClarificationRequest(
+                78L,
+                "Create a fraction lesson",
+                List.of("courseName"),
+                GenerationMode.STANDARD
+        ));
+
+        assertThat(accept.get()).contains("text/event-stream");
+        assertThat(response.workflow()).isEqualTo("published-wf-01-v3");
+        assertThat(response.questions()).containsExactly("Which audience?");
+    }
+
+    @Test
+    void rejectsStreamThatEndsWithoutWorkflowFinished() {
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01-v3", "wf-01-key");
+        handler.set(exchange -> {
+            readJson(exchange);
+            sendSse(
+                    exchange,
+                    objectNode("""
+                            {"event":"workflow_started","workflow_run_id":"run-1"}
+                            """)
+            );
+        });
+
+        assertThatThrownBy(() -> gateway().clarifyRequirement(new ClarificationRequest(
+                78L,
+                "Create a fraction lesson",
+                List.of("courseName"),
+                GenerationMode.STANDARD
+        ))).isInstanceOf(AiWorkflowUnavailableException.class);
     }
 
     @Test
@@ -239,7 +295,7 @@ class DifyAIWorkflowGatewayTest {
         assertThat(content.workflow()).isEqualTo("published-wf-06");
         assertThat(content.fallbackToBackendDrafts()).isFalse();
         assertThat(content.pptContent().contentJson().path("slides")).hasSize(1);
-        assertThat(content.docContent().contentJson().path("sections")).hasSize(1);
+        assertThat(content.docContent().contentJson().path("sections")).hasSize(9);
         assertThat(content.interactionContent().contentJson().path("questions")).hasSize(1);
         assertThat(revision.workflow()).isEqualTo("published-wf-07");
         assertThat(operations).containsExactlyInAnyOrder(
@@ -360,6 +416,145 @@ class DifyAIWorkflowGatewayTest {
     }
 
     @Test
+    void failedRunExposesOnlyProviderErrorCode() {
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01", "private-key-value");
+        ObjectNode response = objectMapper.createObjectNode();
+        ObjectNode data = response.putObject("data");
+        data.put("workflow_id", "published-wf-01");
+        data.put("status", "failed");
+        data.put(
+                "error",
+                "PluginInvokeError: {\\\"code\\\":\\\"GROUP_DISABLED\\\",\\\"message\\\":\\\"provider-secret-body\\\"}"
+        );
+        handler.set(exchange -> sendJson(exchange, 200, response));
+
+        assertThatThrownBy(() -> gateway().clarifyRequirement(new ClarificationRequest(
+                78L,
+                "Create a fraction lesson",
+                List.of(),
+                GenerationMode.STANDARD
+        )))
+                .isInstanceOf(AiWorkflowUnavailableException.class)
+                .hasMessageContaining("GROUP_DISABLED")
+                .hasMessageNotContaining("provider-secret-body")
+                .hasMessageNotContaining("private-key-value");
+    }
+
+    @Test
+    void providerOverloadIsRetriedOnceAndThenSucceeds() {
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01", "private-key-value");
+        AtomicInteger calls = new AtomicInteger();
+        handler.set(exchange -> {
+            readJson(exchange);
+            if (calls.getAndIncrement() == 0) {
+                ObjectNode failed = objectMapper.createObjectNode();
+                ObjectNode data = failed.putObject("data");
+                data.put("workflow_id", "published-wf-01");
+                data.put("status", "failed");
+                data.put("error", "API request failed with status code 429: engine_overloaded_error");
+                sendJson(exchange, 200, failed);
+                return;
+            }
+            sendJson(exchange, 200, successWithObjectOutput(
+                    "published-wf-01",
+                    "result",
+                    outputForClarification()
+            ));
+        });
+
+        var response = gateway().clarifyRequirement(new ClarificationRequest(
+                78L,
+                "Create a fraction lesson",
+                List.of(),
+                GenerationMode.STANDARD
+        ));
+
+        assertThat(calls.get()).isEqualTo(2);
+        assertThat(response.questions()).containsExactly("Which audience?");
+    }
+
+    @Test
+    void transientHttpFailureIsRetriedOnceAndThenSucceeds() {
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01", "private-key-value");
+        AtomicInteger calls = new AtomicInteger();
+        handler.set(exchange -> {
+            readJson(exchange);
+            if (calls.getAndIncrement() == 0) {
+                sendRaw(exchange, 503, "{\"error\":\"temporary upstream failure\"}");
+                return;
+            }
+            sendJson(exchange, 200, successWithObjectOutput(
+                    "published-wf-01",
+                    "result",
+                    outputForClarification()
+            ));
+        });
+
+        var response = gateway().clarifyRequirement(new ClarificationRequest(
+                78L,
+                "Create a fraction lesson",
+                List.of(),
+                GenerationMode.STANDARD
+        ));
+
+        assertThat(calls.get()).isEqualTo(2);
+        assertThat(response.questions()).containsExactly("Which audience?");
+    }
+
+    @Test
+    void transientFailedRunIsRetriedOnceAndThenSucceeds() {
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01", "private-key-value");
+        AtomicInteger calls = new AtomicInteger();
+        handler.set(exchange -> {
+            readJson(exchange);
+            if (calls.getAndIncrement() == 0) {
+                ObjectNode failed = objectMapper.createObjectNode();
+                ObjectNode data = failed.putObject("data");
+                data.put("workflow_id", "published-wf-01");
+                data.put("status", "failed");
+                data.put("error", "API request failed with status code 503: service_unavailable");
+                sendJson(exchange, 200, failed);
+                return;
+            }
+            sendJson(exchange, 200, successWithObjectOutput(
+                    "published-wf-01",
+                    "result",
+                    outputForClarification()
+            ));
+        });
+
+        var response = gateway().clarifyRequirement(new ClarificationRequest(
+                78L,
+                "Create a fraction lesson",
+                List.of(),
+                GenerationMode.STANDARD
+        ));
+
+        assertThat(calls.get()).isEqualTo(2);
+        assertThat(response.questions()).containsExactly("Which audience?");
+    }
+
+    @Test
+    void stripsKimiReasoningPrefixBeforeParsingBusinessJson() {
+        configure(WorkflowCode.CLARIFICATION, "published-wf-01", "wf-01-key");
+        handler.set(exchange -> sendJson(exchange, 200, successWithTextResult(
+                "published-wf-01",
+                "<think>Internal reasoning that must not reach the JSON parser.</think>\n"
+                        + outputForClarification()
+        )));
+
+        var response = gateway().clarifyRequirement(new ClarificationRequest(
+                78L,
+                "Create a fraction lesson",
+                List.of(),
+                GenerationMode.STANDARD
+        ));
+
+        assertThat(response.workflow()).isEqualTo("published-wf-01");
+        assertThat(response.questions()).containsExactly("Which audience?");
+    }
+
+    @Test
     void invalidJsonAndIncompleteBusinessOutputAreRejected() {
         configure(WorkflowCode.CLARIFICATION, "published-wf-01", "wf-01-key");
         AtomicInteger calls = new AtomicInteger();
@@ -433,6 +628,42 @@ class DifyAIWorkflowGatewayTest {
         )))
                 .isInstanceOf(AiWorkflowUnavailableException.class)
                 .hasMessageContaining("PPT deckTitle is missing");
+    }
+
+    @Test
+    void structuredContentAcceptsSingleTextDocListFields() {
+        configure(WorkflowCode.CONTENT_DRAFT, "published-wf-06", "wf-06-key");
+        ObjectNode output = outputFor("structured-content");
+        ObjectNode doc = (ObjectNode) output.path("docContent").path("contentJson");
+        for (String field : List.of(
+                "teachingGoals", "keyPoints", "difficultPoints", "methods",
+                "classroomActivities", "homework", "resourceNotes"
+        )) {
+            doc.put(field, doc.path(field).get(0).asText());
+        }
+        handler.set(exchange -> sendJson(exchange, 200, successWithObjectOutput(
+                "published-wf-06",
+                "result",
+                output
+        )));
+
+        var response = gateway().generateStructuredContent(new StructuredContentRequest(
+                78L,
+                new GenerationPlanSnapshot(
+                        "plan-78",
+                        List.of(new PlanSection("Introduction", List.of("Goal"), "Confirmed plan")),
+                        List.of(new PlanSection("Process", List.of("Explain"), "Confirmed plan")),
+                        List.of("Quick quiz")
+                ),
+                List.of(),
+                List.of("PPT", "DOCX", "INTERACTION")
+        ));
+
+        JsonNode normalizedDoc = response.docContent().contentJson();
+        assertThat(normalizedDoc.path("teachingGoals")).hasSize(1);
+        assertThat(normalizedDoc.path("resourceNotes")).hasSize(1);
+        assertThat(normalizedDoc.path("sections")).hasSize(9);
+        assertThat(response.fallbackToBackendDrafts()).isFalse();
     }
 
     private DifyAIWorkflowGateway gateway() {
@@ -737,6 +968,20 @@ class DifyAIWorkflowGatewayTest {
 
     private void sendJson(HttpExchange exchange, int status, JsonNode body) throws IOException {
         sendRaw(exchange, status, objectMapper.writeValueAsString(body));
+    }
+
+    private void sendSse(HttpExchange exchange, JsonNode... events) throws IOException {
+        StringBuilder body = new StringBuilder();
+        for (JsonNode event : events) {
+            body.append("data: ")
+                    .append(objectMapper.writeValueAsString(event))
+                    .append("\n\n");
+        }
+        byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
     }
 
     private void sendRaw(HttpExchange exchange, int status, String body) throws IOException {
