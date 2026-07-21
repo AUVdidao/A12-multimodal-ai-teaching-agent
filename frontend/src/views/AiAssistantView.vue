@@ -827,9 +827,9 @@ function latestDialogueSessionId(items: DialogueMessage[]) {
   const latestBySession = new Map<string, DialogueMessage>();
   for (const item of items) {
     const current = latestBySession.get(item.sessionId);
-    if (!current || sortDialoguesAsc(current, item) < 0) latestBySession.set(item.sessionId, item);
+    if (!current || sortDialoguesByRecencyAsc(current, item) < 0) latestBySession.set(item.sessionId, item);
   }
-  return [...latestBySession.values()].sort(sortDialoguesAsc).at(-1)?.sessionId;
+  return [...latestBySession.values()].sort(sortDialoguesByRecencyAsc).at(-1)?.sessionId;
 }
 
 function dialogueToMessage(dialogue: DialogueMessage): AssistantMessage {
@@ -963,6 +963,11 @@ function statusTextForQuestion(status: Question['status']) {
 function sortDialoguesAsc(a: DialogueMessage, b: DialogueMessage) {
   return (a.roundNo || 0) - (b.roundNo || 0)
     || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    || a.id - b.id;
+}
+
+function sortDialoguesByRecencyAsc(a: DialogueMessage, b: DialogueMessage) {
+  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     || a.id - b.id;
 }
 
