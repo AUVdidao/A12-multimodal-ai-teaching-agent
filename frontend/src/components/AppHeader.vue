@@ -1,6 +1,13 @@
 <template>
   <div class="app-header">
-    <div class="app-header__title">
+    <RouterLink v-if="isHome" class="app-header__brand" :to="{ name: 'home' }" aria-label="A12 教学智能体首页">
+      <UiBrandMark :size="38" />
+      <span>
+        <strong>A12 教学智能体</strong>
+        <small>多模态 AI 互动式教学</small>
+      </span>
+    </RouterLink>
+    <div v-else-if="title" class="app-header__title">
       <h1>{{ title }}</h1>
     </div>
 
@@ -70,6 +77,7 @@
 <script setup lang="ts">
 import type { UserRole } from '@/api/auth';
 import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
+import UiBrandMark from '@/components/ui/UiBrandMark.vue';
 import { roleHome } from '@/router';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
@@ -79,7 +87,8 @@ import { useRoute, useRouter } from 'vue-router';
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const title = computed(() => String(route.meta.title || '教学工作台'));
+const title = computed(() => String(route.meta.title ?? '教学工作台'));
+const isHome = computed(() => route.name === 'home');
 const avatarText = computed(() => (auth.user?.displayName || '用户').slice(0, 1));
 const roleLabel = computed(() => roleName(auth.activeRole || 'TEACHER'));
 const searchInput = ref<HTMLInputElement>();
@@ -165,6 +174,34 @@ async function handleCommand(command: string) {
 </script>
 
 <style scoped>
+.app-header__brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-header__brand > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.app-header__brand strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header__brand small {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
 .header-search-submit {
   display: grid;
   flex: 0 0 auto;

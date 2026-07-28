@@ -1,6 +1,6 @@
 <template>
-  <div class="app-shell">
-    <aside class="app-shell__aside">
+  <div class="app-shell" :class="{ 'app-shell--home': scene === 'HOME' }">
+    <aside v-if="scene !== 'HOME'" class="app-shell__aside">
       <AppSidebar />
     </aside>
 
@@ -21,6 +21,20 @@ import AppSidebar from '@/components/AppSidebar.vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
+type WorkspaceScene = 'HOME' | 'COURSE_DEVELOPMENT' | 'RESULT_COLLABORATION' | 'STUDENT_INTERACTION' | 'STUDENT_SPACE';
+
 const route = useRoute();
 const isIntentPage = computed(() => route.name === 'project-intent');
+const scene = computed<WorkspaceScene>(() => {
+  if (route.name === 'home') return 'HOME';
+  if (String(route.name).startsWith('student-')) return 'STUDENT_SPACE';
+  if (route.meta.scene) return route.meta.scene as WorkspaceScene;
+  if (['teacher-approvals', 'teacher-publications', 'teacher-teaching-tasks', 'leader-approvals', 'leader-publications'].includes(String(route.name))) {
+    return 'RESULT_COLLABORATION';
+  }
+  if (['teacher-questions', 'leader-questions', 'teaching-analytics', 'student-insights'].includes(String(route.name))) {
+    return 'STUDENT_INTERACTION';
+  }
+  return 'COURSE_DEVELOPMENT';
+});
 </script>

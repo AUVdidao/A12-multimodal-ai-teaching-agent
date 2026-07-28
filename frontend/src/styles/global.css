@@ -109,6 +109,10 @@ textarea {
   overflow: hidden;
 }
 
+.app-shell--home {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .app-shell__header {
   height: 78px;
   background: var(--ui-panel);
@@ -1178,6 +1182,16 @@ textarea {
     height: auto;
     min-height: 100vh;
     padding: 0;
+  }
+
+  .app-shell__workspace {
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .app-shell__main {
+    padding: 16px;
+    overflow: visible;
   }
 
   .app-shell__aside {

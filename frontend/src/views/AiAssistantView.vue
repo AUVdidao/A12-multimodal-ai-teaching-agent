@@ -1,16 +1,5 @@
 <template>
   <section class="page assistant-page">
-    <header class="assistant-page__header">
-      <div>
-        <span>AI 教学工作副驾驶</span>
-        <h1>围绕当前项目推进教学设计</h1>
-        <p>AI 会读取项目、需求、资料、知识库、生成进度与学生问题，并把可执行的下一步放回真实工作区。</p>
-      </div>
-      <el-tooltip content="刷新项目上下文与 AI 状态" placement="bottom">
-        <el-button circle :icon="Refresh" :loading="loading" aria-label="刷新项目上下文与 AI 状态" @click="loadPage" />
-      </el-tooltip>
-    </header>
-
     <StatePanel
       v-if="projectsError && projects.length === 0"
       type="error"
@@ -1013,34 +1002,6 @@ function createMessageId() {
   gap: 18px;
 }
 
-.assistant-page__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.assistant-page__header span {
-  color: var(--ui-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.assistant-page__header h1 {
-  margin: 4px 0 0;
-  color: var(--ui-text);
-  font-size: 24px;
-  line-height: 1.35;
-}
-
-.assistant-page__header p {
-  max-width: 780px;
-  margin: 8px 0 0;
-  color: var(--ui-muted);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
 .assistant-shell {
   display: grid;
   min-width: 0;
@@ -1065,11 +1026,6 @@ function createMessageId() {
 @media (max-width: 760px) {
   .assistant-page {
     min-height: auto;
-  }
-
-  .assistant-page__header {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .assistant-workspace {

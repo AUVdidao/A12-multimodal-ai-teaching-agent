@@ -12,20 +12,20 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/leader',
     name: 'leader-workspace',
-    component: () => import('@/views/RoleWorkspaceView.vue'),
+    redirect: '/home',
     meta: { title: '教研管理工作台', roles: ['LEADER'] },
   },
   {
     path: '/leader/tasks',
     name: 'leader-teaching-tasks',
     component: () => import('@/views/TeachingTasksView.vue'),
-    meta: { title: '教学任务管理', roles: ['LEADER'] },
+    meta: { title: '教学任务管理', roles: ['LEADER'], scene: 'TEACHER_INTERACTION' },
   },
   {
     path: '/leader/courses',
     name: 'leader-courses',
     component: () => import('@/views/CourseManagementView.vue'),
-    meta: { title: '课程与班级', roles: ['LEADER'] },
+    meta: { title: '课程与班级', roles: ['LEADER'], scene: 'TEACHER_INTERACTION' },
   },
   {
     path: '/leader/approvals',
@@ -64,10 +64,29 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的学习问答', roles: ['STUDENT'] },
   },
   {
-    path: '/',
+    path: '/home',
     name: 'home',
     component: () => import('@/views/HomeView.vue'),
-    meta: { title: '教师工作台', roles: ['TEACHER'] },
+    meta: { title: '教师工作台', roles: ['TEACHER', 'LEADER'] },
+  },
+  { path: '/', redirect: '/home' },
+  {
+    path: '/course-development',
+    name: 'course-development',
+    component: () => import('@/views/CourseDevelopmentView.vue'),
+    meta: { title: '课程开发', roles: ['TEACHER', 'LEADER'], scene: 'COURSE_DEVELOPMENT' },
+  },
+  {
+    path: '/result-collaboration',
+    name: 'result-collaboration',
+    component: () => import('@/views/ResultCollaborationView.vue'),
+    meta: { title: '成果提交与审批', roles: ['TEACHER', 'LEADER'], scene: 'RESULT_COLLABORATION' },
+  },
+  {
+    path: '/student-interaction',
+    name: 'student-interaction',
+    component: () => import('@/views/StudentInteractionView.vue'),
+    meta: { title: '学生互动与反馈', roles: ['TEACHER', 'LEADER'], scene: 'STUDENT_INTERACTION' },
   },
   {
     path: '/search',
@@ -145,7 +164,7 @@ const routes: RouteRecordRaw[] = [
     path: '/assistant',
     name: 'ai-assistant',
     component: () => import('@/views/AiAssistantView.vue'),
-    meta: { title: 'AI 教学工作副驾驶', roles: ['TEACHER'] },
+    meta: { title: '', roles: ['TEACHER'] },
   },
   {
     path: '/projects',
@@ -241,9 +260,9 @@ const router = createRouter({
 });
 
 export function roleHome(role?: UserRole) {
-  if (role === 'LEADER') return '/leader';
+  if (role === 'LEADER') return '/home';
   if (role === 'STUDENT') return '/student';
-  return '/';
+  return '/home';
 }
 
 router.beforeEach(async (to) => {
@@ -268,7 +287,15 @@ router.beforeEach(async (to) => {
   }
 
   const allowedRoles = (to.meta.roles || []) as UserRole[];
-  if (allowedRoles.length > 0 && (!auth.activeRole || !allowedRoles.includes(auth.activeRole))) {
+  const leaderCourseRouteNames = new Set([
+    'home',
+    'projects', 'project-create', 'project-mode', 'project-overview', 'project-requirements',
+    'project-summary', 'project-materials', 'project-knowledge', 'project-intent', 'project-plan',
+    'project-preview', 'project-export', 'recent-projects', 'recycle-bin', 'resource-library',
+    'knowledge-library', 'template-center', 'ai-assistant',
+  ]);
+  const leaderCanUseCourseRoute = auth.activeRole === 'LEADER' && leaderCourseRouteNames.has(String(to.name));
+  if (allowedRoles.length > 0 && (!auth.activeRole || (!allowedRoles.includes(auth.activeRole) && !leaderCanUseCourseRoute))) {
     return roleHome(auth.activeRole);
   }
   return true;

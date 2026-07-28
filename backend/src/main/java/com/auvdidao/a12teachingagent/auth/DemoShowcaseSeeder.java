@@ -580,7 +580,9 @@ public class DemoShowcaseSeeder implements ApplicationRunner {
     }
 
     private void upsertExport(Long projectId, ExportType type, String fileName, LocalDateTime timestamp) {
-        ExportRecord record = exportRecordRepository.findByProjectIdAndExportType(projectId, type)
+        // Existing demo databases may contain historical duplicate export rows.
+        // The seed is idempotent, so reuse the oldest record instead of requiring uniqueness.
+        ExportRecord record = exportRecordRepository.findFirstByProjectIdAndExportTypeOrderByCreatedAtAsc(projectId, type)
                 .orElseGet(() -> created(new ExportRecord(), timestamp));
         record.setProjectId(projectId);
         record.setExportType(type);

@@ -3,7 +3,6 @@
     <template v-if="workspace">
       <ProjectContextHeader :project="workspace.project" />
       <ProjectWorkspaceNav :project-id="workspace.project.id" />
-      <IntentWorkflowStepper />
     </template>
 
     <div v-if="workspace" class="intent-page__content">
@@ -184,7 +183,6 @@ import IntentCheckTag from '@/components/intent/IntentCheckTag.vue';
 import IntentEvidencePanel from '@/components/intent/IntentEvidencePanel.vue';
 import IntentFormSection from '@/components/intent/IntentFormSection.vue';
 import IntentStatusCard from '@/components/intent/IntentStatusCard.vue';
-import IntentWorkflowStepper from '@/components/intent/IntentWorkflowStepper.vue';
 import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
@@ -395,11 +393,6 @@ onBeforeUnmount(() => window.clearTimeout(feedbackTimer));
   padding-bottom: 12px;
   flex-direction: column;
   color: #171b2c;
-}
-
-.intent-page > :deep(.intent-stepper) {
-  flex: 0 0 48px;
-  margin-bottom: 9px;
 }
 
 .intent-page__content {

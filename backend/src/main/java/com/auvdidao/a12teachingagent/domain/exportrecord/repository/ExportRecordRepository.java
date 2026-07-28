@@ -12,4 +12,6 @@ public interface ExportRecordRepository extends JpaRepository<ExportRecord, Long
     List<ExportRecord> findByProjectIdOrderByCreatedAtAsc(Long projectId);
 
     Optional<ExportRecord> findByProjectIdAndExportType(Long projectId, ExportType exportType);
+
+    Optional<ExportRecord> findFirstByProjectIdAndExportTypeOrderByCreatedAtAsc(Long projectId, ExportType exportType);
 }
