@@ -23,12 +23,18 @@
         </div>
       </div>
 
-      <div v-if="errorMessage" class="project-list-error">
-        <el-alert :title="errorMessage" type="error" show-icon :closable="false" />
-        <el-button :loading="loading" @click="loadProjects">重新加载</el-button>
-      </div>
+      <StatePanel
+        v-if="errorMessage && projects.length === 0"
+        type="error"
+        title="教学项目读取失败"
+        :description="errorMessage"
+      >
+        <template #action>
+          <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadProjects">重新加载</el-button>
+        </template>
+      </StatePanel>
 
-      <el-table v-if="!isMobileViewport" v-loading="loading" :data="projects" @row-click="openProject">
+      <el-table v-else-if="!isMobileViewport" v-loading="loading" :data="projects" @row-click="openProject">
         <el-table-column label="教学项目" min-width="220">
           <template #default="{ row }">
             <div class="project-table-identity">
@@ -66,26 +72,50 @@
             <time :datetime="row.updatedAt">{{ formatDateTime(row.updatedAt) }}</time>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="202" fixed="right">
+        <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
             <div class="project-row-actions">
-              <el-button class="project-row-actions__continue" type="primary" plain @click.stop="openProject(row)">继续项目</el-button>
               <el-button
-                class="project-row-actions__recycle"
-                type="danger"
-                plain
-                :loading="deletingProjectId === row.id"
-                @click.stop="moveToRecycleBin(row)"
+                class="project-row-actions__continue"
+                type="primary"
+                :disabled="deletingProjectId === row.id"
+                @click.stop="openNextAction(row)"
               >
-                移入回收站
+                <span>{{ primaryActionLabel(row) }}</span>
               </el-button>
+              <el-dropdown trigger="click" @command="handleProjectCommand($event, row)">
+                <el-button
+                  class="project-row-actions__more"
+                  circle
+                  :icon="MoreFilled"
+                  :disabled="deletingProjectId === row.id"
+                  :loading="deletingProjectId === row.id"
+                  :aria-label="`${row.projectName}的更多操作`"
+                  @click.stop
+                />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="overview" :icon="View">项目概览</el-dropdown-item>
+                    <el-dropdown-item command="recycle" :icon="Delete" divided>移入回收站</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>
+        <template #empty>
+          <el-empty description="没有符合当前条件的教学项目" :image-size="72">
+            <el-button v-if="hasActiveFilter" @click="resetFilters">清除筛选</el-button>
+            <el-button v-else type="primary" :icon="Plus" @click="router.push('/projects/new')">新建教学项目</el-button>
+          </el-empty>
+        </template>
       </el-table>
 
       <section v-else class="project-mobile-list" v-loading="loading" aria-label="教学项目列表">
-        <el-empty v-if="!loading && projects.length === 0" description="暂无教学项目" :image-size="72" />
+        <el-empty v-if="!loading && projects.length === 0" description="没有符合当前条件的教学项目" :image-size="72">
+          <el-button v-if="hasActiveFilter" @click="resetFilters">清除筛选</el-button>
+          <el-button v-else type="primary" :icon="Plus" @click="router.push('/projects/new')">新建教学项目</el-button>
+        </el-empty>
         <article v-for="project in projects" :key="project.id" class="project-mobile-card">
           <div class="project-mobile-card__heading">
             <div class="project-mobile-card__identity">
@@ -118,13 +148,35 @@
             <strong>{{ project.progress }}%</strong>
           </div>
           <div class="project-mobile-card__actions">
-            <el-button class="project-row-actions__continue" type="primary" plain @click="openProject(project)">继续项目</el-button>
-            <el-button class="project-row-actions__recycle" type="danger" plain :loading="deletingProjectId === project.id" @click="moveToRecycleBin(project)">移入回收站</el-button>
+            <el-button
+              class="project-row-actions__continue"
+              type="primary"
+              :disabled="deletingProjectId === project.id"
+              @click="openNextAction(project)"
+            >
+              <span>{{ primaryActionLabel(project) }}</span>
+            </el-button>
+            <el-dropdown trigger="click" @command="handleProjectCommand($event, project)">
+              <el-button
+                class="project-row-actions__more"
+                circle
+                :icon="MoreFilled"
+                :disabled="deletingProjectId === project.id"
+                :loading="deletingProjectId === project.id"
+                :aria-label="`${project.projectName}的更多操作`"
+              />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="overview" :icon="View">项目概览</el-dropdown-item>
+                  <el-dropdown-item command="recycle" :icon="Delete" divided>移入回收站</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </article>
       </section>
 
-      <div class="project-list-footer">
+      <div v-if="!errorMessage" class="project-list-footer">
         <p class="muted">共 {{ total }} 个项目</p>
         <el-pagination
           v-model:current-page="currentPage"
@@ -141,12 +193,14 @@
 <script setup lang="ts">
 import { deleteProject } from '@/api/projects';
 import { getWorkspaceProjects, type ProjectBrief } from '@/api/workspace';
+import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 import UiSubjectIcon from '@/components/ui/UiSubjectIcon.vue';
 import { formatDateTime, projectIcon, projectTone, stageTone } from '@/utils/presentation';
+import { Delete, MoreFilled, Plus, Refresh, View } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();
 const keyword = ref('');
@@ -165,6 +219,7 @@ let searchTimer: number | undefined;
 const isMobileViewport = computed(() => viewportWidth.value <= 760);
 const isCompactTable = computed(() => viewportWidth.value <= 1500);
 const isNarrowTable = computed(() => viewportWidth.value <= 1180);
+const hasActiveFilter = computed(() => Boolean(keyword.value.trim()) || filter.value !== 'ALL');
 
 async function loadProjects() {
   loading.value = true;
@@ -189,7 +244,29 @@ async function loadProjects() {
 }
 
 function openProject(project: ProjectBrief) {
-  router.push(`/projects/${project.id}`);
+  void router.push(`/projects/${project.id}`);
+}
+
+function openNextAction(project: ProjectBrief) {
+  void router.push(project.actionPath || `/projects/${project.id}`);
+}
+
+function primaryActionLabel(project: ProjectBrief) {
+  return project.nextAction?.trim() || '打开项目';
+}
+
+function handleProjectCommand(command: string | number | object, project: ProjectBrief) {
+  if (String(command) === 'overview') {
+    openProject(project);
+    return;
+  }
+  if (String(command) === 'recycle') void moveToRecycleBin(project);
+}
+
+function resetFilters() {
+  keyword.value = '';
+  filter.value = 'ALL';
+  currentPage.value = 1;
 }
 
 function toggleSort() {
@@ -311,14 +388,18 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateViewportWidth))
 
 .project-table-progress {
   display: grid;
-  grid-template-columns: 92px 42px;
+  grid-template-columns: minmax(48px, 1fr) 36px;
   align-items: center;
-  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
 }
 
 .project-table-progress strong {
   color: #4d5670;
   font-size: 13px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .project-table-progress__track {
@@ -372,19 +453,9 @@ time {
   margin: 0;
 }
 
-.project-list-error {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.project-list-error .el-alert {
-  flex: 1 1 auto;
-}
-
 .project-row-actions {
   display: flex;
+  min-width: 0;
   justify-content: flex-end;
   gap: 8px;
 }
@@ -393,36 +464,20 @@ time {
   margin-left: 0;
 }
 
-.project-row-actions__continue.el-button--primary.is-plain {
-  border-color: #c9bcff;
-  background: transparent;
-  color: var(--ui-primary);
+.project-row-actions__continue {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
-.project-row-actions__continue.el-button--primary.is-plain:hover,
-.project-row-actions__continue.el-button--primary.is-plain:focus-visible {
-  border-color: #4e3aef;
-  background: var(--ui-primary-soft);
-  color: #4e3aef;
+.project-row-actions__continue span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.project-row-actions__continue.el-button--primary.is-plain:active {
-  border-color: #3f2ad8;
-  background: #e4deff;
-  color: #3f2ad8;
-}
-
-.project-row-actions__recycle.el-button--danger.is-plain {
-  border-color: #f1c6cb;
-  background: transparent;
-  color: #c94754;
-}
-
-.project-row-actions__recycle.el-button--danger.is-plain:hover,
-.project-row-actions__recycle.el-button--danger.is-plain:focus-visible {
-  border-color: var(--ui-danger);
-  background: #fff0f1;
-  color: #b63c47;
+.project-row-actions__more {
+  flex: 0 0 auto;
 }
 
 .project-mobile-list {
@@ -548,7 +603,7 @@ time {
 
 .project-mobile-card__actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   min-width: 0;
 }
@@ -581,13 +636,5 @@ time {
     flex-direction: column;
   }
 
-  .project-list-error {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .project-list-error .el-button {
-    width: 100%;
-  }
 }
 </style>

@@ -30,6 +30,15 @@
         @overview="goToProjectRoute('project-overview')"
       />
 
+      <section v-if="contextFailureMessage" class="assistant-context-error" role="alert">
+        <el-icon><WarningFilled /></el-icon>
+        <div>
+          <strong>部分项目上下文读取失败</strong>
+          <span>{{ contextFailureMessage }}</span>
+        </div>
+        <el-button :icon="Refresh" :loading="contextLoading" @click="retryProjectContext">重新同步</el-button>
+      </section>
+
       <main class="assistant-workspace">
         <AssistantConversation
           v-model="composerText"
@@ -90,7 +99,7 @@ import type {
   AssistantWorkspaceAction,
 } from '@/types/assistant';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Refresh } from '@element-plus/icons-vue';
+import { Refresh, WarningFilled } from '@element-plus/icons-vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter, type RouteLocationRaw } from 'vue-router';
 
@@ -146,6 +155,11 @@ const serviceState = computed<'ok' | 'error' | 'unknown'>(() => {
   if (providerPresentation.value.tone === 'danger' || statusError.value) return 'error';
   if (!gatewayStatus.value) return 'unknown';
   return 'ok';
+});
+const contextFailureMessage = computed(() => {
+  if (!selectedProject.value || contextLoading.value) return '';
+  const failed = sourceStatuses.value.filter((source) => source.state === 'error').map((source) => source.label);
+  return failed.length ? `${failed.join('、')}暂时不可用；其余已读取数据仍可继续使用。` : '';
 });
 
 const currentArtifacts = computed(() => generationWorkspace.value?.artifacts ?? []);
@@ -311,6 +325,11 @@ async function selectProject(projectId: number) {
   selectedProjectId.value = projectId;
   localStorage.setItem(ASSISTANT_PROJECT_STORAGE_KEY, String(projectId));
   await loadProjectContext(projectId);
+}
+
+async function retryProjectContext() {
+  if (!selectedProjectId.value || contextLoading.value) return;
+  await loadProjectContext(selectedProjectId.value);
 }
 
 async function loadProjectContext(projectId: number) {
@@ -1009,6 +1028,39 @@ function createMessageId() {
   gap: 16px;
 }
 
+.assistant-context-error {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #f0c8cc;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: var(--ui-danger);
+}
+
+.assistant-context-error > .el-icon {
+  font-size: 20px;
+}
+
+.assistant-context-error div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.assistant-context-error strong {
+  color: #9f3240;
+  font-size: 14px;
+}
+
+.assistant-context-error span {
+  color: #75515a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .assistant-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
@@ -1030,6 +1082,15 @@ function createMessageId() {
 
   .assistant-workspace {
     min-height: 680px;
+  }
+
+  .assistant-context-error {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .assistant-context-error .el-button {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 }
 </style>
