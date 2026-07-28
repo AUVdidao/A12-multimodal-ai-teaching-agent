@@ -2,6 +2,7 @@ package com.auvdidao.a12teachingagent.common.exception;
 
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
+import com.auvdidao.a12teachingagent.pptskill.PptSkillGenerationException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,11 +14,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException exception) {
@@ -60,6 +65,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.failure(HttpStatus.SERVICE_UNAVAILABLE.value(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(PptSkillGenerationException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePptSkillGeneration(PptSkillGenerationException exception) {
+        return ResponseEntity
+                .status(exception.getStatus())
+                .body(ApiResponse.failure(exception.getStatus().value(), exception.getCode() + ": " + exception.getMessage()));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -125,6 +137,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
+        LOGGER.error("Unhandled API exception", exception);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.failure(

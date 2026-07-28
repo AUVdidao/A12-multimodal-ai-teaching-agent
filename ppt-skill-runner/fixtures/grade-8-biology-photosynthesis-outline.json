@@ -1,0 +1,134 @@
+{
+  "title": "八年级生物：光合作用",
+  "subtitle": "从叶片结构到能量转化的探究课",
+  "deck_style": {
+    "visual_density": "medium",
+    "header_variant": "auto",
+    "style_seed": "grade-8-photosynthesis",
+    "footer_page_numbers": true
+  },
+  "slides": [
+    {
+      "type": "title",
+      "title": "光合作用：把光能储存在有机物中",
+      "subtitle": "八年级生物 · 探究叶片如何制造养分"
+    },
+    {
+      "type": "content",
+      "variant": "standard",
+      "title": "从一片叶子的疑问出发",
+      "subtitle": "课堂导入",
+      "body": "一棵幼苗增加的质量主要来自哪里？土壤、水还是空气？",
+      "bullets": [
+        "观察同一植株在光照和遮光条件下的差异",
+        "提出可验证的问题：光照是否影响淀粉形成",
+        "用证据解释植物质量增长的物质来源"
+      ],
+      "highlights": [
+        "驱动问题：植物新增物质来自哪里？",
+        "证据路径：现象 → 对照实验 → 结论"
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "cards-3",
+      "title": "本节课的三个学习目标",
+      "subtitle": "知识、探究与表达",
+      "cards": [
+        { "title": "理解概念", "body": "说出光合作用的场所、原料、条件和产物。", "accent": "accent_primary" },
+        { "title": "完成探究", "body": "能控制变量并用碘液检验叶片中的淀粉。", "accent": "accent_secondary" },
+        { "title": "解释现象", "body": "用物质与能量转化解释农业生产中的光照管理。", "accent": "accent_primary" }
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "split",
+      "title": "光合作用的核心过程",
+      "subtitle": "叶绿体是能量转化的场所",
+      "bullets": [
+        "原料：二氧化碳和水",
+        "条件：光",
+        "场所：叶绿体",
+        "产物：有机物和氧气"
+      ],
+      "highlights": [
+        "光能转化为有机物中稳定的化学能",
+        "二氧化碳通过气孔进入叶片"
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "timeline",
+      "title": "验证绿叶在光下制造淀粉",
+      "subtitle": "小组实验流程",
+      "milestones": [
+        { "label": "课前", "title": "暗处理", "body": "将天竺葵放在黑暗处一昼夜，消耗原有淀粉。" },
+        { "label": "步骤 1", "title": "遮光", "body": "用黑纸片遮住同一叶片的一部分，设置对照。" },
+        { "label": "步骤 2", "title": "光照", "body": "将植株置于阳光下数小时。" },
+        { "label": "步骤 3", "title": "检验", "body": "脱色后滴加碘液，比较遮光与见光部位。" }
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "chart",
+      "title": "光照强度影响氧气释放速率",
+      "subtitle": "模拟实验数据",
+      "chart": {
+        "type": "line",
+        "series": [
+          {
+            "name": "每分钟气泡数",
+            "labels": ["弱光", "中等光", "较强光", "强光"],
+            "values": [4, 11, 19, 21]
+          }
+        ],
+        "options": {}
+      },
+      "facts": [
+        { "value": "4.8×", "label": "弱光至较强光", "detail": "气泡数由 4 增至 19，氧气释放明显加快。" },
+        { "value": "2", "label": "较强光至强光增量", "detail": "气泡数仅由 19 增至 21，其他因素开始限制速率。" }
+      ],
+      "caption": "变量控制：温度、二氧化碳浓度和水量保持一致。"
+    },
+    {
+      "type": "content",
+      "variant": "comparison-2col",
+      "title": "证据如何支持结论",
+      "subtitle": "对照实验的推理链",
+      "left": {
+        "title": "见光部分",
+        "body": "滴加碘液后变蓝，说明形成了淀粉。"
+      },
+      "right": {
+        "title": "遮光部分",
+        "body": "滴加碘液后不变蓝，说明没有形成淀粉。"
+      },
+      "verdict": "同一叶片只改变光照条件，结果表明光是绿叶制造有机物不可缺少的条件。"
+    },
+    {
+      "type": "content",
+      "variant": "table",
+      "title": "课堂检测：判断并说明理由",
+      "subtitle": "用核心概念解释真实情境",
+      "table": {
+        "headers": ["情境", "判断", "理由"],
+        "rows": [
+          ["温室夜间持续补光", "需权衡", "补光可延长光合作用时间，但也增加能耗"],
+          ["正午关闭通风", "不合理", "二氧化碳不足会限制光合作用"],
+          ["合理密植", "合理", "兼顾光能利用与叶片通风" ]
+        ]
+      }
+    },
+    {
+      "type": "content",
+      "variant": "cards-3",
+      "title": "总结与课后任务",
+      "subtitle": "把概念带回生活",
+      "cards": [
+        { "title": "核心模型", "body": "原料、条件、场所和产物共同构成光合作用概念模型。", "accent": "accent_primary" },
+        { "title": "关键证据", "body": "同一叶片见光部位形成淀粉，说明光是不可缺少的条件。", "accent": "accent_secondary" },
+        { "title": "课后迁移", "body": "记录一种提高作物光能利用率的农业措施，并用原理解释。", "accent": "accent_primary" }
+      ]
+    }
+  ]
+}

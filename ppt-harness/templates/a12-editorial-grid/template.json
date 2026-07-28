@@ -1,0 +1,19 @@
+{
+  "templateId": "a12-editorial-grid",
+  "version": "1.0.0",
+  "name": "A12 中文编辑网格",
+  "locale": "zh-CN",
+  "previewRef": "builtin:a12-editorial-grid",
+  "stylePreset": "a12-editorial-grid",
+  "layouts": [
+    { "layoutId": "cover", "slots": ["title", "subtitle"], "capacity": { "title": 42, "subtitle": 76 } },
+    { "layoutId": "section", "slots": ["title", "summary"], "capacity": { "title": 36, "summary": 100 } },
+    { "layoutId": "title_content", "slots": ["title", "body", "bullets"], "capacity": { "title": 36, "body": 150, "bullets": 5 } },
+    { "layoutId": "image_text", "slots": ["title", "body", "image"], "capacity": { "title": 36, "body": 170, "image": 1 } },
+    { "layoutId": "two_column", "slots": ["title", "left", "right"], "capacity": { "title": 36, "left": 140, "right": 140 } },
+    { "layoutId": "comparison", "slots": ["title", "left", "right", "verdict"], "capacity": { "title": 36, "left": 120, "right": 120, "verdict": 100 } },
+    { "layoutId": "process", "slots": ["title", "steps"], "capacity": { "title": 36, "steps": 5 } },
+    { "layoutId": "summary", "slots": ["title", "takeaways"], "capacity": { "title": 36, "takeaways": 5 } },
+    { "layoutId": "assignment", "slots": ["title", "tasks"], "capacity": { "title": 36, "tasks": 4 } }
+  ]
+}

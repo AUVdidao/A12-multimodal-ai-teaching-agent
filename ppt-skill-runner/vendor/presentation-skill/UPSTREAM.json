@@ -1,0 +1,8 @@
+{
+  "sourceUrl": "https://github.com/sirilsengolraj-source/presentation-skill",
+  "commit": "3a22eed290fa2205b6a1e2de5549b4429c5fffd0",
+  "packageVersion": "0.9.0",
+  "license": "MIT",
+  "licenseSha256": "FB8F829F00CBE895F0BFCB244A8A8E3E9C75FCB5F6543CFEE15CAE5C82B0879F",
+  "vendoringMode": "pinned-runtime-subset"
+}

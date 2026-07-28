@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/CacinieP/ppt-skills",
+  "commit": "5986d74ae9292b4868f4bc6bf8a63abf289b1fb2",
+  "license": "MIT",
+  "source": "skills/themed-cn-pptx/recipes/recipe-editorial-grid.mjs",
+  "adaptation": "Palette, CJK typography, editorial marks, and locked layout treatment were ported into the existing controlled presentation-skill renderer."
+}

@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/schema/ppt-skill-phase-1-outline.json",
+  "title": "A12 presentation-skill Phase-1 outline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "slides"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "subtitle": { "type": "string", "maxLength": 240 },
+    "deck_style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "visual_density": { "enum": ["low", "medium", "high"] },
+        "header_variant": {
+          "enum": ["auto", "left-accent", "split-rule", "title-rule", "side-rail", "top-bottom-rule", "plain"]
+        },
+        "style_seed": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "footer_page_numbers": { "type": "boolean" }
+      }
+    },
+    "compliance": { "type": "object", "additionalProperties": true },
+    "slides": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 30,
+      "items": { "$ref": "#/$defs/slide" }
+    }
+  },
+  "$defs": {
+    "shortText": { "type": "string", "minLength": 1, "maxLength": 240 },
+    "bodyText": { "type": "string", "minLength": 1, "maxLength": 3000 },
+    "stringList": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "assetPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$))(?!file:)(?!https?:).+$"
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "body"],
+      "properties": {
+        "title": { "$ref": "#/$defs/shortText" },
+        "body": { "$ref": "#/$defs/bodyText" },
+        "accent": { "type": "string", "maxLength": 40 }
+      }
+    },
+    "milestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "body"],
+      "properties": {
+        "label": { "type": "string", "maxLength": 80 },
+        "title": { "$ref": "#/$defs/shortText" },
+        "body": { "$ref": "#/$defs/bodyText" }
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "label"],
+      "properties": {
+        "value": { "anyOf": [{ "type": "string", "maxLength": 80 }, { "type": "number" }] },
+        "label": { "$ref": "#/$defs/shortText" },
+        "detail": { "type": "string", "maxLength": 500 },
+        "caption": { "type": "string", "maxLength": 300 },
+        "accent": { "type": "string", "maxLength": 40 }
+      }
+    },
+    "column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": { "$ref": "#/$defs/shortText" },
+        "body": { "$ref": "#/$defs/bodyText" },
+        "bullets": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "chartSeries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "labels", "values"],
+      "properties": {
+        "name": { "$ref": "#/$defs/shortText" },
+        "labels": { "$ref": "#/$defs/stringList" },
+        "values": { "type": "array", "minItems": 1, "maxItems": 30, "items": { "type": "number" } }
+      }
+    },
+    "slide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "title"],
+      "properties": {
+        "type": { "enum": ["title", "section", "content", "text"] },
+        "variant": { "enum": ["standard", "split", "cards-2", "cards-3", "timeline", "stats", "comparison-2col", "chart", "table", "image-sidebar", "flow"] },
+        "title": { "$ref": "#/$defs/shortText" },
+        "subtitle": { "type": "string", "maxLength": 500 },
+        "message": { "type": "string", "maxLength": 500 },
+        "body": { "$ref": "#/$defs/bodyText" },
+        "bullets": { "$ref": "#/$defs/stringList" },
+        "paragraphs": { "$ref": "#/$defs/stringList" },
+        "highlights": { "$ref": "#/$defs/stringList" },
+        "notes": { "type": "string", "maxLength": 3000 },
+        "footer": { "type": "string", "maxLength": 240 },
+        "sources": { "$ref": "#/$defs/stringList" },
+        "caption": { "type": "string", "maxLength": 500 },
+        "cards": { "type": "array", "minItems": 2, "maxItems": 3, "items": { "$ref": "#/$defs/card" } },
+        "milestones": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "$ref": "#/$defs/milestone" } },
+        "facts": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "$ref": "#/$defs/fact" } },
+        "stats": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "$ref": "#/$defs/fact" } },
+        "left": { "$ref": "#/$defs/column" },
+        "right": { "$ref": "#/$defs/column" },
+        "verdict": { "type": "string", "maxLength": 500 },
+        "chart": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "series"],
+          "properties": {
+            "type": { "enum": ["bar", "line", "pie", "doughnut"] },
+            "series": { "type": "array", "minItems": 1, "maxItems": 6, "items": { "$ref": "#/$defs/chartSeries" } },
+            "options": { "type": "object", "additionalProperties": true }
+          }
+        },
+        "table": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["headers", "rows"],
+          "properties": {
+            "headers": { "$ref": "#/$defs/stringList" },
+            "rows": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "items": { "type": "array", "minItems": 1, "maxItems": 12, "items": { "anyOf": [{ "type": "string" }, { "type": "number" }] } }
+            }
+          }
+        },
+        "hero_image": { "$ref": "#/$defs/assetPath" },
+        "image": { "$ref": "#/$defs/assetPath" },
+        "diagram": { "$ref": "#/$defs/assetPath" },
+        "mermaid_source": { "$ref": "#/$defs/assetPath" },
+        "logo": { "$ref": "#/$defs/assetPath" },
+        "image_side": { "enum": ["left", "right"] },
+        "sidebar_sections": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/column" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["content", "text"] } }, "required": ["type"] },
+          "then": { "required": ["variant"] }
+        },
+        { "if": { "properties": { "variant": { "enum": ["cards-2", "cards-3"] } }, "required": ["variant"] }, "then": { "required": ["cards"] } },
+        { "if": { "properties": { "variant": { "const": "timeline" } }, "required": ["variant"] }, "then": { "required": ["milestones"] } },
+        { "if": { "properties": { "variant": { "const": "split" } }, "required": ["variant"] }, "then": { "required": ["bullets", "highlights"] } },
+        { "if": { "properties": { "variant": { "const": "comparison-2col" } }, "required": ["variant"] }, "then": { "required": ["left", "right"] } },
+        { "if": { "properties": { "variant": { "const": "chart" } }, "required": ["variant"] }, "then": { "required": ["chart"] } },
+        { "if": { "properties": { "variant": { "const": "table" } }, "required": ["variant"] }, "then": { "required": ["table"] } }
+      ]
+    }
+  }
+}

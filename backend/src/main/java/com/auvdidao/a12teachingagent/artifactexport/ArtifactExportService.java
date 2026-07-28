@@ -18,6 +18,7 @@ import com.auvdidao.a12teachingagent.domain.generation.repository.GeneratedArtif
 import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
 import com.auvdidao.a12teachingagent.domain.teachingtask.repository.TeachingTaskRepository;
+import com.auvdidao.a12teachingagent.pptskill.PptSkillFileStore;
 import com.auvdidao.a12teachingagent.security.AuthenticatedUser;
 import com.auvdidao.a12teachingagent.security.CurrentUserService;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,7 @@ public class ArtifactExportService {
     private final ArtifactVersionRepository versionRepository;
     private final ExportRecordRepository exportRecordRepository;
     private final ArtifactGenerator renderer;
+    private final PptSkillFileStore pptSkillFileStore;
 
     public ArtifactExportService(
             CurrentUserService currentUserService,
@@ -55,7 +57,8 @@ public class ArtifactExportService {
             GeneratedArtifactRepository artifactRepository,
             ArtifactVersionRepository versionRepository,
             ExportRecordRepository exportRecordRepository,
-            ArtifactGenerator renderer
+            ArtifactGenerator renderer,
+            PptSkillFileStore pptSkillFileStore
     ) {
         this.currentUserService = currentUserService;
         this.projectRepository = projectRepository;
@@ -64,6 +67,7 @@ public class ArtifactExportService {
         this.versionRepository = versionRepository;
         this.exportRecordRepository = exportRecordRepository;
         this.renderer = renderer;
+        this.pptSkillFileStore = pptSkillFileStore;
     }
 
     @Transactional(readOnly = true)
@@ -98,7 +102,9 @@ public class ArtifactExportService {
 
         String filename = filename(project, format);
         byte[] content = switch (format) {
-            case PPTX -> renderer.renderPptx(project, artifact);
+            case PPTX -> artifact.getFilePath() == null
+                    ? renderer.renderPptx(project, artifact)
+                    : pptSkillFileStore.readManaged(artifact.getFilePath());
             case DOCX -> renderer.renderDocx(project, artifact);
             default -> throw unsupportedFormat(requestedFormat);
         };

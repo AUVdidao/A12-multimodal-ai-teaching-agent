@@ -18,9 +18,12 @@ logs/
 
 uploads/
 generated/
+data/generated/
+backend/data/generated/
 tmp/
 .playwright-cli/
 output/playwright/
+output/kimi-ppt/
 
 data/
 backend/data/

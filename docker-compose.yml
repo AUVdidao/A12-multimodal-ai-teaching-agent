@@ -53,6 +53,21 @@ services:
       A12_ARTIFACT_GENERATOR_MODE: ${A12_ARTIFACT_GENERATOR_MODE:-remote}
       A12_ARTIFACT_GENERATOR_BASE_URL: ${A12_ARTIFACT_GENERATOR_BASE_URL:-http://file-generator-service:8080}
       A12_ARTIFACT_GENERATOR_TIMEOUT_MS: ${A12_ARTIFACT_GENERATOR_TIMEOUT_MS:-15000}
+      PPT_GENERATOR_PROVIDER: ${PPT_GENERATOR_PROVIDER:-LEGACY}
+      PPT_GENERATION_MODE: ${PPT_GENERATION_MODE:-LEGACY}
+      PPT_HARNESS_BASE_URL: ${PPT_HARNESS_BASE_URL:-http://ppt-harness:8091}
+      PPT_SKILL_RUNNER_BASE_URL: ${PPT_SKILL_RUNNER_BASE_URL:-http://ppt-skill-runner:8090}
+      PPT_SKILL_TIMEOUT_SECONDS: ${PPT_SKILL_TIMEOUT_SECONDS:-600}
+      PPT_SKILL_POLL_INTERVAL_MILLIS: ${PPT_SKILL_POLL_INTERVAL_MILLIS:-1000}
+      PPT_SKILL_STORAGE_DIR: ${PPT_SKILL_STORAGE_DIR:-/app/data/generated/ppt}
+      PPT_SKILL_STYLE_PRESET: ${PPT_SKILL_STYLE_PRESET:-forest-research}
+      PPT_OUTLINE_PROVIDER: ${PPT_OUTLINE_PROVIDER:-FIXTURE}
+      PPT_OUTLINE_FIXTURE_ENABLED: ${PPT_OUTLINE_FIXTURE_ENABLED:-false}
+      KIMI_API_BASE_URL: ${KIMI_API_BASE_URL:-https://api.moonshot.ai/v1}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      KIMI_PPT_MODEL: ${KIMI_PPT_MODEL:-kimi-k2.6}
+      KIMI_PPT_TIMEOUT_SECONDS: ${KIMI_PPT_TIMEOUT_SECONDS:-120}
+      KIMI_PPT_MAX_COMPLETION_TOKENS: ${KIMI_PPT_MAX_COMPLETION_TOKENS:-6000}
     volumes:
       - backend-data:/app/data
     networks:
@@ -61,6 +76,10 @@ services:
       file-parser-service:
         condition: service_healthy
       file-generator-service:
+        condition: service_healthy
+      ppt-skill-runner:
+        condition: service_healthy
+      ppt-harness:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/health >/dev/null || exit 1"]
@@ -93,6 +112,72 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 15s
+
+  ppt-skill-runner:
+    build:
+      context: ./ppt-skill-runner
+      dockerfile: Dockerfile
+    networks:
+      - a12-local-net
+    ports:
+      - "${PPT_SKILL_RUNNER_PORT:-18090}:8090"
+    volumes:
+      - ppt-skill-results:/app/data/results
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  ppt-harness-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: a12_harness
+      POSTGRES_USER: a12_harness
+      POSTGRES_PASSWORD: ${PPT_HARNESS_POSTGRES_PASSWORD:-a12_harness_dev}
+    volumes:
+      - ppt-harness-postgres:/var/lib/postgresql/data
+      - ./ppt-harness/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - a12-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a12_harness -d a12_harness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ppt-harness:
+    build:
+      context: ./ppt-harness
+      dockerfile: Dockerfile
+    environment:
+      PPT_HARNESS_DATABASE_URL: postgresql://a12_harness:${PPT_HARNESS_POSTGRES_PASSWORD:-a12_harness_dev}@ppt-harness-postgres:5432/a12_harness
+      PPT_SKILL_RUNNER_BASE_URL: http://ppt-skill-runner:8090
+      PPT_HARNESS_GENERATION_SOURCE: ${PPT_HARNESS_GENERATION_SOURCE:-FIXTURE}
+      KIMI_API_BASE_URL: ${KIMI_API_BASE_URL:-https://api.moonshot.ai/v1}
+      KIMI_MODEL: ${KIMI_MODEL:-kimi-k3}
+      KIMI_TIMEOUT_MS: ${KIMI_TIMEOUT_MS:-120000}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      PPT_HARNESS_VISUAL_REVIEW_ENABLED: "false"
+      PPT_HARNESS_ARTIFACT_ROOT: /app/data/artifacts
+    ports:
+      - "${PPT_HARNESS_PORT:-18091}:8091"
+    volumes:
+      - ppt-harness-artifacts:/app/data/artifacts
+    networks:
+      - a12-local-net
+    depends_on:
+      ppt-harness-postgres:
+        condition: service_healthy
+      ppt-skill-runner:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8091/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
       start_period: 15s
 
   frontend-web:
@@ -144,3 +229,6 @@ networks:
 
 volumes:
   backend-data:
+  ppt-skill-results:
+  ppt-harness-postgres:
+  ppt-harness-artifacts:

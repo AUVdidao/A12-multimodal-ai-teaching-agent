@@ -29,6 +29,8 @@ import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.GenerationWor
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.PlanSection;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.TeachingIntentSummary;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
+import com.auvdidao.a12teachingagent.pptskill.PptGenerationDtos;
+import com.auvdidao.a12teachingagent.pptskill.PptGenerationOrchestrator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -67,6 +69,7 @@ public class GenerationService {
     private final MockArtifactContentFactory contentFactory;
     private final ObjectMapper objectMapper;
     private final ProjectAccessService projectAccessService;
+    private final PptGenerationOrchestrator pptGenerationOrchestrator;
 
     public GenerationService(
             ProjectRepository projectRepository,
@@ -77,7 +80,8 @@ public class GenerationService {
             AIWorkflowGateway aiWorkflowGateway,
             MockArtifactContentFactory contentFactory,
             ObjectMapper objectMapper,
-            ProjectAccessService projectAccessService
+            ProjectAccessService projectAccessService,
+            PptGenerationOrchestrator pptGenerationOrchestrator
     ) {
         this.projectRepository = projectRepository;
         this.intentRepository = intentRepository;
@@ -88,6 +92,11 @@ public class GenerationService {
         this.contentFactory = contentFactory;
         this.objectMapper = objectMapper;
         this.projectAccessService = projectAccessService;
+        this.pptGenerationOrchestrator = pptGenerationOrchestrator;
+    }
+
+    public PptGenerationDtos.GenerationResponse generatePresentationSkillPpt(Long projectId) {
+        return pptGenerationOrchestrator.generate(projectId);
     }
 
     @Transactional

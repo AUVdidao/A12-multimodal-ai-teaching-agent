@@ -21,6 +21,7 @@
         <java.version>17</java.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <poi.version>5.5.1</poi.version>
+        <json.schema.validator.version>1.0.80</json.schema.validator.version>
     </properties>
 
     <dependencies>
@@ -66,6 +67,12 @@
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
             <version>${poi.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>${json.schema.validator.version}</version>
         </dependency>
 
         <dependency>

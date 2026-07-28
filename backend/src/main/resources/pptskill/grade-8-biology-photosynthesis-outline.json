@@ -1,0 +1,21 @@
+{
+  "title": "Grade 8 Biology: Photosynthesis",
+  "subtitle": "An inquiry lesson from leaf structure to energy conversion",
+  "deck_style": {
+    "visual_density": "medium",
+    "header_variant": "auto",
+    "style_seed": "grade-8-photosynthesis",
+    "footer_page_numbers": true
+  },
+  "slides": [
+    {"type":"title","title":"Photosynthesis","subtitle":"Grade 8 Biology | Inquiry lesson"},
+    {"type":"content","variant":"standard","title":"Start with a leaf question","subtitle":"Lesson hook","body":"What changes when the same plant receives light or stays in the dark?","bullets":["Observe evidence","Ask a testable question","Explain change with evidence"],"highlights":["Phenomenon to evidence to conclusion"]},
+    {"type":"content","variant":"cards-3","title":"Three learning goals","subtitle":"Knowledge, investigation, and explanation","cards":[{"title":"Understand","body":"Name the inputs, site, conditions, and products."},{"title":"Investigate","body":"Compare leaf evidence under controlled conditions."},{"title":"Explain","body":"Connect matter and energy transformation to observations."}]},
+    {"type":"content","variant":"split","title":"The core process","subtitle":"Chloroplasts convert light energy","bullets":["Inputs: carbon dioxide and water","Condition: light","Site: chloroplasts","Products: organic matter and oxygen"],"highlights":["Light energy becomes stable chemical energy"]},
+    {"type":"content","variant":"timeline","title":"Verify starch formation","subtitle":"A small-group experiment","milestones":[{"label":"Before","title":"Destarch","body":"Keep the plant in darkness to use existing starch."},{"label":"Step 1","title":"Cover","body":"Cover part of one leaf as the control."},{"label":"Step 2","title":"Expose","body":"Place the plant in light for several hours."},{"label":"Step 3","title":"Test","body":"Compare the covered and exposed areas."}]},
+    {"type":"content","variant":"chart","title":"Light intensity and oxygen release","subtitle":"Controlled classroom data","chart":{"type":"line","series":[{"name":"Bubbles per minute","labels":["Low","Medium","High","Very high"],"values":[4,11,19,21]}],"options":{}},"facts":[{"value":"4.8x","label":"low to high","detail":"The rate increases before another factor limits it."},{"value":"21","label":"highest rate","detail":"The curve levels off when another factor becomes limiting."}]},
+    {"type":"content","variant":"comparison-2col","title":"Evidence supports the conclusion","subtitle":"Compare the control and exposed areas","left":{"title":"Exposed area","body":"The indicator changes color, showing starch formation."},"right":{"title":"Covered area","body":"The indicator stays unchanged, showing light is necessary."},"verdict":"Only the light condition changed, so the evidence supports the role of light."},
+    {"type":"content","variant":"table","title":"Group experiment record","subtitle":"Judge and explain the evidence","table":{"headers":["Condition","Observation","Conclusion"],"rows":[["Light","Blue indicator","Starch formed"],["Dark","Lighter color","Light is necessary"]]}},
+    {"type":"content","variant":"cards-3","title":"Summary and homework","subtitle":"Bring the model back to daily life","cards":[{"title":"Core model","body":"Inputs, conditions, site, and products form one model."},{"title":"Key evidence","body":"The exposed leaf area forms starch."},{"title":"Transfer","body":"Design a simple observation with two light conditions."}]}
+  ]
+}

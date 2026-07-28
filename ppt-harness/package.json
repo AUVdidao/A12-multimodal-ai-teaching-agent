@@ -1,0 +1,25 @@
+{
+  "name": "a12-ppt-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistent asynchronous presentation generation harness for A12.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/server.js",
+    "start:mcp": "node dist/src/mcp-server.js",
+    "test": "npm run build && node --test dist/test/**/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.20.0",
+    "fastify": "5.6.2",
+    "pg": "8.16.3",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.10",
+    "@types/pg": "8.15.5",
+    "typescript": "5.9.3"
+  },
+  "engines": { "node": ">=20 <23" }
+}

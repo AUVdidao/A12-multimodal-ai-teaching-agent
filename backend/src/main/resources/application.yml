@@ -36,6 +36,22 @@ app:
     max-file-size: ${APP_MAX_UPLOAD_SIZE:209715200}
 
 a12:
+  ppt-skill:
+    provider: ${PPT_GENERATOR_PROVIDER:LEGACY}
+    generation-mode: ${PPT_GENERATION_MODE:LEGACY}
+    harness-base-url: ${PPT_HARNESS_BASE_URL:http://127.0.0.1:18091}
+    runner-base-url: ${PPT_SKILL_RUNNER_BASE_URL:http://127.0.0.1:18090}
+    timeout-seconds: ${PPT_SKILL_TIMEOUT_SECONDS:600}
+    poll-interval-millis: ${PPT_SKILL_POLL_INTERVAL_MILLIS:1000}
+    storage-dir: ${PPT_SKILL_STORAGE_DIR:./data/generated/ppt}
+    style-preset: ${PPT_SKILL_STYLE_PRESET:forest-research}
+    outline-provider: ${PPT_OUTLINE_PROVIDER:FIXTURE}
+    fixture-enabled: ${PPT_OUTLINE_FIXTURE_ENABLED:false}
+    kimi-base-url: ${KIMI_API_BASE_URL:https://api.moonshot.ai/v1}
+    kimi-api-key: ${MOONSHOT_API_KEY:}
+    kimi-model: ${KIMI_PPT_MODEL:kimi-k2.6}
+    kimi-timeout-seconds: ${KIMI_PPT_TIMEOUT_SECONDS:120}
+    kimi-max-completion-tokens: ${KIMI_PPT_MAX_COMPLETION_TOKENS:6000}
   artifact-generator:
     mode: ${A12_ARTIFACT_GENERATOR_MODE:local}
     base-url: ${A12_ARTIFACT_GENERATOR_BASE_URL:http://file-generator-service:8080}
