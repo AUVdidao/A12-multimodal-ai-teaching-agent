@@ -18,7 +18,11 @@
       type="empty"
       title="暂无系统内置模板"
       description="当前没有可用的模板，请直接创建教学项目。"
-    />
+    >
+      <template #action>
+        <el-button type="primary" :icon="Plus" @click="router.push({ name: 'project-create' })">直接新建项目</el-button>
+      </template>
+    </StatePanel>
 
     <div v-else class="template-layout">
       <section class="template-list" aria-labelledby="template-list-heading">
@@ -136,8 +140,8 @@ const templates: SystemTemplate[] = [
     icon: Collection,
     values: {
       projectName: '标准新课教学设计',
-      courseName: '待填写课程',
-      chapterTitle: '待填写章节主题',
+      courseName: '',
+      chapterTitle: '',
       targetStudents: '大学本科一年级',
       lessonDuration: 45,
       description: '从教学目标和重点难点出发，形成一套完整的新课教学内容。',
@@ -152,8 +156,8 @@ const templates: SystemTemplate[] = [
     icon: MagicStick,
     values: {
       projectName: '互动练习课教学设计',
-      courseName: '待填写课程',
-      chapterTitle: '待填写练习主题',
+      courseName: '',
+      chapterTitle: '',
       targetStudents: '高中学生',
       lessonDuration: 40,
       description: '围绕一个教学主题设计分层练习、课堂提问和反馈环节。',
@@ -168,8 +172,8 @@ const templates: SystemTemplate[] = [
     icon: DocumentAdd,
     values: {
       projectName: '复习巩固课教学设计',
-      courseName: '待填写课程',
-      chapterTitle: '待填写复习主题',
+      courseName: '',
+      chapterTitle: '',
       targetStudents: '初中学生',
       lessonDuration: 45,
       description: '围绕知识结构、典型错误和迁移练习组织复习教学流程。',

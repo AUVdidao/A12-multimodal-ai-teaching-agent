@@ -1,5 +1,22 @@
 <template>
-  <section class="intent-page" data-testid="teaching-intent-page" v-loading="loading">
+  <section class="intent-page" data-testid="teaching-intent-page" v-loading="loading && Boolean(workspace)">
+    <StatePanel
+      v-if="loading && !workspace"
+      type="loading"
+      title="正在读取教学意图"
+      description="正在读取项目、可编辑表单与知识依据。"
+    />
+    <StatePanel
+      v-else-if="errorMessage && !workspace"
+      type="error"
+      title="教学意图读取失败"
+      :description="errorMessage"
+    >
+      <template #action>
+        <el-button type="primary" :icon="Refresh" @click="loadWorkspace">重新加载</el-button>
+      </template>
+    </StatePanel>
+
     <template v-if="workspace">
       <ProjectContextHeader :project="workspace.project" />
       <ProjectWorkspaceNav :project-id="workspace.project.id" />
@@ -185,7 +202,9 @@ import IntentFormSection from '@/components/intent/IntentFormSection.vue';
 import IntentStatusCard from '@/components/intent/IntentStatusCard.vue';
 import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
+import StatePanel from '@/components/StatePanel.vue';
 import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
+import { Refresh } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -195,6 +214,7 @@ const router = useRouter();
 const projectId = computed(() => Number(route.params.projectId));
 const workspace = ref<TeachingIntentWorkspace>();
 const loading = ref(true);
+const errorMessage = ref('');
 const saving = ref(false);
 const confirming = ref(false);
 const generating = ref(false);
@@ -264,9 +284,15 @@ function syncForm() {
 
 async function loadWorkspace() {
   loading.value = true;
+  errorMessage.value = '';
   try {
     workspace.value = await getTeachingIntentWorkspace(projectId.value);
     syncForm();
+    return true;
+  } catch (error) {
+    workspace.value = undefined;
+    errorMessage.value = resolveError(error, '暂时无法读取教学意图，请稍后重试。');
+    return false;
   } finally {
     loading.value = false;
   }
@@ -313,7 +339,7 @@ function validate() {
 
 async function saveDraft() {
   const intentId = workspace.value?.intent?.id;
-  if (!intentId || !isEditable.value || !validate()) return;
+  if (!intentId || !isEditable.value || !validate()) return false;
   saving.value = true;
   try {
     workspace.value = await updateTeachingIntentWorkspace(projectId.value, intentId, {
@@ -329,6 +355,10 @@ async function saveDraft() {
     });
     syncForm();
     showFeedback('草稿已保存');
+    return true;
+  } catch (error) {
+    ElMessage.error(resolveError(error, '教学意图保存失败，请稍后重试。'));
+    return false;
   } finally {
     saving.value = false;
   }
@@ -338,8 +368,11 @@ async function generateIntent() {
   generating.value = true;
   try {
     await generateTeachingIntent(projectId.value);
-    await loadWorkspace();
-    ElMessage.success('教学意图已生成');
+    const loaded = await loadWorkspace();
+    if (loaded) ElMessage.success('教学意图已生成');
+    else ElMessage.warning('生成请求已完成，但暂时无法刷新教学意图。');
+  } catch (error) {
+    ElMessage.error(resolveError(error, '教学意图生成失败，请稍后重试。'));
   } finally {
     generating.value = false;
   }
@@ -350,10 +383,14 @@ async function confirmIntent() {
   if (!intentId || !isEditable.value || !validate()) return;
   confirming.value = true;
   try {
-    await saveDraft();
+    const saved = await saveDraft();
+    if (!saved) return;
     await confirmTeachingIntent(projectId.value, intentId);
-    await loadWorkspace();
-    showFeedback('教学意图已确认');
+    const loaded = await loadWorkspace();
+    if (loaded) showFeedback('教学意图已确认');
+    else ElMessage.warning('确认请求已完成，但暂时无法刷新教学意图。');
+  } catch (error) {
+    ElMessage.error(resolveError(error, '教学意图确认失败，请稍后重试。'));
   } finally {
     confirming.value = false;
   }
@@ -365,17 +402,26 @@ async function createRevision() {
   revisioning.value = true;
   try {
     await createTeachingIntentRevision(projectId.value, intentId);
-    await loadWorkspace();
+    const loaded = await loadWorkspace();
+    if (!loaded) {
+      ElMessage.warning('修订请求已完成，但暂时无法刷新教学意图。');
+      return;
+    }
     if (workspace.value?.intent?.status !== 'DRAFT') {
       ElMessage.warning('修订稿已创建，但当前工作区尚未返回可编辑草稿');
       return;
     }
     ElMessage.success('已创建修订稿，可继续编辑');
   } catch (error) {
-    ElMessage.error(error instanceof Error && error.message ? error.message : '创建修订稿失败，请稍后重试');
+    ElMessage.error(resolveError(error, '创建修订稿失败，请稍后重试。'));
   } finally {
     revisioning.value = false;
   }
+}
+
+function resolveError(error: unknown, fallback: string) {
+  const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+  return message && !/(Exception|java\.|Axios)/i.test(message) ? message : fallback;
 }
 
 onMounted(loadWorkspace);

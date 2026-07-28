@@ -44,7 +44,9 @@
         show-icon
         :closable="false"
       />
-      <el-empty v-if="recentProjects.length === 0" description="暂无最近访问的项目" :image-size="72" />
+      <el-empty v-if="recentProjects.length === 0" description="暂无最近访问的项目" :image-size="72">
+        <el-button type="primary" :icon="FolderOpened" @click="router.push({ name: 'projects' })">查看教学项目</el-button>
+      </el-empty>
       <ul v-else class="recent-list">
         <li v-for="item in recentProjects" :key="item.project.id">
           <div class="recent-list__identity">
@@ -68,7 +70,7 @@ import PageHeader from '@/components/PageHeader.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAuthStore } from '@/stores/auth';
 import { formatFullDateTime } from '@/utils/presentation';
-import { Refresh } from '@element-plus/icons-vue';
+import { FolderOpened, Refresh } from '@element-plus/icons-vue';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 

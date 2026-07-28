@@ -44,7 +44,9 @@
         show-icon
         :closable="false"
       />
-      <el-empty v-if="projects.length === 0" description="回收站为空" :image-size="72" />
+      <el-empty v-if="projects.length === 0" description="回收站为空" :image-size="72">
+        <el-button type="primary" :icon="FolderOpened" @click="router.push({ name: 'projects' })">返回项目列表</el-button>
+      </el-empty>
       <ul v-else class="recycle-list">
         <li v-for="project in projects" :key="project.id">
           <div class="recycle-list__identity">
@@ -72,11 +74,13 @@ import PageHeader from '@/components/PageHeader.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAuthStore } from '@/stores/auth';
 import { formatFullDateTime } from '@/utils/presentation';
-import { Refresh } from '@element-plus/icons-vue';
+import { FolderOpened, Refresh } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 
 const auth = useAuthStore();
+const router = useRouter();
 const projects = ref<TeachingProject[]>([]);
 const loading = ref(false);
 const errorMessage = ref('');
