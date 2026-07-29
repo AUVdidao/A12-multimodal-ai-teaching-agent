@@ -1,6 +1,12 @@
 <template>
-  <div class="app-shell" :class="{ 'app-shell--home': scene === 'HOME' }">
-    <aside v-if="scene !== 'HOME'" class="app-shell__aside">
+  <div
+    class="app-shell"
+    :class="{
+      'app-shell--home': scene === 'HOME',
+      'app-shell--single-column': !showSidebar,
+    }"
+  >
+    <aside v-if="showSidebar" class="app-shell__aside">
       <AppSidebar />
     </aside>
 
@@ -26,8 +32,8 @@ type WorkspaceScene = 'HOME' | 'COURSE_DEVELOPMENT' | 'RESULT_COLLABORATION' | '
 const route = useRoute();
 const scene = computed<WorkspaceScene>(() => {
   if (route.name === 'home') return 'HOME';
-  if (String(route.name).startsWith('student-')) return 'STUDENT_SPACE';
   if (route.meta.scene) return route.meta.scene as WorkspaceScene;
+  if (String(route.name).startsWith('student-')) return 'STUDENT_SPACE';
   if (['teacher-approvals', 'teacher-publications', 'teacher-teaching-tasks', 'leader-approvals', 'leader-publications'].includes(String(route.name))) {
     return 'RESULT_COLLABORATION';
   }
@@ -36,4 +42,6 @@ const scene = computed<WorkspaceScene>(() => {
   }
   return 'COURSE_DEVELOPMENT';
 });
+
+const showSidebar = computed(() => scene.value !== 'HOME' && scene.value !== 'STUDENT_INTERACTION');
 </script>

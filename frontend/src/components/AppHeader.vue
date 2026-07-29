@@ -7,6 +7,15 @@
         <small>多模态 AI 互动式教学</small>
       </span>
     </RouterLink>
+    <RouterLink
+      v-else-if="isStudentInteraction"
+      class="app-header__back-home"
+      :to="{ name: 'home' }"
+      aria-label="返回首页"
+    >
+      <A12AssetIcon name="home" :size="20" />
+      <span>返回首页</span>
+    </RouterLink>
     <div v-else-if="title" class="app-header__title">
       <h1>{{ title }}</h1>
     </div>
@@ -28,9 +37,6 @@
     <div class="app-header__actions">
       <button class="icon-button header-search-trigger" type="button" aria-label="打开全局搜索" title="全局搜索" @click="openSearch">
         <A12AssetIcon name="search" :size="24" />
-      </button>
-      <button class="icon-button notification-button" type="button" :aria-label="notificationLabel" :title="notificationLabel" @click="openNotifications">
-        <A12AssetIcon name="bell" :size="29" />
       </button>
       <button class="icon-button" type="button" aria-label="打开帮助" title="帮助" @click="helpVisible = true">
         <A12AssetIcon name="question-help" :size="29" />
@@ -89,16 +95,15 @@ const router = useRouter();
 const auth = useAuthStore();
 const title = computed(() => String(route.meta.title ?? '教学工作台'));
 const isHome = computed(() => route.name === 'home');
+const isStudentInteraction = computed(() => (
+  route.meta.scene === 'STUDENT_INTERACTION'
+  || ['teacher-questions', 'leader-questions'].includes(String(route.name))
+));
 const avatarText = computed(() => (auth.user?.displayName || '用户').slice(0, 1));
 const roleLabel = computed(() => roleName(auth.activeRole || 'TEACHER'));
 const searchInput = ref<HTMLInputElement>();
 const searchQuery = ref('');
 const helpVisible = ref(false);
-const notificationLabel = computed(() => ({
-  TEACHER: '查看待回答的问题',
-  LEADER: '查看待审批的成果',
-  STUDENT: '查看我的问答',
-}[auth.activeRole || 'TEACHER']));
 const helpItems = computed(() => {
   if (auth.activeRole === 'LEADER') {
     return [
@@ -134,15 +139,6 @@ function submitSearch() {
 
 function openSearch() {
   void router.push({ name: 'global-search' });
-}
-
-function openNotifications() {
-  const destination = auth.activeRole === 'LEADER'
-    ? { name: 'leader-approvals' }
-    : auth.activeRole === 'STUDENT'
-      ? { name: 'student-questions' }
-      : { name: 'teacher-questions' };
-  void router.push(destination);
 }
 
 function handleSearchShortcut(event: KeyboardEvent) {
@@ -200,6 +196,27 @@ async function handleCommand(command: string) {
 .app-header__brand small {
   color: var(--color-text-secondary);
   font-size: 11px;
+}
+
+.app-header__back-home {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.app-header__back-home:hover {
+  color: var(--color-primary);
+}
+
+.app-header__back-home:focus-visible {
+  border-radius: 4px;
+  outline: 3px solid var(--color-primary-border);
+  outline-offset: 3px;
 }
 
 .header-search-submit {

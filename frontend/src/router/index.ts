@@ -85,7 +85,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/student-interaction',
     name: 'student-interaction',
-    component: () => import('@/views/StudentInteractionView.vue'),
+    component: () => import('@/views/QuestionCenterView.vue'),
     meta: { title: '学生互动与反馈', roles: ['TEACHER', 'LEADER'], scene: 'STUDENT_INTERACTION' },
   },
   {

@@ -109,7 +109,8 @@ textarea {
   overflow: hidden;
 }
 
-.app-shell--home {
+.app-shell--home,
+.app-shell--single-column {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -235,23 +236,6 @@ textarea {
 
 .icon-button:hover {
   background: #f5f6fb;
-}
-
-.notification-button > span {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: grid;
-  width: 15px;
-  height: 15px;
-  place-items: center;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: #ef3e45;
-  color: #fff;
-  font-size: 8px;
-  font-weight: 800;
-  line-height: 1;
 }
 
 .user-chip {
