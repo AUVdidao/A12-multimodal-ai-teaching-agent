@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.common.exception;
 
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
+import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantException;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
 import com.auvdidao.a12teachingagent.pptskill.PptSkillGenerationException;
 import jakarta.validation.ConstraintViolationException;
@@ -69,6 +70,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PptSkillGenerationException.class)
     public ResponseEntity<ApiResponse<Void>> handlePptSkillGeneration(PptSkillGenerationException exception) {
+        return ResponseEntity
+                .status(exception.getStatus())
+                .body(ApiResponse.failure(exception.getStatus().value(), exception.getCode() + ": " + exception.getMessage()));
+    }
+
+    @ExceptionHandler(KimiAssistantException.class)
+    public ResponseEntity<ApiResponse<Void>> handleKimiAssistant(KimiAssistantException exception) {
         return ResponseEntity
                 .status(exception.getStatus())
                 .body(ApiResponse.failure(exception.getStatus().value(), exception.getCode() + ": " + exception.getMessage()));

@@ -53,7 +53,7 @@ test("Kimi K3 provider sends a compatible JSON-object request and parses SlideSp
   }
 });
 
-test("Kimi K2.6 provider keeps its K2-only thinking setting", async () => {
+test("Kimi K2.6 provider omits unsupported thinking and temperature settings", async () => {
   const originalFetch = globalThis.fetch;
   let request: RequestInit | undefined;
   globalThis.fetch = async (_url, init) => {
@@ -66,9 +66,9 @@ test("Kimi K2.6 provider keeps its K2-only thinking setting", async () => {
   try {
     await new KimiSlideSpecProvider({ ...config, kimiModel: "kimi-k2.6" }).create(job, template);
     const body = JSON.parse(String(request?.body)) as { thinking?: { type: string }; reasoning_effort?: string; temperature?: number };
-    assert.equal(body.thinking?.type, "disabled");
+    assert.equal(body.thinking, undefined);
     assert.equal(body.reasoning_effort, undefined);
-    assert.equal(body.temperature, 0.2);
+    assert.equal(body.temperature, undefined);
   } finally {
     globalThis.fetch = originalFetch;
   }

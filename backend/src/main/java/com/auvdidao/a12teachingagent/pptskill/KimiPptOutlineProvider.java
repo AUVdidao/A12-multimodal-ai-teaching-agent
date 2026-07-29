@@ -99,9 +99,9 @@ public class KimiPptOutlineProvider implements PptOutlineProvider {
         try {
             ObjectNode body = objectMapper.createObjectNode();
             body.put("model", properties.getKimiModel());
-            // Kimi K2.6 rejects arbitrary temperature values. Let its non-thinking default apply.
+            // Kimi K2.6 accepts the documented chat-completions fields below.
+            // Do not send preview-only thinking or custom temperature parameters.
             body.put("max_tokens", properties.getKimiMaxCompletionTokens());
-            body.set("thinking", objectMapper.createObjectNode().put("type", "disabled"));
             body.set("response_format", responseFormat());
             var messages = body.putArray("messages");
             messages.addObject().put("role", "system").put("content", SYSTEM_PROMPT);

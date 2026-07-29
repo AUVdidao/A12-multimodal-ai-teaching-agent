@@ -8,7 +8,7 @@
       <header class="app-shell__header">
         <AppHeader />
       </header>
-      <main :class="['app-shell__main', { 'app-shell__main--intent': isIntentPage }]">
+      <main class="app-shell__main">
         <router-view />
       </main>
     </section>
@@ -24,7 +24,6 @@ import { useRoute } from 'vue-router';
 type WorkspaceScene = 'HOME' | 'COURSE_DEVELOPMENT' | 'RESULT_COLLABORATION' | 'STUDENT_INTERACTION' | 'STUDENT_SPACE';
 
 const route = useRoute();
-const isIntentPage = computed(() => route.name === 'project-intent');
 const scene = computed<WorkspaceScene>(() => {
   if (route.name === 'home') return 'HOME';
   if (String(route.name).startsWith('student-')) return 'STUDENT_SPACE';

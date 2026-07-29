@@ -60,7 +60,7 @@ class KimiPptOutlineProviderTest {
         ArgumentCaptor<HttpRequest> request = ArgumentCaptor.forClass(HttpRequest.class);
         verify(httpClient).send(request.capture(), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any());
         JsonNode body = objectMapper.readTree(requestBody(request.getValue()));
-        assertEquals("disabled", body.path("thinking").path("type").asText());
+        assertTrue(body.path("thinking").isMissingNode());
         assertEquals("json_object", body.path("response_format").path("type").asText());
         assertTrue(body.path("response_format").path("json_schema").isMissingNode());
         assertTrue(body.path("temperature").isMissingNode());

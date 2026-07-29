@@ -148,10 +148,6 @@ textarea {
   overflow: auto;
 }
 
-.app-shell__main--intent {
-  overflow: hidden;
-}
-
 .app-header {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(260px, 356px) minmax(0, 237px);

@@ -52,6 +52,12 @@ a12:
     kimi-model: ${KIMI_PPT_MODEL:kimi-k2.6}
     kimi-timeout-seconds: ${KIMI_PPT_TIMEOUT_SECONDS:120}
     kimi-max-completion-tokens: ${KIMI_PPT_MAX_COMPLETION_TOKENS:6000}
+  kimi:
+    base-url: ${KIMI_API_BASE_URL:https://api.moonshot.ai/v1}
+    api-key: ${MOONSHOT_API_KEY:}
+    assistant-model: ${KIMI_ASSISTANT_MODEL:kimi-k2.6}
+    assistant-timeout-seconds: ${KIMI_ASSISTANT_TIMEOUT_SECONDS:90}
+    assistant-max-completion-tokens: ${KIMI_ASSISTANT_MAX_COMPLETION_TOKENS:1600}
   artifact-generator:
     mode: ${A12_ARTIFACT_GENERATOR_MODE:local}
     base-url: ${A12_ARTIFACT_GENERATOR_BASE_URL:http://file-generator-service:8080}

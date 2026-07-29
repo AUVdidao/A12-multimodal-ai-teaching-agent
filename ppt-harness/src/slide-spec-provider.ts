@@ -95,9 +95,6 @@ function kimiRequest(
 ): Record<string, unknown> {
   const request: Record<string, unknown> = {
     model: config.kimiModel,
-    // K3 currently accepts only temperature=1, while K2.x accepts the
-    // lower-temperature setting used for deterministic structured output.
-    temperature: config.kimiModel.toLowerCase().startsWith("kimi-k3") ? 1 : 0.2,
     // json_object is documented for Kimi Chat Completions and the response is
     // still validated locally against the stricter per-template SlideSpec rules.
     response_format: { type: "json_object" },
@@ -115,10 +112,13 @@ function kimiRequest(
     ],
   };
 
-  // K3 always reasons and accepts reasoning_effort. K2.x instead accepts the
-  // thinking extension, so never send the K2-only field to K3.
-  if (config.kimiModel.toLowerCase().startsWith("kimi-k3")) request.reasoning_effort = "low";
-  else request.thinking = { type: "disabled" };
+  // K2.6 rejects the K2 preview-only thinking extension and custom
+  // temperature settings. Keep its request body to documented chat fields.
+  // K3 keeps its provider-specific settings isolated here.
+  if (config.kimiModel.toLowerCase().startsWith("kimi-k3")) {
+    request.temperature = 1;
+    request.reasoning_effort = "low";
+  }
   return request;
 }
 

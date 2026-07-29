@@ -53,6 +53,18 @@ export interface GenerationPlanResponse {
   nextAction: string;
 }
 
+export interface KimiAssistantConversationTurn {
+  role: 'teacher' | 'assistant';
+  content: string;
+}
+
+export interface KimiAssistantChatResponse {
+  projectId: number;
+  provider: string;
+  model: string;
+  content: string;
+}
+
 const workflowPath = '/api/ai-workflow';
 
 export async function getAiGatewayStatus() {
@@ -71,6 +83,17 @@ export async function runClarification(payload: ClarificationRequest) {
 export async function runGenerationPlan(payload: GenerationPlanRequest) {
   const response = await http.post<ApiResponse<GenerationPlanResponse>>(
     `${workflowPath}/generation-plan`,
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function runKimiAssistantChat(
+  projectId: number,
+  payload: { message: string; conversation: KimiAssistantConversationTurn[] },
+) {
+  const response = await http.post<ApiResponse<KimiAssistantChatResponse>>(
+    `/api/projects/${projectId}/assistant/chat`,
     payload,
   );
   return response.data.data;

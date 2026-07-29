@@ -18,7 +18,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HarnessConfig 
     maxRepairAttempts: positive(env.PPT_HARNESS_MAX_REPAIR_ATTEMPTS, 1),
     kimiApiKey: env.MOONSHOT_API_KEY?.trim() || undefined,
     kimiBaseUrl: (env.KIMI_API_BASE_URL?.trim() || "https://api.moonshot.ai/v1").replace(/\/$/, ""),
-    kimiModel: env.KIMI_MODEL?.trim() || "kimi-k3",
+    kimiModel: env.KIMI_MODEL?.trim() || "kimi-k2.6",
     kimiTimeoutMs: positive(env.KIMI_TIMEOUT_MS, 120000)
   };
 }

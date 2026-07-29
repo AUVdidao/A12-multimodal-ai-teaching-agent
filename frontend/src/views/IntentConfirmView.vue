@@ -146,6 +146,10 @@
         </IntentFormSection>
 
         <div class="intent-page__actions">
+          <button class="intent-button intent-button--secondary" type="button" @click="openCopilot">
+            <A12AssetIcon name="sparkle" :size="20" />
+            教学副驾驶
+          </button>
           <button v-if="workspace.intent && !isConfirmed" class="intent-button intent-button--secondary" type="button" :disabled="!isEditable || saving" @click="saveDraft">
             <A12AssetIcon name="document" :size="20" />
             保存草稿
@@ -218,6 +222,13 @@ const errorMessage = ref('');
 const saving = ref(false);
 const confirming = ref(false);
 const generating = ref(false);
+
+function openCopilot() {
+  void router.push({
+    name: 'ai-assistant',
+    query: { projectId: String(projectId.value), focus: 'intent' },
+  });
+}
 const revisioning = ref(false);
 const goals = ref<string[]>([]);
 const outputs = ref<string[]>([]);

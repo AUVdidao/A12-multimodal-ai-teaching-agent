@@ -7,7 +7,7 @@
     </header>
 
     <div class="scene-home__grid" aria-label="工作场景入口">
-      <button v-if="!isLeader" class="scene-card" type="button" @click="go('course-development')">
+      <button v-if="!isLeader" class="scene-card" type="button" @click="go('projects')">
         <span class="scene-card__icon scene-card__icon--purple"><A12AssetIcon name="folder" :size="30" /></span>
         <span class="scene-card__content">
           <strong>课程开发</strong>
@@ -68,7 +68,7 @@ const resultDescription = computed(() => auth.activeRole === 'LEADER'
   ? '审核教师提交的教学成果，处理退回修改，并完成成果发布。'
   : '提交教学成果，跟踪审核进度，处理退回修改，并查看成果发布状态。');
 
-function go(name: 'course-development' | 'result-collaboration' | 'student-interaction' | 'leader-teaching-tasks') {
+function go(name: 'projects' | 'result-collaboration' | 'student-interaction' | 'leader-teaching-tasks') {
   void router.push({ name });
 }
 </script>

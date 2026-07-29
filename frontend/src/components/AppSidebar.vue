@@ -121,7 +121,6 @@ const navGroups = computed<Array<{ label: string; items: SidebarNavItem[] }>>(()
     {
       label: '课程开发',
       items: [
-        { key: 'course-development', label: '开发概览', to: { name: 'course-development' }, icon: 'home', activeRouteNames: ['course-development'] },
         { key: 'projects', label: '教学项目', to: { name: 'projects' }, icon: 'folder', activeRouteNames: projectRoutes },
         { key: 'recent-projects', label: '最近访问', to: { name: 'recent-projects' }, icon: 'clock', activeRouteNames: ['recent-projects'] },
         { key: 'recycle-bin', label: '回收站', to: { name: 'recycle-bin' }, icon: 'layers', activeRouteNames: ['recycle-bin'] },
@@ -133,12 +132,6 @@ const navGroups = computed<Array<{ label: string; items: SidebarNavItem[] }>>(()
         { key: 'resource-library', label: '资料库', to: { name: 'resource-library' }, icon: 'document', activeRouteNames: ['resource-library'] },
         { key: 'knowledge-library', label: '知识库', to: { name: 'knowledge-library' }, icon: 'book', activeRouteNames: ['knowledge-library'] },
         { key: 'template-center', label: '模板中心', to: { name: 'template-center' }, icon: 'layers', activeRouteNames: ['template-center'] },
-      ],
-    },
-    {
-      label: '智能生成',
-      items: [
-        { key: 'ai-assistant', label: 'AI助手', to: { name: 'ai-assistant' }, icon: 'sparkle', activeRouteNames: ['ai-assistant'] },
       ],
     },
   ];

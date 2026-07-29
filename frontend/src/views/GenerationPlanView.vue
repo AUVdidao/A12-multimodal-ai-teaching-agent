@@ -35,6 +35,7 @@
         </div>
         <div class="generation-hero__actions">
           <UiStatusPill :label="providerLabel" tone="purple" dot />
+          <el-button @click="openCopilot">教学副驾驶</el-button>
           <el-button :icon="Back" @click="router.push(`/projects/${projectId}/intent`)">教学意图</el-button>
           <el-button v-if="artifactCount" type="primary" :icon="View" @click="router.push(`/projects/${projectId}/preview`)">
             查看成果
@@ -287,6 +288,13 @@ const generating = ref(false);
 const workspaceError = ref('内容生成数据读取失败，请检查服务后重试。');
 const actionError = ref('');
 const lastFailedAction = ref<FailedAction>();
+
+function openCopilot() {
+  void router.push({
+    name: 'ai-assistant',
+    query: { projectId: String(projectId.value), focus: 'generation' },
+  });
+}
 const {
   status: gatewayStatus,
   loading: gatewayStatusLoading,

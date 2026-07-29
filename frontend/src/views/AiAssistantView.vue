@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { runClarification, runGenerationPlan, type GenerationMode } from '@/api/aiAssistant';
+import { runClarification, runGenerationPlan, runKimiAssistantChat, type GenerationMode } from '@/api/aiAssistant';
 import { listProjectDialogues, saveDialogueMessage, type DialogueMessage, type DialogueSender } from '@/api/dialogues';
 import { getGenerationWorkspace, type GenerationWorkspace } from '@/api/generation';
 import { getKnowledgeOverview, type KnowledgeOverview } from '@/api/knowledge';
@@ -101,11 +101,12 @@ import type {
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Refresh, WarningFilled } from '@element-plus/icons-vue';
 import { computed, onMounted, ref } from 'vue';
-import { useRouter, type RouteLocationRaw } from 'vue-router';
+import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router';
 
 const ASSISTANT_PROJECT_STORAGE_KEY = 'a12-assistant-project-id';
 
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
 const projects = ref<TeachingProject[]>([]);
 const recentProjects = ref<RecentProject[]>([]);
@@ -301,8 +302,13 @@ async function loadPage() {
 
   if (projectResult.status === 'fulfilled') {
     projects.value = projectResult.value;
+    const requestedId = Number(route.query.projectId);
     const storedId = Number(localStorage.getItem(ASSISTANT_PROJECT_STORAGE_KEY));
-    const nextProjectId = projects.value.some((project) => project.id === storedId) ? storedId : projects.value[0]?.id;
+    const nextProjectId = projects.value.some((project) => project.id === requestedId)
+      ? requestedId
+      : projects.value.some((project) => project.id === storedId)
+        ? storedId
+        : projects.value[0]?.id;
     selectedProjectId.value = nextProjectId;
   } else {
     projectsError.value = resolveError(projectResult.reason, '暂时无法读取教学项目，请稍后重试。');
@@ -441,9 +447,47 @@ async function handleTeacherIntent(intent: string, content: string) {
     else if (intent === 'intent') addAssistantMessage(buildIntentMessage());
     else if (intent === 'generation') await runGenerationWorkflow(content);
     else if (intent === 'student-questions') addAssistantMessage(buildQuestionMessage());
-    else addAssistantMessage(buildUnsupportedMessage());
+    else await runKimiTeachingAssistant(content);
   } finally {
     sending.value = false;
+  }
+}
+
+async function runKimiTeachingAssistant(teacherInput: string) {
+  if (!selectedProject.value) return;
+  const conversation = messages.value
+    .slice(0, -1)
+    .filter((message) => message.role === 'teacher' || message.role === 'assistant')
+    .slice(-8)
+    .map((message) => ({
+      role: message.role === 'teacher' ? 'teacher' as const : 'assistant' as const,
+      content: message.content,
+    }));
+
+  try {
+    const response = await runKimiAssistantChat(selectedProject.value.id, {
+      message: teacherInput,
+      conversation,
+    });
+    addAssistantMessage({
+      id: createMessageId(),
+      role: 'assistant',
+      content: response.content,
+      createdAt: new Date().toISOString(),
+      status: 'success',
+      evidence: buildEvidence(),
+      sections: [{
+        id: 'kimi-assistant',
+        title: `Kimi ${response.model}`,
+        content: '已结合当前教学项目上下文生成建议。',
+        tone: 'purple',
+      }],
+    });
+  } catch (error) {
+    addAssistantMessage(buildErrorMessage(
+      resolveError(error, 'Kimi 教学助手暂时不可用，请稍后重试。'),
+      'kimi-assistant',
+    ));
   }
 }
 

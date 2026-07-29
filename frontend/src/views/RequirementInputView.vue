@@ -12,6 +12,7 @@
               <p>系统按九项关键信息识别缺口，并保存每轮沟通记录。</p>
             </div>
             <div class="inline-actions">
+              <el-button @click="openCopilot">教学副驾驶</el-button>
               <el-button @click="formVisible = true">编辑需求</el-button>
               <el-button @click="clearDialogues" :disabled="workspace.dialogues.length === 0">清空对话</el-button>
               <el-button type="primary" :disabled="!workspace.canGenerateSummary" @click="router.push(`/projects/${projectId}/summary`)">需求摘要</el-button>
@@ -195,6 +196,13 @@ async function saveForm() {
   } finally {
     saving.value = false;
   }
+}
+
+function openCopilot() {
+  void router.push({
+    name: 'ai-assistant',
+    query: { projectId: String(projectId.value), focus: 'requirement' },
+  });
 }
 
 function applyAnswerToMissingField(content: string) {

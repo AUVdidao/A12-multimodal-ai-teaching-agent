@@ -73,7 +73,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/course-development',
     name: 'course-development',
-    component: () => import('@/views/CourseDevelopmentView.vue'),
+    redirect: { name: 'projects' },
     meta: { title: '课程开发', roles: ['TEACHER', 'LEADER'], scene: 'COURSE_DEVELOPMENT' },
   },
   {
