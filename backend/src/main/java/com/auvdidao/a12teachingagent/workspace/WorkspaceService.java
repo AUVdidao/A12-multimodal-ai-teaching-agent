@@ -444,7 +444,7 @@ public class WorkspaceService {
         );
     }
 
-    private String stage(Snapshot value) {
+    private String legacyStage(Snapshot value) {
         int progress = progress(value);
         if (progress >= 100) return "FINALIZED";
         if (progress >= 85) return "CONTENT_GENERATED";
@@ -455,7 +455,7 @@ public class WorkspaceService {
         return "REQUIREMENT_CLARIFYING";
     }
 
-    private int progress(Snapshot value) {
+    private int legacyProgress(Snapshot value) {
         int derived = 5;
         if (value.requirement() != null) {
             derived = Math.min(29, 10 + completeness(value.project(), value.requirement()).percentage() / 5);
@@ -485,7 +485,7 @@ public class WorkspaceService {
         };
     }
 
-    private String nextAction(Snapshot value) {
+    private String legacyNextAction(Snapshot value) {
         if (value.requirement() == null) return "完善教学需求";
         if (completeness(value.project(), value.requirement()).collected() < 9) return "完善教学需求";
         if (value.summary() == null || value.summary().getStatus() != RequirementSummaryStatus.CONFIRMED) return "确认需求摘要";
@@ -499,7 +499,7 @@ public class WorkspaceService {
         return "导出教学成果";
     }
 
-    private String actionPath(Snapshot value) {
+    private String legacyActionPath(Snapshot value) {
         String root = "/projects/" + value.project().getId();
         if (value.requirement() == null) return root + "/requirements";
         if (completeness(value.project(), value.requirement()).collected() < 9) return root + "/requirements";
@@ -566,7 +566,7 @@ public class WorkspaceService {
         return result;
     }
 
-    private List<TimelineStep> timeline(Snapshot value) {
+    private List<TimelineStep> legacyTimeline(Snapshot value) {
         LocalDateTime parsedAt = value.materials().stream()
                 .filter(item -> item.getParseStatus() == MaterialParseStatus.SUCCEEDED)
                 .map(UploadedMaterial::getUpdatedAt)
@@ -628,7 +628,7 @@ public class WorkspaceService {
         return List.copyOf(result);
     }
 
-    private List<QuickAction> quickActions(Snapshot value) {
+    private List<QuickAction> legacyQuickActions(Snapshot value) {
         String root = "/projects/" + value.project().getId();
         return List.of(
                 new QuickAction("DIALOGUES", "查看对话记录", root + "/requirements", true),
@@ -638,6 +638,129 @@ public class WorkspaceService {
                 new QuickAction("INTENT", "确认意图", root + "/intent", !value.chunks().isEmpty()),
                 new QuickAction("PREVIEW", "预览内容", root + "/preview", !value.artifacts().isEmpty()),
                 new QuickAction("EXPORT", "导出文件", root + "/export", !value.artifacts().isEmpty())
+        );
+    }
+
+    private String stage(Snapshot value) {
+        if (pptComplete(value)) return "PPT";
+        if (lessonPlanComplete(value)) return "LESSON_PLAN";
+        if (outlineComplete(value)) return "OUTLINE";
+        if (materialsComplete(value)) return "MATERIALS";
+        return "REQUIREMENTS";
+    }
+
+    private int progress(Snapshot value) {
+        if (pptComplete(value)) return 100;
+        if (lessonPlanComplete(value)) return 80;
+        if (outlineComplete(value)) return 60;
+        if (materialsComplete(value)) return 40;
+        if (requirementsComplete(value)) return 20;
+        if (value.requirement() == null) return 5;
+        return Math.min(19, Math.max(5, completeness(value.project(), value.requirement()).percentage() / 5));
+    }
+
+    private boolean requirementsComplete(Snapshot value) {
+        return value.requirement() != null
+                && completeness(value.project(), value.requirement()).collected() >= 9
+                && value.summary() != null
+                && value.summary().getStatus() == RequirementSummaryStatus.CONFIRMED;
+    }
+
+    private boolean materialsComplete(Snapshot value) {
+        return !value.materials().isEmpty()
+                && parsedMaterialCount(value) == value.materials().size();
+    }
+
+    private boolean outlineComplete(Snapshot value) {
+        return isConfirmed(value.intent());
+    }
+
+    private boolean lessonPlanComplete(Snapshot value) {
+        return value.artifacts().stream().anyMatch(item -> item.getArtifactType() == ArtifactType.DOCX);
+    }
+
+    private boolean pptComplete(Snapshot value) {
+        return value.artifacts().stream().anyMatch(item -> item.getArtifactType() == ArtifactType.PPT);
+    }
+
+    private String nextAction(Snapshot value) {
+        if (!requirementsComplete(value)) return "\u5b8c\u5584\u6559\u5b66\u9700\u6c42";
+        if (!materialsComplete(value)) return "\u8865\u5145\u8d44\u6599\u4e2d\u5fc3";
+        if (!outlineComplete(value)) return "\u786e\u8ba4\u8bfe\u7a0b\u5927\u7eb2";
+        if (!lessonPlanComplete(value)) return "\u5b8c\u6210\u6559\u6848\u8bbe\u8ba1";
+        if (!pptComplete(value)) return "\u751f\u6210PPT\u6210\u679c";
+        return "\u67e5\u770bPPT\u6210\u679c";
+    }
+
+    private String actionPath(Snapshot value) {
+        String root = "/projects/" + value.project().getId();
+        if (!requirementsComplete(value)) return root + "/requirements";
+        if (!materialsComplete(value)) return root + "/materials";
+        if (!outlineComplete(value)) return root + "/outline";
+        if (!lessonPlanComplete(value)) return root + "/lesson-plan";
+        return root + "/ppt";
+    }
+
+    private List<TimelineStep> timeline(Snapshot value) {
+        LocalDateTime materialAt = value.materials().stream()
+                .filter(item -> item.getParseStatus() == MaterialParseStatus.SUCCEEDED)
+                .map(UploadedMaterial::getUpdatedAt)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+        LocalDateTime outlineAt = value.intent() == null ? null :
+                firstNonNull(value.intent().getConfirmedAt(), value.intent().getUpdatedAt());
+        LocalDateTime lessonPlanAt = latestArtifactAt(value, ArtifactType.DOCX);
+        LocalDateTime pptAt = latestArtifactAt(value, ArtifactType.PPT);
+        List<StepValue> steps = List.of(
+                new StepValue("REQUIREMENTS", "\u6559\u5b66\u9700\u6c42", requirementsComplete(value),
+                        value.requirement() == null ? null : firstNonNull(value.summary() == null ? null : value.summary().getConfirmedAt(), value.requirement().getUpdatedAt())),
+                new StepValue("MATERIALS", "\u8d44\u6599\u4e2d\u5fc3", materialsComplete(value), materialAt),
+                new StepValue("OUTLINE", "\u8bfe\u7a0b\u5927\u7eb2", outlineComplete(value), outlineAt),
+                new StepValue("LESSON_PLAN", "\u6559\u6848\u8bbe\u8ba1", lessonPlanComplete(value), lessonPlanAt),
+                new StepValue("PPT", "PPT\u6210\u679c", pptComplete(value), pptAt)
+        );
+        return timelineSteps(steps);
+    }
+
+    private LocalDateTime latestArtifactAt(Snapshot value, ArtifactType type) {
+        return value.artifacts().stream()
+                .filter(item -> item.getArtifactType() == type)
+                .map(GeneratedArtifact::getCreatedAt)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+    }
+
+    private List<TimelineStep> timelineSteps(List<StepValue> steps) {
+        int firstIncomplete = -1;
+        for (int index = 0; index < steps.size(); index++) {
+            if (!steps.get(index).completed()) {
+                firstIncomplete = index;
+                break;
+            }
+        }
+        List<TimelineStep> result = new ArrayList<>();
+        for (int index = 0; index < steps.size(); index++) {
+            StepValue step = steps.get(index);
+            boolean completedPrefix = firstIncomplete < 0 || index < firstIncomplete;
+            String state = completedPrefix && step.completed()
+                    ? "COMPLETED"
+                    : index == firstIncomplete ? "CURRENT" : "PENDING";
+            result.add(new TimelineStep(step.code(), step.label(), state,
+                    "COMPLETED".equals(state) ? step.completedAt() : null));
+        }
+        return List.copyOf(result);
+    }
+
+    private List<QuickAction> quickActions(Snapshot value) {
+        String root = "/projects/" + value.project().getId();
+        return List.of(
+                new QuickAction("REQUIREMENTS", "\u6559\u5b66\u9700\u6c42", root + "/requirements", true),
+                new QuickAction("MATERIALS", "\u8d44\u6599\u4e2d\u5fc3", root + "/materials", requirementsComplete(value)),
+                new QuickAction("OUTLINE", "\u8bfe\u7a0b\u5927\u7eb2", root + "/outline", materialsComplete(value)),
+                new QuickAction("LESSON_PLAN", "\u6559\u6848\u8bbe\u8ba1", root + "/lesson-plan", outlineComplete(value)),
+                new QuickAction("PPT", "PPT\u6210\u679c", root + "/ppt", lessonPlanComplete(value))
         );
     }
 

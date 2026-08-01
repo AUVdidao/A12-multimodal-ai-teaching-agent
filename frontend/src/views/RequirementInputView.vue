@@ -224,7 +224,7 @@ async function sendMessage() {
     }
     const updatedRequirement = await saveClarificationAnswer(
       projectId.value,
-      { targetField: questionToAnswer.targetField, answer: content },
+      { questionId: questionToAnswer.questionId, answer: content },
     );
     Object.assign(form, updatedRequirement);
     const clarification = await getClarificationQuestions(projectId.value, form);

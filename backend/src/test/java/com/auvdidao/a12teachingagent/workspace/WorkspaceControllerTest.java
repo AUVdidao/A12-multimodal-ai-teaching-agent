@@ -119,13 +119,13 @@ class WorkspaceControllerTest {
                 .andExpect(jsonPath("$.data.metrics.projectCount", is(1)))
                 .andExpect(jsonPath("$.data.metrics.pendingTaskCount", is(1)))
                 .andExpect(jsonPath("$.data.continueProjects[0].projectName", is("人工智能基础概念与应用")))
-                .andExpect(jsonPath("$.data.continueProjects[0].stage", is("REQUIREMENT_CLARIFYING")))
+                .andExpect(jsonPath("$.data.continueProjects[0].stage", is("REQUIREMENTS")))
                 .andExpect(jsonPath("$.data.pendingTasks[0].derived", is(true)))
                 .andExpect(jsonPath("$.data.pendingTasks[0].actionPath", containsString("/requirements")));
 
         mockMvc.perform(get("/api/workspace/projects")
                         .param("query", "人工智能")
-                        .param("stage", "REQUIREMENT_CLARIFYING")
+                        .param("stage", "REQUIREMENTS")
                         .param("page", "0")
                         .param("size", "10"))
                 .andExpect(status().isOk())
@@ -275,13 +275,13 @@ class WorkspaceControllerTest {
                 .andExpect(jsonPath("$.data.metrics.knowledgeChunkCount", is(1)))
                 .andExpect(jsonPath("$.data.metrics.pptCount", is(1)))
                 .andExpect(jsonPath("$.data.metrics.versionCount", is(1)))
-                .andExpect(jsonPath("$.data.timeline", hasSize(8)))
-                .andExpect(jsonPath("$.data.timeline[5].code", is("INTENT_CONFIRMED")))
-                .andExpect(jsonPath("$.data.timeline[5].state", is("CURRENT")))
-                .andExpect(jsonPath("$.data.timeline[6].code", is("CONTENT_GENERATED")))
-                .andExpect(jsonPath("$.data.timeline[6].state", is("PENDING")))
-                .andExpect(jsonPath("$.data.timeline[6].completedAt").value(org.hamcrest.Matchers.nullValue()))
-                .andExpect(jsonPath("$.data.quickActions[3].enabled", is(true)));
+                .andExpect(jsonPath("$.data.timeline", hasSize(5)))
+                .andExpect(jsonPath("$.data.timeline[2].code", is("OUTLINE")))
+                .andExpect(jsonPath("$.data.timeline[2].state", is("CURRENT")))
+                .andExpect(jsonPath("$.data.timeline[3].code", is("LESSON_PLAN")))
+                .andExpect(jsonPath("$.data.timeline[3].state", is("PENDING")))
+                .andExpect(jsonPath("$.data.timeline[3].completedAt").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.data.quickActions[2].enabled", is(true)));
 
         mockMvc.perform(get("/api/projects/{projectId}/teaching-intents/workspace", project.getId()))
                 .andExpect(status().isOk())

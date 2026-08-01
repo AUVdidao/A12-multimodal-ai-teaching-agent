@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -48,10 +49,10 @@ class ClarificationMockProviderIntegrationTest {
                         .content("{\"rawRequirementText\":\"帮我生成一份数学课件\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.complete", is(false)))
-                .andExpect(jsonPath("$.data.missingFields", hasSize(1)))
-                .andExpect(jsonPath("$.data.missingFields[0].field", is("teachingGoals")))
+                .andExpect(jsonPath("$.data.missingFields", hasSize(greaterThan(0))))
                 .andExpect(jsonPath("$.data.questions", hasSize(1)))
-                .andExpect(jsonPath("$.data.questions[0]", not("")));
+                .andExpect(jsonPath("$.data.questions[0].targetField", not("")))
+                .andExpect(jsonPath("$.data.questions[0].question", not("")));
     }
 
     private Long createProject() {

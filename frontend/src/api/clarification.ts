@@ -15,6 +15,7 @@ export interface ClarificationResult {
 }
 
 export interface ClarificationQuestion {
+  questionId: string;
   targetField: string;
   question: string;
 }
@@ -43,7 +44,7 @@ export async function getClarificationQuestions(
 
 export async function saveClarificationAnswer(
   projectId: number | string,
-  payload: { targetField: string; answer: string },
+  payload: { questionId: string; answer: string },
 ) {
   const response = await http.post<ApiResponse<TeachingRequirementPayload>>(
     `/api/projects/${projectId}/clarification/answers`,

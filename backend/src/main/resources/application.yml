@@ -45,7 +45,7 @@ a12:
     poll-interval-millis: ${PPT_SKILL_POLL_INTERVAL_MILLIS:1000}
     storage-dir: ${PPT_SKILL_STORAGE_DIR:./data/generated/ppt}
     style-preset: ${PPT_SKILL_STYLE_PRESET:forest-research}
-    outline-provider: ${PPT_OUTLINE_PROVIDER:FIXTURE}
+    outline-provider: ${PPT_OUTLINE_PROVIDER:KIMI}
     fixture-enabled: ${PPT_OUTLINE_FIXTURE_ENABLED:false}
     kimi-base-url: ${KIMI_API_BASE_URL:https://api.moonshot.ai/v1}
     kimi-api-key: ${MOONSHOT_API_KEY:}
@@ -85,4 +85,4 @@ a12:
       multi-password: ${A12_DEMO_MULTI_PASSWORD:}
   ai:
     provider: ${A12_AI_PROVIDER:${AI_PROVIDER:KIMI}}
-    fallback-to-mock: ${A12_AI_FALLBACK_TO_MOCK:true}
+    fallback-to-mock: ${A12_AI_FALLBACK_TO_MOCK:false}

@@ -1,5 +1,8 @@
 package com.auvdidao.a12teachingagent.requirement;
 
+import com.auvdidao.a12teachingagent.clarification.ClarificationQuestionEntity;
+import com.auvdidao.a12teachingagent.clarification.ClarificationQuestionRepository;
+import com.auvdidao.a12teachingagent.clarification.ClarificationQuestionStatus;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.domain.common.ProjectStatus;
 import com.auvdidao.a12teachingagent.domain.project.Project;
@@ -34,6 +37,9 @@ class RequirementInputControllerTest {
 
     @Autowired
     private ProjectRepository projectRepository;
+
+    @Autowired
+    private ClarificationQuestionRepository clarificationQuestionRepository;
 
     @Test
     void savesCompleteRequirementAndOutputTypes() throws Exception {
@@ -151,6 +157,7 @@ class RequirementInputControllerTest {
     @Test
     void clarificationAnswerUpdatesOnlyExplicitOutputTypesField() throws Exception {
         Long projectId = createProject();
+        String questionId = seedQuestion(projectId, "outputTypes", "本次需要生成哪些教学成果？");
 
         mockMvc.perform(post("/api/projects/{projectId}/requirements", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -173,10 +180,10 @@ class RequirementInputControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "targetField":"outputTypes",
+                                  "questionId":"QUESTION_ID",
                                   "answer":"课件、教案、学案、课堂练习"
                                 }
-                                """))
+                                """.replace("QUESTION_ID", questionId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.outputTypes", hasSize(4)))
                 .andExpect(jsonPath("$.data.outputTypes[0]", is("课件")))
@@ -190,6 +197,7 @@ class RequirementInputControllerTest {
     @Test
     void rejectsUnknownClarificationTargetField() throws Exception {
         Long projectId = createProject();
+        String questionId = seedQuestion(projectId, "notAllowed", "invalid");
 
         mockMvc.perform(post("/api/projects/{projectId}/requirements", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -211,11 +219,21 @@ class RequirementInputControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "targetField":"notAllowed",
+                                  "questionId":"QUESTION_ID",
                                   "answer":"不应被写入任何需求字段"
                                 }
-                                """))
+                                """.replace("QUESTION_ID", questionId)))
                 .andExpect(status().isBadRequest());
+    }
+
+    private String seedQuestion(Long projectId, String targetField, String question) {
+        ClarificationQuestionEntity entity = new ClarificationQuestionEntity();
+        entity.setQuestionId("test-question-" + targetField + "-" + System.nanoTime());
+        entity.setProjectId(projectId);
+        entity.setTargetField(targetField);
+        entity.setQuestion(question);
+        entity.setStatus(ClarificationQuestionStatus.PENDING);
+        return clarificationQuestionRepository.save(entity).getQuestionId();
     }
 
     private void expectBadProjectId(long projectId) throws Exception {

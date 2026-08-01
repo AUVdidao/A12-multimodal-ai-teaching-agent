@@ -11,7 +11,11 @@ import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
+import com.auvdidao.a12teachingagent.requirement.RequirementInputService;
+import com.auvdidao.a12teachingagent.requirement.dto.RequirementInputDtos.RequirementInputResponse;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +23,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
+import java.time.LocalDateTime;
 
 @Service
 public class ClarificationService {
@@ -39,15 +45,30 @@ public class ClarificationService {
     private final AIWorkflowGateway aiWorkflowGateway;
     private final ProjectRepository projectRepository;
     private final ProjectAccessService projectAccessService;
+    private final ClarificationQuestionRepository questionRepository;
+    private final RequirementInputService requirementInputService;
 
     public ClarificationService(
             AIWorkflowGateway aiWorkflowGateway,
             ProjectRepository projectRepository,
             ProjectAccessService projectAccessService
     ) {
+        this(aiWorkflowGateway, projectRepository, projectAccessService, null, null);
+    }
+
+    @Autowired
+    public ClarificationService(
+            AIWorkflowGateway aiWorkflowGateway,
+            ProjectRepository projectRepository,
+            ProjectAccessService projectAccessService,
+            ObjectProvider<ClarificationQuestionRepository> questionRepositoryProvider,
+            ObjectProvider<RequirementInputService> requirementInputServiceProvider
+    ) {
         this.aiWorkflowGateway = aiWorkflowGateway;
         this.projectRepository = projectRepository;
         this.projectAccessService = projectAccessService;
+        this.questionRepository = questionRepositoryProvider.getIfAvailable();
+        this.requirementInputService = requirementInputServiceProvider.getIfAvailable();
     }
 
     @Transactional(readOnly = true)
@@ -65,6 +86,21 @@ public class ClarificationService {
             return new ClarificationResult(true, List.of(), List.of());
         }
 
+        if (questionRepository != null) {
+            ClarificationQuestionEntity pending = questionRepository
+                    .findFirstByProjectIdAndStatusOrderByCreatedAtDescIdDesc(
+                            projectId, ClarificationQuestionStatus.PENDING)
+                    .orElse(null);
+            if (pending != null) {
+                return new ClarificationResult(
+                        false,
+                        evaluation.missingFields(),
+                        List.of(new ClarificationQuestion(
+                                pending.getQuestionId(), pending.getTargetField(), pending.getQuestion()))
+                );
+            }
+        }
+
         List<String> missingCodes = evaluation.missingFields().stream()
                 .map(MissingField::field)
                 .toList();
@@ -77,7 +113,53 @@ public class ClarificationService {
                 projectContext(project, request)
         ));
 
-        return new ClarificationResult(false, evaluation.missingFields(), adaptQuestions(missingCodes, response));
+        List<ClarificationQuestion> questions = adaptQuestions(missingCodes, response);
+        if (questionRepository == null) {
+            return new ClarificationResult(false, evaluation.missingFields(), questions);
+        }
+
+        ClarificationQuestion first = questions.get(0);
+        ClarificationQuestionEntity entity = new ClarificationQuestionEntity();
+        entity.setQuestionId(UUID.randomUUID().toString());
+        entity.setProjectId(projectId);
+        entity.setTargetField(first.targetField());
+        entity.setQuestion(first.question());
+        entity.setStatus(ClarificationQuestionStatus.PENDING);
+        questionRepository.save(entity);
+        return new ClarificationResult(
+                false,
+                evaluation.missingFields(),
+                List.of(new ClarificationQuestion(entity.getQuestionId(), entity.getTargetField(), entity.getQuestion()))
+        );
+    }
+
+    @Transactional
+    public RequirementInputResponse answer(Long projectId, String questionId, String answer) {
+        requireProject(projectId);
+        if (!hasText(questionId) || !hasText(answer)) {
+            throw new BadRequestException("questionId and answer are required");
+        }
+        if (questionRepository == null || requirementInputService == null) {
+            throw new BadRequestException("Clarification question persistence is unavailable");
+        }
+        ClarificationQuestionEntity entity = questionRepository.findByQuestionId(questionId.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Clarification question not found"));
+        if (!projectId.equals(entity.getProjectId())) {
+            throw new BadRequestException("Clarification question does not belong to this project");
+        }
+        if (entity.getStatus() != ClarificationQuestionStatus.PENDING) {
+            throw new BadRequestException("Clarification question has already been answered");
+        }
+        String targetField = entity.getTargetField();
+        if (ClarificationField.fromCode(targetField).isEmpty()) {
+            throw new BadRequestException("Invalid clarification targetField");
+        }
+        RequirementInputResponse updated = requirementInputService.applyClarificationAnswer(
+                projectId, targetField, answer.trim());
+        entity.setStatus(ClarificationQuestionStatus.ANSWERED);
+        entity.setAnsweredAt(LocalDateTime.now());
+        questionRepository.save(entity);
+        return updated;
     }
 
     private Evaluation evaluate(Project project, ClarificationCheckRequest request) {
@@ -160,7 +242,7 @@ public class ClarificationService {
                         "AI workflow returned a clarification targetField that is not missing: " + targetField
                 );
             }
-            questions.add(new ClarificationQuestion(targetField, question.question().trim()));
+            questions.add(new ClarificationQuestion(null, targetField, question.question().trim()));
         }
         if (questions.isEmpty()) {
             throw new AiWorkflowUnavailableException("AI workflow returned no clarification questions");

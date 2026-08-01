@@ -94,9 +94,13 @@ public final class AiWorkflowDtos {
     }
 
     public record ClarificationQuestion(
+            String questionId,
             String targetField,
             String question
     ) {
+        public ClarificationQuestion(String targetField, String question) {
+            this(null, targetField, question);
+        }
     }
 
     public record ClarificationResponse(

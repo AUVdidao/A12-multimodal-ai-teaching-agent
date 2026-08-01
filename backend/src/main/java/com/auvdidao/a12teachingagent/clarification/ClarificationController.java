@@ -1,7 +1,6 @@
 package com.auvdidao.a12teachingagent.clarification;
 
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
-import com.auvdidao.a12teachingagent.requirement.RequirementInputService;
 import com.auvdidao.a12teachingagent.requirement.dto.RequirementInputDtos.RequirementInputResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -18,14 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ClarificationController {
 
     private final ClarificationService clarificationService;
-    private final RequirementInputService requirementInputService;
 
     public ClarificationController(
-            ClarificationService clarificationService,
-            RequirementInputService requirementInputService
+            ClarificationService clarificationService
     ) {
         this.clarificationService = clarificationService;
-        this.requirementInputService = requirementInputService;
     }
 
     @PostMapping("/check")
@@ -49,9 +45,9 @@ public class ClarificationController {
             @PathVariable @Positive(message = "projectId must be greater than 0") Long projectId,
             @Valid @RequestBody ClarificationAnswerRequest request
     ) {
-        return ApiResponse.success(requirementInputService.applyClarificationAnswer(
+        return ApiResponse.success(clarificationService.answer(
                 projectId,
-                request.targetField(),
+                request.questionId(),
                 request.answer()
         ));
     }

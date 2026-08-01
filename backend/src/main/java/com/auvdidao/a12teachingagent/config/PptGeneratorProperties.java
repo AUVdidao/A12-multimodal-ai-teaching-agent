@@ -16,7 +16,7 @@ public class PptGeneratorProperties {
     private long pollIntervalMillis = 1000;
     private String storageDir = "./data/generated/ppt";
     private String stylePreset = "forest-research";
-    private String outlineProvider = "FIXTURE";
+    private String outlineProvider = "KIMI";
     private boolean fixtureEnabled = false;
     private String kimiBaseUrl = "https://api.moonshot.ai/v1";
     private String kimiApiKey;

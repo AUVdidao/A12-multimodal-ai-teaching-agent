@@ -12,11 +12,8 @@
 <script setup lang="ts">
 import {
   Aim,
-  DocumentChecked,
-  Download,
   Files,
   Finished,
-  FolderChecked,
   Reading,
   View,
 } from '@element-plus/icons-vue';
@@ -31,13 +28,10 @@ const navItems = computed(() => {
   const root = `/projects/${props.projectId}`;
   return [
     { label: '教学需求', path: `${root}/requirements`, icon: Reading },
-    { label: '需求摘要', path: `${root}/summary`, icon: DocumentChecked },
-    { label: '参考资料', path: `${root}/materials`, icon: Files },
-    { label: '知识库', path: `${root}/knowledge`, icon: FolderChecked },
-    { label: '教学意图', path: `${root}/intent`, icon: Aim },
-    { label: '内容生成', path: `${root}/plan`, icon: Finished },
-    { label: '成果预览', path: `${root}/preview`, icon: View },
-    { label: '成果导出', path: `${root}/export`, icon: Download },
+    { label: '资料中心', path: `${root}/materials`, icon: Files },
+    { label: '课程大纲', path: `${root}/outline`, icon: Aim },
+    { label: '教案设计', path: `${root}/lesson-plan`, icon: Finished },
+    { label: 'PPT成果', path: `${root}/ppt`, icon: View },
   ];
 });
 </script>
