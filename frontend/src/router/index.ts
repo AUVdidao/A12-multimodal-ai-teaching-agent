@@ -302,8 +302,8 @@ router.beforeEach(async (to) => {
   const leaderCourseRouteNames = new Set([
     'home',
     'projects', 'project-create', 'project-mode', 'project-overview', 'project-requirements',
-    'project-summary', 'project-materials', 'project-knowledge', 'project-intent', 'project-plan',
-    'project-preview', 'project-export', 'recent-projects', 'recycle-bin', 'resource-library',
+    'project-materials', 'project-outline', 'project-lesson-plan', 'project-ppt',
+    'recent-projects', 'recycle-bin', 'resource-library',
     'knowledge-library', 'template-center', 'ai-assistant',
   ]);
   const leaderCanUseCourseRoute = auth.activeRole === 'LEADER' && leaderCourseRouteNames.has(String(to.name));

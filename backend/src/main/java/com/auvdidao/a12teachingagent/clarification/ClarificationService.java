@@ -78,13 +78,10 @@ public class ClarificationService {
         return new ClarificationResult(evaluation.complete(), evaluation.missingFields(), List.of());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ClarificationResult questions(Long projectId, ClarificationCheckRequest request) {
-        Project project = requireProject(projectId);
+        Project project = requireProjectForUpdate(projectId);
         Evaluation evaluation = evaluate(project, request);
-        if (evaluation.complete()) {
-            return new ClarificationResult(true, List.of(), List.of());
-        }
 
         if (questionRepository != null) {
             ClarificationQuestionEntity pending = questionRepository
@@ -92,13 +89,24 @@ public class ClarificationService {
                             projectId, ClarificationQuestionStatus.PENDING)
                     .orElse(null);
             if (pending != null) {
-                return new ClarificationResult(
-                        false,
-                        evaluation.missingFields(),
-                        List.of(new ClarificationQuestion(
-                                pending.getQuestionId(), pending.getTargetField(), pending.getQuestion()))
-                );
+                boolean targetStillMissing = evaluation.missingFields().stream()
+                        .map(MissingField::field)
+                        .anyMatch(field -> java.util.Objects.equals(field, pending.getTargetField()));
+                if (targetStillMissing) {
+                    return new ClarificationResult(
+                            false,
+                            evaluation.missingFields(),
+                            List.of(new ClarificationQuestion(
+                                    pending.getQuestionId(), pending.getTargetField(), pending.getQuestion()))
+                    );
+                }
+                pending.setStatus(ClarificationQuestionStatus.OBSOLETE);
+                questionRepository.save(pending);
             }
+        }
+
+        if (evaluation.complete()) {
+            return new ClarificationResult(true, List.of(), List.of());
         }
 
         List<String> missingCodes = evaluation.missingFields().stream()
@@ -142,7 +150,7 @@ public class ClarificationService {
         if (questionRepository == null || requirementInputService == null) {
             throw new BadRequestException("Clarification question persistence is unavailable");
         }
-        ClarificationQuestionEntity entity = questionRepository.findByQuestionId(questionId.trim())
+        ClarificationQuestionEntity entity = questionRepository.findByQuestionIdForUpdate(questionId.trim())
                 .orElseThrow(() -> new ResourceNotFoundException("Clarification question not found"));
         if (!projectId.equals(entity.getProjectId())) {
             throw new BadRequestException("Clarification question does not belong to this project");
@@ -255,6 +263,16 @@ public class ClarificationService {
             throw new BadRequestException("projectId must be greater than 0");
         }
         Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        projectAccessService.requireAccess(projectId);
+        return project;
+    }
+
+    private Project requireProjectForUpdate(Long projectId) {
+        if (projectId == null || projectId <= 0) {
+            throw new BadRequestException("projectId must be greater than 0");
+        }
+        Project project = projectRepository.findByIdForUpdate(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
         projectAccessService.requireAccess(projectId);
         return project;

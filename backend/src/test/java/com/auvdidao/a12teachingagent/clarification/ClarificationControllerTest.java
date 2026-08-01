@@ -58,6 +58,9 @@ class ClarificationControllerTest {
     private ProjectRepository projectRepository;
 
     @MockBean
+    private ClarificationQuestionRepository questionRepository;
+
+    @MockBean
     private ProjectAccessService projectAccessService;
 
     @MockBean
@@ -75,6 +78,9 @@ class ClarificationControllerTest {
         project.setId(1L);
         project.setGenerationMode(GenerationMode.STANDARD);
         when(projectRepository.findById(anyLong())).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdForUpdate(anyLong())).thenReturn(Optional.of(project));
+        when(questionRepository.findFirstByProjectIdAndStatusOrderByCreatedAtDescIdDesc(
+                anyLong(), any())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -312,7 +318,7 @@ class ClarificationControllerTest {
                         .content("{\"rawRequirementText\":\"帮我生成一份数学课件\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.missingFields[*].field", not(hasItem("outputTypes"))))
-                .andExpect(jsonPath("$.data.questions", hasSize(8)));
+                .andExpect(jsonPath("$.data.questions", hasSize(1)));
     }
 
     @Test

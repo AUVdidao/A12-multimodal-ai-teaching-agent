@@ -5,11 +5,18 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "clarification_questions")
+@Table(
+        name = "clarification_questions",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_clarification_question_question_id",
+                columnNames = "question_id"
+        )
+)
 public class ClarificationQuestionEntity extends BaseCreatedEntity {
 
     private String questionId;
