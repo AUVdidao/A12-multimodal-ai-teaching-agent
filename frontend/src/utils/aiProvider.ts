@@ -19,7 +19,7 @@ export function describeAiProvider(
   error = '',
 ): AiProviderPresentation {
   if (loading && !status) {
-    return presentation('正在读取 AI 状态', '正在确认 Dify 与 Mock 工作流的运行状态。', 'info');
+    return presentation('正在读取 AI 状态', '正在确认 Kimi 与 Mock 工作流的运行状态。', 'info');
   }
 
   if (error && !status) {
@@ -38,7 +38,7 @@ export function describeAiProvider(
   if (active === 'UNAVAILABLE') {
     return presentation(
       'AI 工作流不可用',
-      'Dify 尚未达到可调用条件，且当前没有可用的 Mock 回退。',
+      'Kimi 尚未完成服务端配置，且当前没有可用的 Mock 回退。',
       'danger',
       true,
       false,
@@ -49,12 +49,12 @@ export function describeAiProvider(
   }
 
   if (active.includes('MOCK')) {
-    const fallbackActive = requested === 'DIFY';
+    const fallbackActive = requested === 'KIMI';
     return presentation(
       fallbackActive ? 'Mock 降级中' : 'Mock AI',
       fallbackActive
-        ? '目标 Provider 为 Dify，但最近一次调用已由 Mock 保底完成。'
-        : '当前使用本地 Mock 工作流，不会调用外部 Dify 服务。',
+        ? '目标 Provider 为 Kimi，但最近一次调用已由 Mock 保底完成。'
+        : '当前使用本地 Mock 工作流，不会调用外部模型服务。',
       'warning',
       false,
       true,
@@ -64,14 +64,13 @@ export function describeAiProvider(
     );
   }
 
-  if (active.startsWith('DIFY')) {
-    const partial = active.includes('PARTIAL');
+  if (active === 'KIMI') {
     return presentation(
-      partial ? 'Dify 部分可用' : 'Dify AI',
-      partial
-        ? '只有部分工作流已配置发布应用，未配置流程将按后端策略处理。'
-        : '当前工作流由服务端配置的 Dify 应用执行。',
-      partial ? 'warning' : 'success',
+      'Kimi AI',
+      status.providerConfigured
+        ? '当前结构化教学工作流由 Spring Boot 直接调用 Kimi 执行。'
+        : '后端选择了 Kimi，但服务端配置尚未完成。',
+      status.providerConfigured ? 'success' : 'warning',
       false,
       false,
       false,
@@ -110,7 +109,7 @@ function normalize(value?: string) {
 }
 
 function providerName(value: string) {
-  if (value === 'DIFY') return 'Dify';
+  if (value === 'KIMI') return 'Kimi';
   if (value === 'MOCK') return 'Mock';
   return value || '未知';
 }

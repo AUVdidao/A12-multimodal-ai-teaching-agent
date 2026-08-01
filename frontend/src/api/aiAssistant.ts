@@ -7,7 +7,7 @@ export interface AiGatewayStatus {
   requestedProvider: string;
   activeProvider: string;
   mockEnabled: boolean;
-  difyConfigured: boolean;
+  providerConfigured: boolean;
   fallbackToMock: boolean;
   message: string;
 }
@@ -23,7 +23,10 @@ export interface ClarificationRequest {
 export interface ClarificationResponse {
   workflow: string;
   missingFields: string[];
-  questions: string[];
+  questions: Array<{
+    targetField: string;
+    question: string;
+  }>;
   suggestedFields: Record<string, string>;
   nextAction: string;
 }

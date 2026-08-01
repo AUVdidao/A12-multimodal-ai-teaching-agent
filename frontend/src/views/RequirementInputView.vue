@@ -37,7 +37,7 @@
             :rows="4"
             maxlength="2000"
             show-word-limit
-            :placeholder="currentQuestion || '请输入您的教学需求或回复 AI 的问题...'"
+            :placeholder="currentQuestion?.question || '请输入您的教学需求或回复 AI 的问题...'"
             @keydown.ctrl.enter.prevent="sendMessage"
           />
           <div class="page-actions">
@@ -109,7 +109,11 @@
 </template>
 
 <script setup lang="ts">
-import { getClarificationQuestions } from '@/api/clarification';
+import {
+  getClarificationQuestions,
+  saveClarificationAnswer,
+  type ClarificationQuestion,
+} from '@/api/clarification';
 import { clearProjectDialogues, saveDialogueMessage } from '@/api/dialogues';
 import { saveTeachingRequirement, type TeachingRequirementPayload } from '@/api/requirements';
 import { getRequirementWorkspace, type RequirementWorkspace } from '@/api/workspace';
@@ -134,7 +138,7 @@ const chatList = ref<HTMLElement>();
 const sessionId = computed(() => `project-${projectId.value}-requirement`);
 const form = reactive<TeachingRequirementPayload>(emptyRequirement());
 
-const currentQuestion = computed(() => workspace.value?.suggestedQuestions?.[0] || '');
+const currentQuestion = ref<ClarificationQuestion | null>(null);
 const displayMessages = computed(() => {
   const messages = (workspace.value?.dialogues || []).map((message) => ({
     key: String(message.id),
@@ -143,7 +147,7 @@ const displayMessages = computed(() => {
     time: formatDateTime(message.createdAt),
   }));
   if (messages.length === 0 && currentQuestion.value) {
-    messages.push({ key: 'suggested-question', role: 'ai', content: currentQuestion.value, time: '现在' });
+    messages.push({ key: 'suggested-question', role: 'ai', content: currentQuestion.value.question, time: '现在' });
   }
   return messages;
 });
@@ -175,6 +179,8 @@ async function loadWorkspace() {
   try {
     workspace.value = await getRequirementWorkspace(projectId.value);
     syncForm();
+    const clarification = await getClarificationQuestions(projectId.value, form);
+    currentQuestion.value = clarification.questions[0] || null;
     await nextTick();
     chatList.value?.scrollTo({ top: chatList.value.scrollHeight });
   } finally {
@@ -205,23 +211,6 @@ function openCopilot() {
   });
 }
 
-function applyAnswerToMissingField(content: string) {
-  const code = workspace.value?.completeness.fields.find((field) => !field.completed)?.code;
-  const mappings: Record<string, keyof TeachingRequirementPayload> = {
-    topic: 'topic',
-    teachingGoals: 'teachingGoals',
-    audience: 'gradeLevel',
-    baselineLevel: 'baselineLevel',
-    lessonDuration: 'lessonDuration',
-    keyDifficulties: 'difficultPoints',
-    stylePreference: 'stylePreference',
-    interactionType: 'interactionType',
-  };
-  const field = code ? mappings[code] : undefined;
-  if (field) form[field] = content as never;
-  form.rawRequirementText = [form.rawRequirementText, content].filter(Boolean).join('\n');
-}
-
 async function sendMessage() {
   const content = draft.value.trim();
   if (!content || sending.value) return;
@@ -229,13 +218,26 @@ async function sendMessage() {
   try {
     const nextRound = Math.max(0, ...(workspace.value?.dialogues.map((item) => item.roundNo) || [0])) + 1;
     await saveDialogueMessage(projectId.value, { sessionId: sessionId.value, sender: 'TEACHER', content, roundNo: nextRound });
-    applyAnswerToMissingField(content);
-    await saveTeachingRequirement(projectId.value, { ...form, outputTypes: [...form.outputTypes] });
+    const questionToAnswer = currentQuestion.value;
+    if (!questionToAnswer) {
+      throw new Error('当前没有可回答的澄清问题');
+    }
+    const updatedRequirement = await saveClarificationAnswer(
+      projectId.value,
+      { targetField: questionToAnswer.targetField, answer: content },
+    );
+    Object.assign(form, updatedRequirement);
     const clarification = await getClarificationQuestions(projectId.value, form);
     const question = clarification.questions[0];
     if (question) {
-      await saveDialogueMessage(projectId.value, { sessionId: sessionId.value, sender: 'AI', content: question, roundNo: nextRound });
+      await saveDialogueMessage(projectId.value, {
+        sessionId: sessionId.value,
+        sender: 'AI',
+        content: question.question,
+        roundNo: nextRound,
+      });
     }
+    currentQuestion.value = question || null;
     draft.value = '';
     await loadWorkspace();
   } finally {

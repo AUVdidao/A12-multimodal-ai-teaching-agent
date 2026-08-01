@@ -55,9 +55,16 @@ a12:
   kimi:
     base-url: ${KIMI_API_BASE_URL:https://api.moonshot.ai/v1}
     api-key: ${MOONSHOT_API_KEY:}
+    connect-timeout-seconds: ${KIMI_CONNECT_TIMEOUT_SECONDS:15}
+    request-attempts: ${KIMI_REQUEST_ATTEMPTS:2}
+    retry-delay-millis: ${KIMI_RETRY_DELAY_MILLIS:1200}
     assistant-model: ${KIMI_ASSISTANT_MODEL:kimi-k2.6}
     assistant-timeout-seconds: ${KIMI_ASSISTANT_TIMEOUT_SECONDS:90}
     assistant-max-completion-tokens: ${KIMI_ASSISTANT_MAX_COMPLETION_TOKENS:1600}
+    workflow-model: ${KIMI_WORKFLOW_MODEL:kimi-k2.6}
+    workflow-timeout-seconds: ${KIMI_WORKFLOW_TIMEOUT_SECONDS:180}
+    workflow-max-completion-tokens: ${KIMI_WORKFLOW_MAX_COMPLETION_TOKENS:8000}
+    workflow-max-input-characters: ${KIMI_WORKFLOW_MAX_INPUT_CHARACTERS:60000}
   artifact-generator:
     mode: ${A12_ARTIFACT_GENERATOR_MODE:local}
     base-url: ${A12_ARTIFACT_GENERATOR_BASE_URL:http://file-generator-service:8080}
@@ -77,32 +84,5 @@ a12:
       student-password: ${A12_DEMO_STUDENT_PASSWORD:}
       multi-password: ${A12_DEMO_MULTI_PASSWORD:}
   ai:
-    provider: ${A12_AI_PROVIDER:${AI_PROVIDER:MOCK}}
+    provider: ${A12_AI_PROVIDER:${AI_PROVIDER:KIMI}}
     fallback-to-mock: ${A12_AI_FALLBACK_TO_MOCK:true}
-    dify:
-      base-url: ${A12_AI_DIFY_BASE_URL:${DIFY_BASE_URL:https://api.dify.ai/v1}}
-      user-prefix: ${A12_AI_DIFY_USER_PREFIX:a12-project-}
-      connect-timeout: ${A12_AI_DIFY_CONNECT_TIMEOUT:5s}
-      read-timeout: ${A12_AI_DIFY_READ_TIMEOUT:600s}
-      workflows:
-        clarification:
-          workflow-id: ${DIFY_APP01_REQUIREMENT_WORKFLOW_ID:${DIFY_WF01_WORKFLOW_ID:}}
-          api-key: ${DIFY_APP01_REQUIREMENT_API_KEY:${DIFY_WF01_API_KEY:}}
-        summary:
-          workflow-id: ${DIFY_APP01_REQUIREMENT_WORKFLOW_ID:${DIFY_WF02_WORKFLOW_ID:}}
-          api-key: ${DIFY_APP01_REQUIREMENT_API_KEY:${DIFY_WF02_API_KEY:}}
-        material:
-          workflow-id: ${DIFY_APP02_MATERIAL_INTENT_WORKFLOW_ID:${DIFY_WF03_WORKFLOW_ID:}}
-          api-key: ${DIFY_APP02_MATERIAL_INTENT_API_KEY:${DIFY_WF03_API_KEY:}}
-        knowledge-intent:
-          workflow-id: ${DIFY_APP02_MATERIAL_INTENT_WORKFLOW_ID:${DIFY_WF04_WORKFLOW_ID:}}
-          api-key: ${DIFY_APP02_MATERIAL_INTENT_API_KEY:${DIFY_WF04_API_KEY:}}
-        generation-plan:
-          workflow-id: ${DIFY_APP03_GENERATION_PLAN_WORKFLOW_ID:${DIFY_WF05_WORKFLOW_ID:}}
-          api-key: ${DIFY_APP03_GENERATION_PLAN_API_KEY:${DIFY_WF05_API_KEY:}}
-        content-draft:
-          workflow-id: ${DIFY_APP04_CONTENT_DRAFT_WORKFLOW_ID:${DIFY_WF06_WORKFLOW_ID:}}
-          api-key: ${DIFY_APP04_CONTENT_DRAFT_API_KEY:${DIFY_WF06_API_KEY:}}
-        revision:
-          workflow-id: ${DIFY_APP05_REVISION_WORKFLOW_ID:${DIFY_WF07_WORKFLOW_ID:}}
-          api-key: ${DIFY_APP05_REVISION_API_KEY:${DIFY_WF07_API_KEY:}}

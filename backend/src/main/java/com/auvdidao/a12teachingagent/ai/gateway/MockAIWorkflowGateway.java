@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.ai.gateway;
 
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationQuestion;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanResponse;
@@ -40,8 +41,11 @@ public class MockAIWorkflowGateway {
                     .filter(field -> ClarificationField.fromCode(field).isPresent())
                     .distinct()
                     .toList();
-            List<String> questions = missingFields.stream()
-                    .map(field -> ClarificationField.fromCode(field).orElseThrow().defaultQuestion())
+            List<ClarificationQuestion> questions = missingFields.stream()
+                    .map(field -> new ClarificationQuestion(
+                            field,
+                            ClarificationField.fromCode(field).orElseThrow().defaultQuestion()
+                    ))
                     .toList();
             return new ClarificationResponse(
                     WORKFLOW,
@@ -69,8 +73,8 @@ public class MockAIWorkflowGateway {
             suggestedFields.put("outputTypes", "PPT, DOCX, INTERACTION");
         }
 
-        List<String> questions = missingFields.stream()
-                .map(this::questionForField)
+        List<ClarificationQuestion> questions = missingFields.stream()
+                .map(field -> new ClarificationQuestion(field, questionForField(field)))
                 .toList();
 
         String nextAction = missingFields.isEmpty()

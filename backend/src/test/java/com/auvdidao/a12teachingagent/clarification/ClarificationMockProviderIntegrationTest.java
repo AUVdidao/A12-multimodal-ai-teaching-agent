@@ -38,9 +38,9 @@ class ClarificationMockProviderIntegrationTest {
     private ProjectRepository projectRepository;
 
     @Test
-    void realMockRouterWorksWithoutDifyKeyAndReturnsQuestions() throws Exception {
+    void realMockRouterWorksWithoutExternalKeyAndReturnsQuestions() throws Exception {
         assertThat(aiWorkflowGateway.status().activeProvider()).isEqualTo("MOCK");
-        assertThat(aiWorkflowGateway.status().difyConfigured()).isFalse();
+        assertThat(aiWorkflowGateway.status().providerConfigured()).isFalse();
 
         Long projectId = createProject();
         mockMvc.perform(post("/api/projects/{projectId}/clarification/questions", projectId)

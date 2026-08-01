@@ -442,7 +442,7 @@ async function loadWorkspace() {
 
 async function createPlan() {
   if (gatewayPresentation.value.unavailable) {
-    setActionError('create', undefined, 'AI 工作流当前不可用，请先检查 Dify 或 Mock 配置。');
+    setActionError('create', undefined, 'AI 工作流当前不可用，请先检查 Kimi 或 Mock 配置。');
     return;
   }
   creating.value = true;
@@ -508,7 +508,7 @@ async function confirmPlan() {
 
 async function generateContent() {
   if (!plan.value?.confirmed || gatewayPresentation.value.unavailable) {
-    if (gatewayPresentation.value.unavailable) setActionError('generate', undefined, 'AI 工作流当前不可用，请先检查 Dify 或 Mock 配置。');
+    if (gatewayPresentation.value.unavailable) setActionError('generate', undefined, 'AI 工作流当前不可用，请先检查 Kimi 或 Mock 配置。');
     return;
   }
   generating.value = true;

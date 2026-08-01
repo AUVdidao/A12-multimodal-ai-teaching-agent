@@ -1,12 +1,14 @@
 package com.auvdidao.a12teachingagent.clarification;
 
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationQuestion;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
+import com.auvdidao.a12teachingagent.requirement.RequirementInputService;
 import com.auvdidao.a12teachingagent.security.A12SecurityProperties;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import com.auvdidao.a12teachingagent.security.TokenAuthenticationService;
@@ -59,6 +61,9 @@ class ClarificationControllerTest {
     private ProjectAccessService projectAccessService;
 
     @MockBean
+    private RequirementInputService requirementInputService;
+
+    @MockBean
     private TokenAuthenticationService tokenAuthenticationService;
 
     @MockBean
@@ -89,6 +94,10 @@ class ClarificationControllerTest {
                                 {
                                   "topic": "Photosynthesis",
                                   "rawRequirementText": "Use classroom examples",
+                                  "baselineLevel": "有基础生物知识",
+                                  "difficultPoints": "能量转化过程",
+                                  "stylePreference": "案例驱动",
+                                  "interactionType": "小组讨论",
                                   "outputTypes": []
                                 }
                                 """))
@@ -121,7 +130,8 @@ class ClarificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.complete", is(false)))
                 .andExpect(jsonPath("$.data.missingFields[*].field", contains(
-                        "gradeLevel", "subject", "topic", "lessonDuration", "teachingGoals", "outputTypes"
+                        "gradeLevel", "topic", "lessonDuration", "teachingGoals", "baselineLevel",
+                        "difficultPoints", "stylePreference", "interactionType", "outputTypes"
                 )))
                 .andExpect(jsonPath("$.data.questions", hasSize(0)));
     }
@@ -136,6 +146,10 @@ class ClarificationControllerTest {
                                   "topic": "分数的意义",
                                   "lessonDuration": "45分钟",
                                   "teachingGoals": "理解分数表示整体与部分的关系",
+                                  "baselineLevel": "掌握整数运算",
+                                  "difficultPoints": "单位一的理解",
+                                  "stylePreference": "案例驱动",
+                                  "interactionType": "课堂问答",
                                   "outputTypes": ["PPT"]
                                 }
                                 """))
@@ -153,7 +167,8 @@ class ClarificationControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.missingFields[*].field", contains(
-                        "gradeLevel", "topic", "lessonDuration", "teachingGoals"
+                        "gradeLevel", "topic", "lessonDuration", "teachingGoals", "baselineLevel",
+                        "difficultPoints", "stylePreference", "interactionType"
                 )));
     }
 
@@ -164,11 +179,13 @@ class ClarificationControllerTest {
                         .content("""
                                 {
                                   "gradeLevel": " ", "subject": "", "topic": "   ",
-                                  "lessonDuration": " ", "teachingGoals": "", "outputTypes": ["   "]
+                                  "lessonDuration": " ", "teachingGoals": "", "baselineLevel": " ",
+                                  "difficultPoints": "", "stylePreference": " ", "interactionType": "",
+                                  "outputTypes": ["   "]
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.missingFields", hasSize(6)));
+                .andExpect(jsonPath("$.data.missingFields", hasSize(9)));
     }
 
     @Test
@@ -179,6 +196,8 @@ class ClarificationControllerTest {
                                 {
                                   "gradeLevel": "五年级", "subject": "数学", "topic": "分数的意义",
                                   "lessonDuration": "45分钟", "teachingGoals": "理解分数意义",
+                                  "baselineLevel": "掌握整数运算", "difficultPoints": "单位一的理解",
+                                  "stylePreference": "案例驱动", "interactionType": "课堂问答",
                                   "outputTypes": [], "rawRequirementText": "帮我上一节五年级数学分数课"
                                 }
                                 """))
@@ -218,7 +237,9 @@ class ClarificationControllerTest {
                 .thenReturn(new ClarificationResponse(
                         "mock-ai-workflow",
                         List.of("gradeLevel"),
-                        List.of("网关追问：请说明学生年级。"),
+                        List.of(new ClarificationQuestion(
+                                "gradeLevel",
+                                "网关追问：请说明学生年级。")),
                         Map.of(),
                         "请补充缺失字段"
                 ));
@@ -228,12 +249,15 @@ class ClarificationControllerTest {
                         .content("""
                                 {
                                   "subject": "数学", "topic": "分数的意义", "lessonDuration": "45分钟",
-                                  "teachingGoals": "理解分数意义", "outputTypes": ["PPT"]
+                                  "teachingGoals": "理解分数意义", "baselineLevel": "掌握整数运算",
+                                  "difficultPoints": "单位一的理解", "stylePreference": "案例驱动",
+                                  "interactionType": "课堂问答", "outputTypes": ["PPT"]
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.missingFields", hasSize(1)))
-                .andExpect(jsonPath("$.data.questions", contains("网关追问：请说明学生年级。")));
+                .andExpect(jsonPath("$.data.questions[0].targetField", is("gradeLevel")))
+                .andExpect(jsonPath("$.data.questions[0].question", is("网关追问：请说明学生年级。")));
 
         ArgumentCaptor<ClarificationRequest> requestCaptor = ArgumentCaptor.forClass(ClarificationRequest.class);
         verify(aiWorkflowGateway).clarifyRequirement(requestCaptor.capture());
@@ -248,8 +272,38 @@ class ClarificationControllerTest {
     }
 
     @Test
+    void questionsKeepExplicitTargetFieldWhenMissingFieldOrderChanges() throws Exception {
+        when(aiWorkflowGateway.clarifyRequirement(any(ClarificationRequest.class)))
+                .thenReturn(new ClarificationResponse(
+                        "mock-ai-workflow",
+                        List.of("stylePreference", "interactionType", "outputTypes"),
+                        List.of(new ClarificationQuestion("outputTypes", "本次需要生成哪些教学成果？")),
+                        Map.of(),
+                        "请补充输出内容"
+                ));
+
+        mockMvc.perform(post("/api/projects/1/clarification/questions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "gradeLevel":"八年级",
+                                  "topic":"光合作用",
+                                  "lessonDuration":"45分钟",
+                                  "teachingGoals":"理解光合作用",
+                                  "baselineLevel":"基础",
+                                  "difficultPoints":"能量转化"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions[0].targetField", is("outputTypes")))
+                .andExpect(jsonPath("$.data.questions[0].question", is("本次需要生成哪些教学成果？")));
+    }
+
+    @Test
     void questionsDoNotRepeatInferredOutputType() throws Exception {
-        List<String> missingFields = List.of("gradeLevel", "topic", "lessonDuration", "teachingGoals");
+        List<String> missingFields = List.of(
+                "gradeLevel", "topic", "lessonDuration", "teachingGoals",
+                "baselineLevel", "difficultPoints", "stylePreference", "interactionType");
         when(aiWorkflowGateway.clarifyRequirement(any(ClarificationRequest.class)))
                 .thenReturn(responseFor(missingFields));
 
@@ -258,7 +312,7 @@ class ClarificationControllerTest {
                         .content("{\"rawRequirementText\":\"帮我生成一份数学课件\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.missingFields[*].field", not(hasItem("outputTypes"))))
-                .andExpect(jsonPath("$.data.questions", hasSize(4)));
+                .andExpect(jsonPath("$.data.questions", hasSize(8)));
     }
 
     @Test
@@ -357,15 +411,19 @@ class ClarificationControllerTest {
                 {
                   "gradeLevel": "五年级", "subject": "数学", "topic": "分数的意义",
                   "lessonDuration": "45分钟", "teachingGoals": "理解分数表示整体与部分的关系",
-                  "keyPoints": "分数、整体、部分", "difficultPoints": "单位一的理解",
+                  "baselineLevel": "掌握整数运算", "keyPoints": "分数、整体、部分",
+                  "difficultPoints": "单位一的理解", "stylePreference": "案例驱动",
+                  "interactionType": "课堂问答",
                   "outputTypes": ["PPT", "DOCX"]
                 }
                 """;
     }
 
     private ClarificationResponse responseFor(List<String> missingFields) {
-        List<String> questions = missingFields.stream()
-                .map(field -> ClarificationField.fromCode(field).orElseThrow().defaultQuestion())
+        List<ClarificationQuestion> questions = missingFields.stream()
+                .map(field -> new ClarificationQuestion(
+                        field,
+                        ClarificationField.fromCode(field).orElseThrow().defaultQuestion()))
                 .toList();
         return new ClarificationResponse(
                 "mock-ai-workflow",

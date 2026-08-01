@@ -17,7 +17,7 @@ public final class AiWorkflowDtos {
             String requestedProvider,
             String activeProvider,
             boolean mockEnabled,
-            boolean difyConfigured,
+            boolean providerConfigured,
             boolean fallbackToMock,
             String message
     ) {
@@ -93,10 +93,16 @@ public final class AiWorkflowDtos {
         }
     }
 
+    public record ClarificationQuestion(
+            String targetField,
+            String question
+    ) {
+    }
+
     public record ClarificationResponse(
             String workflow,
             List<String> missingFields,
-            List<String> questions,
+            List<ClarificationQuestion> questions,
             Map<String, String> suggestedFields,
             String nextAction
     ) {

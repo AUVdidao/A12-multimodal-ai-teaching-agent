@@ -2,6 +2,7 @@ package com.auvdidao.a12teachingagent.requirement;
 
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
+import com.auvdidao.a12teachingagent.clarification.ClarificationField;
 import com.auvdidao.a12teachingagent.domain.common.InputType;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementInput;
@@ -67,6 +68,42 @@ public class RequirementInputService {
                 .orElse(null);
     }
 
+    @Transactional
+    public RequirementInputResponse applyClarificationAnswer(
+            Long projectId,
+            String targetField,
+            String answer
+    ) {
+        requireProject(projectId);
+        ClarificationField field = ClarificationField.fromCode(trimToNull(targetField))
+                .orElseThrow(() -> new BadRequestException(
+                        "Unsupported clarification targetField: " + targetField
+                ));
+        String normalizedAnswer = trimToNull(answer);
+        if (normalizedAnswer == null) {
+            throw new BadRequestException("Clarification answer is required");
+        }
+
+        RequirementInput latest = requirementInputRepository
+                .findFirstByProjectIdOrderByCreatedAtDescIdDesc(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Requirement input not found for project: " + projectId
+                ));
+        RequirementInput updated = copyOf(latest);
+        switch (field) {
+            case GRADE_LEVEL -> updated.setGradeLevel(normalizedAnswer);
+            case TOPIC -> updated.setTopic(normalizedAnswer);
+            case LESSON_DURATION -> updated.setLessonDuration(normalizedAnswer);
+            case TEACHING_GOALS -> updated.setTeachingGoals(normalizedAnswer);
+            case BASELINE_LEVEL -> updated.setBaselineLevel(normalizedAnswer);
+            case DIFFICULT_POINTS -> updated.setDifficultPoints(normalizedAnswer);
+            case STYLE_PREFERENCE -> updated.setStylePreference(normalizedAnswer);
+            case INTERACTION_TYPE -> updated.setInteractionType(normalizedAnswer);
+            case OUTPUT_TYPES -> updated.setOutputTypes(parseOutputTypes(normalizedAnswer));
+        }
+        return toResponse(requirementInputRepository.save(updated));
+    }
+
     private void requireProject(Long projectId) {
         if (projectId == null || projectId <= 0) {
             throw new BadRequestException("projectId must be greater than 0");
@@ -96,6 +133,30 @@ public class RequirementInputService {
                 requirement.getCreatedAt(),
                 requirement.getUpdatedAt()
         );
+    }
+
+    private static RequirementInput copyOf(RequirementInput source) {
+        RequirementInput target = new RequirementInput();
+        target.setProjectId(source.getProjectId());
+        target.setGradeLevel(source.getGradeLevel());
+        target.setSubject(source.getSubject());
+        target.setTopic(source.getTopic());
+        target.setBaselineLevel(source.getBaselineLevel());
+        target.setLessonDuration(source.getLessonDuration());
+        target.setTeachingGoals(source.getTeachingGoals());
+        target.setKeyPoints(source.getKeyPoints());
+        target.setDifficultPoints(source.getDifficultPoints());
+        target.setStylePreference(source.getStylePreference());
+        target.setInteractionType(source.getInteractionType());
+        target.setOutputTypes(source.getOutputTypes());
+        target.setRawRequirementText(source.getRawRequirementText());
+        target.setContent(source.getContent());
+        target.setInputType(source.getInputType());
+        return target;
+    }
+
+    private static List<String> parseOutputTypes(String answer) {
+        return normalizeOutputTypes(List.of(answer.split("[,，、;；/\\n]+")));
     }
 
     private static List<String> normalizeOutputTypes(List<String> outputTypes) {

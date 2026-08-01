@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.clarification;
 
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationQuestion;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -93,10 +93,6 @@ public class ClarificationService {
                 hasText(request.gradeLevel())
                         || hasText(project.getTargetAudience())
                         || GRADE_PATTERN.matcher(rawText).find());
-        evaluateField(missingFields, knownFields, ClarificationField.SUBJECT,
-                hasText(request.subject())
-                        || hasText(project.getCourseName())
-                        || containsAny(rawText, KNOWN_SUBJECTS));
         evaluateField(missingFields, knownFields, ClarificationField.TOPIC,
                 hasText(request.topic())
                         || hasText(project.getChapterTopic())
@@ -107,11 +103,19 @@ public class ClarificationService {
                         || DURATION_PATTERN.matcher(rawText).find());
         evaluateField(missingFields, knownFields, ClarificationField.TEACHING_GOALS,
                 hasText(request.teachingGoals()));
+        evaluateField(missingFields, knownFields, ClarificationField.BASELINE_LEVEL,
+                hasText(request.baselineLevel()));
+        evaluateField(missingFields, knownFields, ClarificationField.DIFFICULT_POINTS,
+                hasText(request.difficultPoints()));
+        evaluateField(missingFields, knownFields, ClarificationField.STYLE_PREFERENCE,
+                hasText(request.stylePreference()));
+        evaluateField(missingFields, knownFields, ClarificationField.INTERACTION_TYPE,
+                hasText(request.interactionType()));
         evaluateField(missingFields, knownFields, ClarificationField.OUTPUT_TYPES,
                 hasOutputTypes(request.outputTypes()) || containsPositiveOutputType(rawText));
 
         addOptionalKnownField(knownFields, "keyPoints", request.keyPoints());
-        addOptionalKnownField(knownFields, "difficultPoints", request.difficultPoints());
+        addOptionalKnownField(knownFields, "subject", request.subject());
         return new Evaluation(missingFields.isEmpty(), List.copyOf(missingFields), List.copyOf(knownFields));
     }
 
@@ -128,30 +132,38 @@ public class ClarificationService {
         }
     }
 
-    private static List<String> adaptQuestions(List<String> missingCodes, ClarificationResponse response) {
-        if (response == null || response.missingFields() == null || response.questions() == null) {
+    private static List<ClarificationQuestion> adaptQuestions(
+            List<String> missingCodes,
+            ClarificationResponse response
+    ) {
+        if (response == null || response.questions() == null) {
             throw new AiWorkflowUnavailableException("AI workflow returned an incomplete clarification response");
         }
 
-        Map<String, String> questionsByField = new LinkedHashMap<>();
-        int pairCount = Math.min(response.missingFields().size(), response.questions().size());
-        for (int index = 0; index < pairCount; index++) {
-            String field = response.missingFields().get(index);
-            String question = response.questions().get(index);
-            if (field != null && hasText(question)) {
-                questionsByField.putIfAbsent(field, question.trim());
-            }
-        }
-
-        List<String> questions = new ArrayList<>();
-        for (String field : missingCodes) {
-            String question = questionsByField.get(field);
-            if (!hasText(question)) {
+        List<ClarificationQuestion> questions = new ArrayList<>();
+        for (ClarificationQuestion question : response.questions()) {
+            if (question == null
+                    || !hasText(question.targetField())
+                    || !hasText(question.question())) {
                 throw new AiWorkflowUnavailableException(
-                        "AI workflow did not return a question for missing field: " + field
+                        "AI workflow returned a clarification question without targetField or question"
                 );
             }
-            questions.add(question);
+            String targetField = question.targetField().trim();
+            if (ClarificationField.fromCode(targetField).isEmpty()) {
+                throw new AiWorkflowUnavailableException(
+                        "AI workflow returned an invalid clarification targetField: " + targetField
+                );
+            }
+            if (!missingCodes.contains(targetField)) {
+                throw new AiWorkflowUnavailableException(
+                        "AI workflow returned a clarification targetField that is not missing: " + targetField
+                );
+            }
+            questions.add(new ClarificationQuestion(targetField, question.question().trim()));
+        }
+        if (questions.isEmpty()) {
+            throw new AiWorkflowUnavailableException("AI workflow returned no clarification questions");
         }
         return List.copyOf(questions);
     }

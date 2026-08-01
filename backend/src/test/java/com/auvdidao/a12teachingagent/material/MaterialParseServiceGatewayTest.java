@@ -167,7 +167,7 @@ class MaterialParseServiceGatewayTest {
         when(prototypeParser.parse(fixture.material(), fixture.usages(), fixture.summary()))
                 .thenReturn(localParsedContent());
         when(aiWorkflowGateway.analyzeMaterial(any()))
-                .thenThrow(new AiWorkflowUnavailableException("sensitive Dify response body and token"))
+                .thenThrow(new AiWorkflowUnavailableException("sensitive Kimi response body and token"))
                 .thenReturn(successfulAnalysis());
 
         ParseResultResponse failed = service.parse(PROJECT_ID, MATERIAL_ID);
@@ -175,7 +175,7 @@ class MaterialParseServiceGatewayTest {
         assertThat(failed.parseStatus()).isEqualTo(MaterialParseStatus.FAILED);
         assertThat(failed.failureReason())
                 .isEqualTo("Prototype parsing could not be completed. Please retry.")
-                .doesNotContain("sensitive", "Dify", "token");
+                .doesNotContain("sensitive", "Kimi", "token");
         assertThat(fixture.material().getParseStatus()).isEqualTo(MaterialParseStatus.FAILED);
         assertThat(fixture.material().getUploadStatus()).isEqualTo(UploadStatus.FAILED);
 

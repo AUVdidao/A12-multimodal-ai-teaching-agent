@@ -1,5 +1,6 @@
 package com.auvdidao.a12teachingagent.ai.gateway;
 
+import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantProperties;
 import com.auvdidao.a12teachingagent.ai.config.AiProvider;
 import com.auvdidao.a12teachingagent.ai.config.AiWorkflowProperties;
 import com.auvdidao.a12teachingagent.ai.config.WorkflowCode;
@@ -35,19 +36,22 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
     private static final Logger LOGGER = LoggerFactory.getLogger(AIWorkflowGatewayRouter.class);
 
     private final AiWorkflowProperties properties;
+    private final KimiAssistantProperties kimiProperties;
     private final MockAIWorkflowGateway mockGateway;
-    private final DifyAIWorkflowGateway difyGateway;
+    private final KimiAIWorkflowGateway kimiGateway;
     private final AtomicReference<String> lastActiveProvider = new AtomicReference<>();
     private final AtomicReference<String> lastFallbackReason = new AtomicReference<>();
 
     public AIWorkflowGatewayRouter(
             AiWorkflowProperties properties,
+            KimiAssistantProperties kimiProperties,
             MockAIWorkflowGateway mockGateway,
-            DifyAIWorkflowGateway difyGateway
+            KimiAIWorkflowGateway kimiGateway
     ) {
         this.properties = properties;
+        this.kimiProperties = kimiProperties;
         this.mockGateway = mockGateway;
-        this.difyGateway = difyGateway;
+        this.kimiGateway = kimiGateway;
     }
 
     @Override
@@ -57,13 +61,13 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
                 ? AiProvider.MOCK.name()
                 : lastActiveProvider.get();
         if (!StringUtils.hasText(activeProvider)) {
-            activeProvider = initialDifyStatus();
+            activeProvider = initialProviderStatus();
         }
         return new AiGatewayStatus(
                 requestedProvider.name(),
                 activeProvider,
                 requestedProvider == AiProvider.MOCK || properties.isFallbackToMock(),
-                properties.isDifyConfigured(),
+                kimiProperties.isWorkflowConfigured(),
                 properties.isFallbackToMock(),
                 statusMessage(requestedProvider)
         );
@@ -71,88 +75,64 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
 
     @Override
     public ClarificationResponse clarifyRequirement(ClarificationRequest request) {
-        return route(
-                WorkflowCode.CLARIFICATION,
-                "clarification",
-                () -> difyGateway.clarifyRequirement(request),
-                () -> mockGateway.clarifyRequirement(request)
-        );
+        return route(WorkflowCode.CLARIFICATION, "clarification",
+                () -> kimiGateway.clarifyRequirement(request),
+                () -> mockGateway.clarifyRequirement(request));
     }
 
     @Override
     public RequirementSummaryResponse summarizeRequirement(RequirementSummaryRequest request) {
-        return route(
-                WorkflowCode.REQUIREMENT_SUMMARY,
-                "requirement-summary",
-                () -> difyGateway.summarizeRequirement(request),
-                () -> mockGateway.summarizeRequirement(request)
-        );
+        return route(WorkflowCode.REQUIREMENT_SUMMARY, "requirement-summary",
+                () -> kimiGateway.summarizeRequirement(request),
+                () -> mockGateway.summarizeRequirement(request));
     }
 
     @Override
     public MaterialAnalysisResponse analyzeMaterial(MaterialAnalysisRequest request) {
-        return route(
-                WorkflowCode.MATERIAL_ANALYSIS,
-                "material-analysis",
-                () -> difyGateway.analyzeMaterial(request),
-                () -> mockGateway.analyzeMaterial(request)
-        );
+        return route(WorkflowCode.MATERIAL_ANALYSIS, "material-analysis",
+                () -> kimiGateway.analyzeMaterial(request),
+                () -> mockGateway.analyzeMaterial(request));
     }
 
     @Override
     public KnowledgeRetrievalResponse retrieveKnowledge(KnowledgeRetrievalRequest request) {
-        return route(
-                WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT,
-                "knowledge-retrieval",
-                () -> difyGateway.retrieveKnowledge(request),
-                () -> mockGateway.retrieveKnowledge(request)
-        );
+        return route(WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT, "knowledge-retrieval",
+                () -> kimiGateway.retrieveKnowledge(request),
+                () -> mockGateway.retrieveKnowledge(request));
     }
 
     @Override
     public TeachingIntentResponse buildTeachingIntent(TeachingIntentRequest request) {
-        return route(
-                WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT,
-                "teaching-intent",
-                () -> difyGateway.buildTeachingIntent(request),
-                () -> mockGateway.buildTeachingIntent(request)
-        );
+        return route(WorkflowCode.KNOWLEDGE_AND_TEACHING_INTENT, "teaching-intent",
+                () -> kimiGateway.buildTeachingIntent(request),
+                () -> mockGateway.buildTeachingIntent(request));
     }
 
     @Override
     public GenerationPlanResponse createGenerationPlan(GenerationPlanRequest request) {
-        return route(
-                WorkflowCode.GENERATION_PLAN,
-                "generation-plan",
-                () -> difyGateway.createGenerationPlan(request),
-                () -> mockGateway.createGenerationPlan(request)
-        );
+        return route(WorkflowCode.GENERATION_PLAN, "generation-plan",
+                () -> kimiGateway.createGenerationPlan(request),
+                () -> mockGateway.createGenerationPlan(request));
     }
 
     @Override
     public StructuredContentResponse generateStructuredContent(StructuredContentRequest request) {
-        return route(
-                WorkflowCode.CONTENT_DRAFT,
-                "structured-content",
-                () -> difyGateway.generateStructuredContent(request),
-                () -> mockGateway.generateStructuredContent(request)
-        );
+        return route(WorkflowCode.CONTENT_DRAFT, "structured-content",
+                () -> kimiGateway.generateStructuredContent(request),
+                () -> mockGateway.generateStructuredContent(request));
     }
 
     @Override
     public RevisionResponse reviseArtifact(RevisionRequest request) {
-        return route(
-                WorkflowCode.REVISION,
-                "revision",
-                () -> difyGateway.reviseArtifact(request),
-                () -> mockGateway.reviseArtifact(request)
-        );
+        return route(WorkflowCode.REVISION, "revision",
+                () -> kimiGateway.reviseArtifact(request),
+                () -> mockGateway.reviseArtifact(request));
     }
 
     private <T> T route(
             WorkflowCode workflowCode,
             String operation,
-            Supplier<T> difyCall,
+            Supplier<T> kimiCall,
             Supplier<T> mockCall
     ) {
         if (provider() == AiProvider.MOCK) {
@@ -160,19 +140,21 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             return mockCall.get();
         }
 
-        String configurationIssue = properties.difyConfigurationIssue(workflowCode);
-        if (configurationIssue != null) {
+        if (!kimiProperties.isWorkflowConfigured()) {
             return fallbackOrThrow(
                     workflowCode,
                     operation,
-                    new AiWorkflowUnavailableException(workflowCode.code() + ": " + configurationIssue + "."),
+                    new AiWorkflowUnavailableException(
+                            workflowCode.code() + ": Kimi workflow provider is not configured."
+                    ),
                     mockCall
             );
         }
 
         try {
-            T response = difyCall.get();
-            lastActiveProvider.set(AiProvider.DIFY.name());
+            T response = kimiCall.get();
+            lastActiveProvider.set(AiProvider.KIMI.name());
+            lastFallbackReason.set(null);
             return response;
         } catch (AiWorkflowUnavailableException exception) {
             return fallbackOrThrow(workflowCode, operation, exception, mockCall);
@@ -192,7 +174,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             throw exception;
         }
         LOGGER.warn(
-                "Dify workflow {} operation {} fell back to Mock: {}",
+                "Kimi workflow {} operation {} fell back to Mock: {}",
                 workflowCode.code(),
                 operation,
                 reason
@@ -202,45 +184,38 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
     }
 
     private AiProvider provider() {
-        return properties.getProvider() == null ? AiProvider.MOCK : properties.getProvider();
+        return properties.getProvider() == null ? AiProvider.KIMI : properties.getProvider();
     }
 
-    private String initialDifyStatus() {
-        if (properties.isDifyConfigured()) {
-            return AiProvider.DIFY.name();
-        }
-        if (properties.areCallableDifyWorkflowsConfigured()) {
-            return "DIFY_MAPPED";
-        }
-        if (!properties.configuredWorkflowCodes().isEmpty()) {
-            return "DIFY_PARTIAL";
+    private String initialProviderStatus() {
+        if (kimiProperties.isWorkflowConfigured()) {
+            return AiProvider.KIMI.name();
         }
         return properties.isFallbackToMock() ? AiProvider.MOCK.name() : "UNAVAILABLE";
     }
 
     private String statusMessage(AiProvider requestedProvider) {
-        String configured = listOrNone(properties.configuredWorkflowCodes());
-        String missing = listOrNone(properties.missingWorkflowCodes());
         StringBuilder message = new StringBuilder();
         if (requestedProvider == AiProvider.MOCK) {
-            message.append("Mock provider is active. ");
+            message.append("Mock provider is explicitly active. ");
         } else {
-            message.append("Dify published Workflow API routing is requested. ");
+            message.append("Kimi structured workflow routing is requested. ");
         }
-        message.append("Configured workflow slots: ").append(configured)
-                .append("; missing or incomplete workflow slots: ").append(missing)
-                .append("; Gateway-mapped callable workflows: ")
-                .append(listOrNone(properties.callableWorkflowCodes())).append('.');
+        message.append("Kimi workflow configuration: ")
+                .append(kimiProperties.isWorkflowConfigured() ? "ready" : "missing")
+                .append("; model: ")
+                .append(StringUtils.hasText(kimiProperties.getWorkflowModel())
+                        ? kimiProperties.getWorkflowModel().strip()
+                        : "not configured")
+                .append("; fallback to Mock: ")
+                .append(properties.isFallbackToMock())
+                .append('.');
 
         String fallbackReason = lastFallbackReason.get();
         if (StringUtils.hasText(fallbackReason)) {
             message.append(" Last fallback reason: ").append(fallbackReason);
         }
         return message.toString();
-    }
-
-    private String listOrNone(java.util.List<String> values) {
-        return values.isEmpty() ? "none" : String.join(", ", values);
     }
 
     private String sanitizeReason(String reason) {

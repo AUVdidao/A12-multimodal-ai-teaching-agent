@@ -11,12 +11,6 @@ public enum ClarificationField {
             "生成教学内容需要明确学生学段",
             "请补充本节课面向哪个年级学生？"
     ),
-    SUBJECT(
-            "subject",
-            "学科",
-            "不同学科的知识组织方式和表达风格不同",
-            "请补充本节课属于哪个学科？"
-    ),
     TOPIC(
             "topic",
             "课题",
@@ -34,6 +28,30 @@ public enum ClarificationField {
             "教学目标",
             "教学目标决定课件结构、讲解深度和评价方式",
             "请补充本节课希望学生达成的教学目标。"
+    ),
+    BASELINE_LEVEL(
+            "baselineLevel",
+            "基础水平",
+            "学生基础决定讲解起点和内容深度",
+            "学生目前具备怎样的基础知识和能力？"
+    ),
+    DIFFICULT_POINTS(
+            "difficultPoints",
+            "重点难点",
+            "重点难点决定讲解和练习的侧重",
+            "本节课需要重点突破哪些知识点或难点？"
+    ),
+    STYLE_PREFERENCE(
+            "stylePreference",
+            "教学风格",
+            "教学风格影响内容组织和表达方式",
+            "你希望采用怎样的教学风格？"
+    ),
+    INTERACTION_TYPE(
+            "interactionType",
+            "互动设计",
+            "互动设计决定课堂活动和参与方式",
+            "你希望安排哪些课堂互动形式？"
     ),
     OUTPUT_TYPES(
             "outputTypes",

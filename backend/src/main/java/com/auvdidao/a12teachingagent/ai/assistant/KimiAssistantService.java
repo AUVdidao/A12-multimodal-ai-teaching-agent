@@ -1,22 +1,18 @@
 package com.auvdidao.a12teachingagent.ai.assistant;
 
+import com.auvdidao.a12teachingagent.ai.kimi.KimiChatClient;
+import com.auvdidao.a12teachingagent.ai.kimi.KimiClientException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
 import com.auvdidao.a12teachingagent.domain.common.TeachingIntentStatus;
 import com.auvdidao.a12teachingagent.domain.generation.TeachingIntent;
 import com.auvdidao.a12teachingagent.domain.generation.repository.TeachingIntentRepository;
 import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,61 +32,45 @@ public class KimiAssistantService {
     private final KimiAssistantProperties properties;
     private final ProjectRepository projectRepository;
     private final TeachingIntentRepository teachingIntentRepository;
-    private final HttpClient httpClient;
+    private final KimiChatClient kimiChatClient;
 
     public KimiAssistantService(
             ObjectMapper objectMapper,
             KimiAssistantProperties properties,
             ProjectRepository projectRepository,
-            TeachingIntentRepository teachingIntentRepository
+            TeachingIntentRepository teachingIntentRepository,
+            KimiChatClient kimiChatClient
     ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.projectRepository = projectRepository;
         this.teachingIntentRepository = teachingIntentRepository;
-        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
+        this.kimiChatClient = kimiChatClient;
     }
 
     public KimiAssistantDtos.ChatResponse chat(Long projectId, KimiAssistantDtos.ChatRequest request) {
-        requireConfiguration();
+        if (!properties.isAssistantConfigured()) {
+            throw new KimiAssistantException(
+                    "KIMI_NOT_CONFIGURED",
+                    "Kimi teaching assistant is not configured on this server",
+                    HttpStatus.SERVICE_UNAVAILABLE
+            );
+        }
+
         Project project = projectRepository.findById(projectId)
                 .filter(value -> value.getDeletedAt() == null)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
 
-        String response = requestCompletion(project, request);
-        return new KimiAssistantDtos.ChatResponse(projectId, "KIMI", properties.getAssistantModel(), response);
-    }
-
-    private String requestCompletion(Project project, KimiAssistantDtos.ChatRequest request) {
         try {
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("model", properties.getAssistantModel());
-            body.put("max_tokens", properties.getAssistantMaxCompletionTokens());
-            body.put("messages", messages(project, request));
-
-            HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(normalizedBaseUrl() + "/chat/completions"))
-                    .timeout(Duration.ofSeconds(properties.getAssistantTimeoutSeconds()))
-                    .header("Authorization", "Bearer " + properties.getApiKey().trim())
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-                    .build();
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new KimiAssistantException("KIMI_REQUEST_FAILED", "Kimi teaching assistant is temporarily unavailable", HttpStatus.BAD_GATEWAY);
-            }
-            JsonNode content = objectMapper.readTree(response.body()).path("choices").path(0).path("message").path("content");
-            if (!content.isTextual() || content.asText().isBlank()) {
-                throw new KimiAssistantException("KIMI_INVALID_RESPONSE", "Kimi did not return a teaching response", HttpStatus.BAD_GATEWAY);
-            }
-            return content.asText().trim();
-        } catch (KimiAssistantException exception) {
-            throw exception;
-        } catch (java.net.http.HttpTimeoutException exception) {
-            throw new KimiAssistantException("KIMI_TIMEOUT", "Kimi teaching assistant timed out", HttpStatus.GATEWAY_TIMEOUT);
-        } catch (IOException | InterruptedException exception) {
-            if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
-            throw new KimiAssistantException("KIMI_UNAVAILABLE", "Kimi teaching assistant cannot be reached", HttpStatus.BAD_GATEWAY);
+            String content = kimiChatClient.complete(
+                    messages(project, request),
+                    properties.getAssistantModel(),
+                    properties.getAssistantMaxCompletionTokens(),
+                    properties.getAssistantTimeoutSeconds()
+            );
+            return new KimiAssistantDtos.ChatResponse(projectId, "KIMI", properties.getAssistantModel(), content);
+        } catch (KimiClientException exception) {
+            throw mapClientException(exception);
         }
     }
 
@@ -114,12 +94,19 @@ public class KimiAssistantService {
         context.put("lessonDurationMinutes", project.getLessonDurationMinutes());
         context.put("projectDescription", project.getProjectDescription());
         context.put("generationMode", project.getGenerationMode() == null ? null : project.getGenerationMode().name());
-        teachingIntentRepository.findFirstByProjectIdAndStatusOrderByConfirmedAtDescCreatedAtDescIdDesc(project.getId(), TeachingIntentStatus.CONFIRMED)
+        teachingIntentRepository.findFirstByProjectIdAndStatusOrderByConfirmedAtDescCreatedAtDescIdDesc(
+                        project.getId(),
+                        TeachingIntentStatus.CONFIRMED
+                )
                 .ifPresent(intent -> context.put("confirmedTeachingIntent", intentContext(intent)));
         try {
             return objectMapper.writeValueAsString(context);
-        } catch (IOException exception) {
-            throw new KimiAssistantException("KIMI_CONTEXT_FAILED", "Teaching project context could not be prepared", HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (JsonProcessingException exception) {
+            throw new KimiAssistantException(
+                    "KIMI_CONTEXT_FAILED",
+                    "Teaching project context could not be prepared",
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
         }
     }
 
@@ -135,17 +122,18 @@ public class KimiAssistantService {
         return context;
     }
 
-    private void requireConfiguration() {
-        if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
-            throw new KimiAssistantException("KIMI_NOT_CONFIGURED", "Kimi teaching assistant is not configured on this server", HttpStatus.SERVICE_UNAVAILABLE);
-        }
-        if (properties.getAssistantModel() == null || properties.getAssistantModel().isBlank()) {
-            throw new KimiAssistantException("KIMI_MODEL_NOT_CONFIGURED", "Kimi teaching assistant model is not configured", HttpStatus.SERVICE_UNAVAILABLE);
-        }
-    }
-
-    private String normalizedBaseUrl() {
-        return properties.getBaseUrl().replaceAll("/+$", "");
+    private KimiAssistantException mapClientException(KimiClientException exception) {
+        HttpStatus status = switch (exception.getCode()) {
+            case "KIMI_TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
+            case "KIMI_NOT_CONFIGURED", "KIMI_INVALID_CONFIGURATION", "KIMI_INTERRUPTED" -> HttpStatus.SERVICE_UNAVAILABLE;
+            default -> HttpStatus.BAD_GATEWAY;
+        };
+        String message = switch (exception.getCode()) {
+            case "KIMI_TIMEOUT" -> "Kimi teaching assistant timed out";
+            case "KIMI_NOT_CONFIGURED", "KIMI_INVALID_CONFIGURATION" -> "Kimi teaching assistant is not configured on this server";
+            default -> "Kimi teaching assistant is temporarily unavailable";
+        };
+        return new KimiAssistantException(exception.getCode(), message, status);
     }
 
     private static Map<String, String> message(String role, String content) {

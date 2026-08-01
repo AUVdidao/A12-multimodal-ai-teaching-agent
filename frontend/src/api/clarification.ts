@@ -11,7 +11,12 @@ export interface MissingField {
 export interface ClarificationResult {
   complete: boolean;
   missingFields: MissingField[];
-  questions: string[];
+  questions: ClarificationQuestion[];
+}
+
+export interface ClarificationQuestion {
+  targetField: string;
+  question: string;
 }
 
 export async function checkClarification(
@@ -31,6 +36,17 @@ export async function getClarificationQuestions(
 ) {
   const response = await http.post<ApiResponse<ClarificationResult>>(
     `/api/projects/${projectId}/clarification/questions`,
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function saveClarificationAnswer(
+  projectId: number | string,
+  payload: { targetField: string; answer: string },
+) {
+  const response = await http.post<ApiResponse<TeachingRequirementPayload>>(
+    `/api/projects/${projectId}/clarification/answers`,
     payload,
   );
   return response.data.data;

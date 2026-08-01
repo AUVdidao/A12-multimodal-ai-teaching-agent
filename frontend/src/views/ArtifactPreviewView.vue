@@ -315,7 +315,7 @@ async function submitRevision() {
   const source = activeSummary.value;
   const instruction = revisionInstruction.value.trim();
   if (gatewayPresentation.value.unavailable) {
-    revisionError.value = 'AI 工作流当前不可用，请先检查 Dify 或 Mock 配置。';
+    revisionError.value = 'AI 工作流当前不可用，请先检查 Kimi 或 Mock 配置。';
     return;
   }
   if (!source || !instruction) {

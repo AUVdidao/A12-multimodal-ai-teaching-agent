@@ -148,6 +148,76 @@ class RequirementInputControllerTest {
                 .andExpect(jsonPath("$.data.outputTypes[0]", is("PPT")));
     }
 
+    @Test
+    void clarificationAnswerUpdatesOnlyExplicitOutputTypesField() throws Exception {
+        Long projectId = createProject();
+
+        mockMvc.perform(post("/api/projects/{projectId}/requirements", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "gradeLevel":"八年级",
+                                  "topic":"光合作用",
+                                  "lessonDuration":"45分钟",
+                                  "teachingGoals":"理解光合作用",
+                                  "baselineLevel":"基础",
+                                  "difficultPoints":"能量转化",
+                                  "stylePreference":"案例驱动",
+                                  "interactionType":"小组讨论",
+                                  "outputTypes":["PPT"]
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/projects/{projectId}/clarification/answers", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetField":"outputTypes",
+                                  "answer":"课件、教案、学案、课堂练习"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.outputTypes", hasSize(4)))
+                .andExpect(jsonPath("$.data.outputTypes[0]", is("课件")))
+                .andExpect(jsonPath("$.data.outputTypes[1]", is("教案")))
+                .andExpect(jsonPath("$.data.outputTypes[2]", is("学案")))
+                .andExpect(jsonPath("$.data.outputTypes[3]", is("课堂练习")))
+                .andExpect(jsonPath("$.data.stylePreference", is("案例驱动")))
+                .andExpect(jsonPath("$.data.interactionType", is("小组讨论")));
+    }
+
+    @Test
+    void rejectsUnknownClarificationTargetField() throws Exception {
+        Long projectId = createProject();
+
+        mockMvc.perform(post("/api/projects/{projectId}/requirements", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "gradeLevel":"八年级",
+                                  "topic":"光合作用",
+                                  "lessonDuration":"45分钟",
+                                  "teachingGoals":"理解光合作用",
+                                  "baselineLevel":"基础",
+                                  "difficultPoints":"能量转化",
+                                  "stylePreference":"案例驱动",
+                                  "interactionType":"小组讨论"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/projects/{projectId}/clarification/answers", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetField":"notAllowed",
+                                  "answer":"不应被写入任何需求字段"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
     private void expectBadProjectId(long projectId) throws Exception {
         mockMvc.perform(post("/api/projects/{projectId}/requirements", projectId)
                         .contentType(MediaType.APPLICATION_JSON)

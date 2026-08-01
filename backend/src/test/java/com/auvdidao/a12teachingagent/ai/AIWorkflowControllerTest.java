@@ -3,12 +3,12 @@ package com.auvdidao.a12teachingagent.ai;
 import com.auvdidao.a12teachingagent.ai.api.AIWorkflowController;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.AiGatewayStatus;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationQuestion;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.PlanSection;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
-import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.security.A12SecurityProperties;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import com.auvdidao.a12teachingagent.security.TokenAuthenticationService;
@@ -59,7 +59,7 @@ class AIWorkflowControllerTest {
                 true,
                 false,
                 true,
-                "Mock AI workflow is active. No external Dify key is required."
+                "Mock provider is explicitly active."
         ));
 
         mockMvc.perform(get("/api/ai-workflow/status"))
@@ -67,7 +67,7 @@ class AIWorkflowControllerTest {
                 .andExpect(jsonPath("$.code", is(0)))
                 .andExpect(jsonPath("$.data.activeProvider", is("MOCK")))
                 .andExpect(jsonPath("$.data.mockEnabled", is(true)))
-                .andExpect(jsonPath("$.data.difyConfigured", is(false)));
+                .andExpect(jsonPath("$.data.providerConfigured", is(false)));
     }
 
     @Test
@@ -75,9 +75,11 @@ class AIWorkflowControllerTest {
         when(aiWorkflowGateway.clarifyRequirement(any(ClarificationRequest.class)))
                 .thenReturn(new ClarificationResponse(
                         "mock-ai-workflow",
-                        List.of("targetAudience"),
-                        List.of("这节课面向哪个年级或学段的学生？"),
-                        Map.of("targetAudience", "小学五年级"),
+                        List.of("gradeLevel"),
+                        List.of(new ClarificationQuestion(
+                                "gradeLevel",
+                                "这节课面向哪个年级或学段的学生？")),
+                        Map.of("gradeLevel", "小学五年级"),
                         "请先补充缺失字段，再生成需求摘要。"
                 ));
 
@@ -94,8 +96,9 @@ class AIWorkflowControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code", is(0)))
                 .andExpect(jsonPath("$.data.workflow", is("mock-ai-workflow")))
-                .andExpect(jsonPath("$.data.missingFields[0]", is("targetAudience")))
-                .andExpect(jsonPath("$.data.suggestedFields.targetAudience", is("小学五年级")));
+                .andExpect(jsonPath("$.data.missingFields[0]", is("gradeLevel")))
+                .andExpect(jsonPath("$.data.questions[0].targetField", is("gradeLevel")))
+                .andExpect(jsonPath("$.data.suggestedFields.gradeLevel", is("小学五年级")));
     }
 
     @Test

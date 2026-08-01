@@ -10,8 +10,11 @@ public record ClarificationCheckRequest(
         String topic,
         String lessonDuration,
         String teachingGoals,
+        String baselineLevel,
         String keyPoints,
         String difficultPoints,
+        String stylePreference,
+        String interactionType,
         List<String> outputTypes,
         @Size(max = 10000, message = "rawRequirementText must not exceed 10000 characters")
         String rawRequirementText

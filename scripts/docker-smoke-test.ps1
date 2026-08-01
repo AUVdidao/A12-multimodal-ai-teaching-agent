@@ -9,7 +9,7 @@ $aiTimeoutSeconds = if ([string]::IsNullOrWhiteSpace($env:A12_SMOKE_AI_TIMEOUT_S
 else {
     [int]$env:A12_SMOKE_AI_TIMEOUT_SECONDS
 }
-$requireDify = $env:A12_SMOKE_REQUIRE_DIFY -eq "true"
+$requireKimi = $env:A12_SMOKE_REQUIRE_KIMI -eq "true"
 $readinessUrl = "$baseUrl/api/health"
 $deadline = [DateTime]::UtcNow.AddSeconds(60)
 $lastReadinessError = "No response received"
@@ -217,20 +217,20 @@ if ($currentUser.username -ne "teacher" -or $currentUser.activeRole -ne "TEACHER
 }
 
 $aiStatus = Invoke-A12Api -Name "AI workflow status" -Method "GET" -Path "/api/ai-workflow/status"
-if ($requireDify -and ($aiStatus.requestedProvider -ne "DIFY" -or $aiStatus.activeProvider -ne "DIFY")) {
-    throw "Strict Dify smoke requires requestedProvider=DIFY and activeProvider=DIFY. $($aiStatus.message)"
+if ($requireKimi -and ($aiStatus.requestedProvider -ne "KIMI" -or $aiStatus.activeProvider -ne "KIMI")) {
+    throw "Strict Kimi smoke requires requestedProvider=KIMI and activeProvider=KIMI. $($aiStatus.message)"
 }
 
-function Assert-A12DifyActive {
+function Assert-A12KimiActive {
     param([Parameter(Mandatory = $true)][string]$Stage)
 
-    if (-not $requireDify) {
+    if (-not $requireKimi) {
         return
     }
 
     $status = Invoke-A12Api -Name "$Stage provider status" -Method "GET" -Path "/api/ai-workflow/status"
-    if ($status.requestedProvider -ne "DIFY" -or $status.activeProvider -ne "DIFY") {
-        throw "Strict Dify smoke detected a fallback after $Stage. Active provider: $($status.activeProvider)"
+    if ($status.requestedProvider -ne "KIMI" -or $status.activeProvider -ne "KIMI") {
+        throw "Strict Kimi smoke detected a fallback after $Stage. Active provider: $($status.activeProvider)"
     }
 }
 $null = Invoke-A12Api -Name "model modes" -Method "GET" -Path "/api/model-modes"
@@ -287,7 +287,7 @@ $clarificationQuestions = Invoke-A12Api -Name "clarification questions" -Method 
 if ($clarificationQuestions.questions.Count -eq 0) {
     throw "Clarification questions were not generated"
 }
-Assert-A12DifyActive -Stage "clarification"
+Assert-A12KimiActive -Stage "clarification"
 
 $sessionId = "project-$projectId-clarification"
 $aiContent = "Please add the learner profile, prior knowledge, teaching style, interaction design, and expected outputs."
@@ -339,7 +339,7 @@ if (-not $completeCheck.complete) {
 }
 
 $summary = Invoke-A12Api -Name "summary generation" -Method "POST" -Path "/api/projects/$projectId/requirement-summaries/generate" -TimeoutSec $aiTimeoutSeconds
-Assert-A12DifyActive -Stage "requirement summary"
+Assert-A12KimiActive -Stage "requirement summary"
 $latestSummary = Invoke-A12Api -Name "summary latest" -Method "GET" -Path "/api/projects/$projectId/requirement-summaries/latest"
 if ($latestSummary.id -ne $summary.id) {
     throw "Summary latest did not return the generated summary"
@@ -411,7 +411,7 @@ Students predict variables, observe evidence, explain energy conversion, and com
     }
 
     $parse = Invoke-A12Api -Name "M2 prototype parsing" -Method "POST" -Path "/api/projects/$projectId/materials/$materialId/parse" -TimeoutSec $aiTimeoutSeconds
-    Assert-A12DifyActive -Stage "material analysis"
+    Assert-A12KimiActive -Stage "material analysis"
     if ($parse.parseStatus -ne "SUCCEEDED" -or [string]::IsNullOrWhiteSpace($parse.summary) -or $parse.keywords.Count -lt 3) {
         throw "Prototype parse result is incomplete"
     }
@@ -437,7 +437,7 @@ Students predict variables, observe evidence, explain energy conversion, and com
         query = "Photosynthesis investigation"
         limit = 5
     } -TimeoutSec $aiTimeoutSeconds
-    Assert-A12DifyActive -Stage "knowledge retrieval"
+    Assert-A12KimiActive -Stage "knowledge retrieval"
 
     $workspaceSearch = Invoke-A12Api -Name "UI V6 knowledge workspace search" -Method "POST" -Path "/api/projects/$projectId/knowledge/workspace-search" -Body @{
         query = "Photosynthesis investigation"
@@ -454,7 +454,7 @@ Students predict variables, observe evidence, explain energy conversion, and com
     }
 
     $intent = Invoke-A12Api -Name "M2 teaching intent generation" -Method "POST" -Path "/api/projects/$projectId/teaching-intents/generate" -TimeoutSec $aiTimeoutSeconds
-    Assert-A12DifyActive -Stage "teaching intent"
+    Assert-A12KimiActive -Stage "teaching intent"
     if ($intent.status -ne "DRAFT" -or $intent.evidenceItems.Count -lt 1) {
         throw "Teaching intent draft did not contain evidence"
     }
@@ -530,13 +530,13 @@ Students predict variables, observe evidence, explain energy conversion, and com
     }
 
     $plan = Invoke-A12Api -Name "M3 generation plan creation" -Method "POST" -Path "/api/projects/$projectId/generation-plans" -TimeoutSec $aiTimeoutSeconds
-    Assert-A12DifyActive -Stage "generation plan"
+    Assert-A12KimiActive -Stage "generation plan"
     $planProviderStatus = Invoke-A12Api -Name "M3 generation provider status" -Method "GET" -Path "/api/ai-workflow/status"
     if ($null -eq $plan.id -or $plan.confirmed -or $plan.provider -ne $planProviderStatus.activeProvider) {
         throw "Generation plan creation returned an invalid plan"
     }
-    if ($requireDify -and $plan.provider -ne "DIFY") {
-        throw "Strict Dify smoke detected a generation-plan fallback to $($plan.provider)"
+    if ($requireKimi -and $plan.provider -ne "KIMI") {
+        throw "Strict Kimi smoke detected a generation-plan fallback to $($plan.provider)"
     }
     $planId = [long]$plan.id
 
@@ -568,7 +568,7 @@ Students predict variables, observe evidence, explain energy conversion, and com
     $artifacts = @(Invoke-A12Api -Name "M3 artifact generation" -Method "POST" -Path "/api/projects/$projectId/artifacts/generate" -Body @{
         planId = $planId
     } -TimeoutSec $aiTimeoutSeconds)
-    Assert-A12DifyActive -Stage "structured content"
+    Assert-A12KimiActive -Stage "structured content"
     if ($artifacts.Count -ne 3) {
         throw "Artifact generation did not return all three artifact types"
     }
@@ -603,9 +603,9 @@ Students predict variables, observe evidence, explain energy conversion, and com
     $revision = Invoke-A12Api -Name "M4 artifact revision" -Method "POST" -Path "/api/v1/projects/$projectId/artifacts/$($pptArtifact.id)/revisions" -Body @{
         instruction = "Simplify slide 3 and add one observable classroom example without changing the learning objective."
     } -TimeoutSec $aiTimeoutSeconds
-    Assert-A12DifyActive -Stage "artifact revision"
-    if ($revision.activeProvider -ne "DIFY" -and $requireDify) {
-        throw "Strict Dify smoke detected an artifact-revision fallback to $($revision.activeProvider)"
+    Assert-A12KimiActive -Stage "artifact revision"
+    if ($revision.activeProvider -ne "KIMI" -and $requireKimi) {
+        throw "Strict Kimi smoke detected an artifact-revision fallback to $($revision.activeProvider)"
     }
     if ($revision.version.versionNumber -le 1 -or @($revision.artifacts).Count -ne 3) {
         throw "Artifact revision did not create a complete new version"
@@ -621,5 +621,5 @@ finally {
     Remove-Item -LiteralPath $temporaryMaterial -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "M1 to M4 Docker smoke test passed, including all five Dify apps."
+Write-Host "M1 to M4 Docker smoke test passed, including direct Kimi workflow orchestration."
 Write-Host "projectId=$projectId requirementId=$($completeRequirement.id) summaryId=$($summary.id) materialId=$materialId intentId=$intentId planId=$planId versionId=$versionId sessionId=$sessionId"
