@@ -16,13 +16,6 @@
     <template v-else>
       <ProjectContextHeader v-if="projectContext" :project="projectContext" />
       <ProjectWorkspaceNav :project-id="workspace.projectId" />
-      <AiProviderStatusStrip
-        :status="gatewayStatus"
-        :loading="gatewayStatusLoading"
-        :error="gatewayStatusError"
-        compact
-        @refresh="loadGatewayStatus"
-      />
 
       <header class="generation-hero">
         <div class="generation-hero__main">
@@ -34,7 +27,6 @@
           </div>
         </div>
         <div class="generation-hero__actions">
-          <UiStatusPill :label="providerLabel" tone="purple" dot />
           <el-button @click="openCopilot">教学副驾驶</el-button>
           <el-button :icon="Back" @click="router.push(`/projects/${projectId}/intent`)">教学意图</el-button>
           <el-button v-if="artifactCount" type="primary" :icon="View" @click="router.push(`/projects/${projectId}/preview`)">
@@ -73,7 +65,6 @@
                 </div>
                 <p>更新于 {{ formatDateTime(plan.updatedAt) }}</p>
               </div>
-              <span class="plan-toolbar__provider">{{ providerLabel }}</span>
             </section>
 
             <GenerationOutlineEditor
@@ -200,10 +191,6 @@
             </header>
             <dl class="generation-condition-list">
               <div>
-                <dt>本次方案提供方</dt>
-                <dd>{{ providerLabel }}</dd>
-              </div>
-              <div>
                 <dt>项目状态</dt>
                 <dd>{{ projectStatusLabel }}</dd>
               </div>
@@ -242,7 +229,6 @@ import {
   type PlanOutlineItem,
 } from '@/api/generation';
 import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
-import AiProviderStatusStrip from '@/components/ai/AiProviderStatusStrip.vue';
 import GenerationOutlineEditor from '@/components/generation/GenerationOutlineEditor.vue';
 import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
@@ -296,20 +282,13 @@ function openCopilot() {
   });
 }
 const {
-  status: gatewayStatus,
-  loading: gatewayStatusLoading,
-  error: gatewayStatusError,
   presentation: gatewayPresentation,
   refresh: loadGatewayStatus,
 } = useAiGatewayStatus();
 
 const artifactCount = computed(() => workspace.value?.artifacts?.length || 0);
-const providerLabel = computed(() => {
-  const provider = plan.value?.provider || workspace.value?.provider || '';
-  return provider.toUpperCase().includes('MOCK') ? 'Mock AI' : provider || 'AI';
-});
 const heroStatus = computed(() => {
-  if (!plan.value) return `尚无生成方案 · ${providerLabel.value}`;
+  if (!plan.value) return '尚无生成方案';
   if (plan.value.confirmed) return `方案已确认 · ${artifactCount.value ? `已有 ${artifactCount.value} 项成果` : '等待生成内容'}`;
   return isDirty.value ? '方案有未保存修改' : '方案草稿已保存，等待确认';
 });

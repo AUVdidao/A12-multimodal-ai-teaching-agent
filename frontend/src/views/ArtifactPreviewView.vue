@@ -16,13 +16,6 @@
     <template v-else>
       <ProjectContextHeader v-if="projectContext" :project="projectContext" />
       <ProjectWorkspaceNav :project-id="projectId" />
-      <AiProviderStatusStrip
-        :status="gatewayStatus"
-        :loading="gatewayStatusLoading"
-        :error="gatewayStatusError"
-        compact
-        @refresh="loadGatewayStatus"
-      />
 
       <header class="preview-hero">
         <div class="preview-hero__main">
@@ -34,7 +27,6 @@
           </div>
         </div>
         <div class="preview-hero__actions">
-          <UiStatusPill v-if="workspace" :label="providerLabel" tone="purple" dot />
           <el-button :icon="Back" @click="router.push(`/projects/${projectId}/plan`)">返回内容生成</el-button>
         </div>
       </header>
@@ -131,7 +123,6 @@
               <h3>版本修改</h3>
               <p>仅修改当前成果并生成新的非定稿版本</p>
             </div>
-            <UiStatusPill :label="providerLabel" tone="purple" dot />
           </div>
           <el-alert
             v-if="revisionError"
@@ -158,7 +149,6 @@
             aria-label="版本修改意见"
           />
           <div class="revision-panel__footer">
-            <span>本次成果提供方：{{ providerLabel }}<template v-if="workspace?.provider?.toUpperCase().includes('MOCK')">（Mock，不代表真实模型）</template></span>
             <el-button
               type="primary"
               :icon="EditPen"
@@ -184,14 +174,12 @@ import {
   reviseArtifact,
 } from '@/api/generation';
 import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
-import AiProviderStatusStrip from '@/components/ai/AiProviderStatusStrip.vue';
 import DocxArtifactPreview from '@/components/generation/DocxArtifactPreview.vue';
 import InteractionArtifactPreview from '@/components/generation/InteractionArtifactPreview.vue';
 import PptArtifactPreview from '@/components/generation/PptArtifactPreview.vue';
 import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
-import UiStatusPill from '@/components/ui/UiStatusPill.vue';
 import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
 import { formatDateTime } from '@/utils/presentation';
 import { ElMessage } from 'element-plus';
@@ -218,9 +206,6 @@ const revisionSubmitting = ref(false);
 const revisionError = ref('');
 const revisionSuccess = ref('');
 const {
-  status: gatewayStatus,
-  loading: gatewayStatusLoading,
-  error: gatewayStatusError,
   presentation: gatewayPresentation,
   refresh: loadGatewayStatus,
 } = useAiGatewayStatus();
@@ -253,10 +238,6 @@ const activeArtifact = computed(() => {
 const activeDetailLoading = computed(() => Boolean(activeSummary.value && detailLoading[activeSummary.value.id]));
 const activeDetailError = computed(() => activeSummary.value ? detailErrors[activeSummary.value.id] || '' : '');
 const activeTabLabel = computed(() => artifactTabs.find((tab) => tab.type === activeType.value)?.label || '教学成果');
-const providerLabel = computed(() => {
-  const provider = workspace.value?.provider || '';
-  return provider.toUpperCase().includes('MOCK') ? 'Mock AI' : provider || 'AI';
-});
 
 function artifactForType(type: ArtifactType) {
   return artifactsByType.value[type][0];
