@@ -25,6 +25,15 @@
         </RouterLink>
       </template>
     </nav>
+    <RouterLink
+      v-if="scene !== 'STUDENT_SPACE'"
+      class="sidebar-nav__item app-sidebar__credentials-link"
+      :class="{ 'is-active': route.name === 'ai-credentials' }"
+      :to="{ name: 'ai-credentials' }"
+    >
+      <A12AssetIcon name="document" :size="21" />
+      <span>API 密钥</span>
+    </RouterLink>
   </aside>
 </template>
 
@@ -146,5 +155,10 @@ function isNavActive(item: SidebarNavItem) {
 .app-sidebar__home-link {
   flex: 0 0 auto;
   margin: 14px 0 6px;
+}
+
+.app-sidebar__credentials-link {
+  flex: 0 0 auto;
+  margin: 8px 0 14px;
 }
 </style>

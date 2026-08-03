@@ -14,10 +14,10 @@
         <div class="inline-actions">
           <el-radio-group v-model="filter" size="large">
             <el-radio-button value="ALL">全部状态</el-radio-button>
-            <el-radio-button value="REQUIREMENT_CLARIFYING">需求澄清中</el-radio-button>
-            <el-radio-button value="MATERIAL_ANALYZING">资料解析中</el-radio-button>
-            <el-radio-button value="INTENT_CONFIRMED">意图已确认</el-radio-button>
-            <el-radio-button value="FINALIZED">已定稿</el-radio-button>
+            <el-radio-button value="REQUIREMENTS">需求澄清中</el-radio-button>
+            <el-radio-button value="MATERIALS">资料解析中</el-radio-button>
+            <el-radio-button value="OUTLINE">意图已确认</el-radio-button>
+            <el-radio-button value="PPT">已定稿</el-radio-button>
           </el-radio-group>
           <el-button @click="toggleSort">更新时间 {{ sortDesc ? '↓' : '↑' }}</el-button>
         </div>

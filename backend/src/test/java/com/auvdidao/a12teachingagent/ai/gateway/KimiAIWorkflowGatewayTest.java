@@ -4,7 +4,9 @@ import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantProperties;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationQuestion;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeRetrievalRequest;
+import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiChatClient;
+import com.auvdidao.a12teachingagent.ai.kimi.KimiClientException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -29,6 +32,29 @@ class KimiAIWorkflowGatewayTest {
     private final KimiAssistantProperties properties = configuredProperties();
     private final KimiChatClient client = mock(KimiChatClient.class);
     private final KimiAIWorkflowGateway gateway = new KimiAIWorkflowGateway(objectMapper, properties, client);
+
+    @Test
+    void preservesKimiFailureCodeAndHttpStatusInsteadOfReportingOnlyUnavailable() {
+        when(client.complete(anyList(), anyString(), anyInt(), anyInt()))
+                .thenThrow(new KimiClientException(
+                        "KIMI_REQUEST_FAILED",
+                        "Kimi returned HTTP 401: code=invalid_auth; Invalid Authentication",
+                        401
+                ));
+
+        assertThatThrownBy(() -> gateway.clarifyRequirement(new ClarificationRequest(
+                1L,
+                "生成一节生物课",
+                List.of(),
+                GenerationMode.STANDARD
+        )))
+                .isInstanceOf(AiWorkflowUnavailableException.class)
+                .hasMessageContaining("WF-01")
+                .hasMessageContaining("KIMI_REQUEST_FAILED")
+                .hasMessageContaining("HTTP 401")
+                .extracting(exception -> ((AiWorkflowUnavailableException) exception).getProviderCode())
+                .isEqualTo("KIMI_REQUEST_FAILED");
+    }
 
     @Test
     void clarificationMapsStrictJsonAndInjectsWorkflowReference() {

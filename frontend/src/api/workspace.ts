@@ -157,6 +157,7 @@ export interface RequirementCompleteness {
   collected: number;
   total: number;
   percentage: number;
+  complete: boolean;
   fields: RequirementFieldState[];
 }
 

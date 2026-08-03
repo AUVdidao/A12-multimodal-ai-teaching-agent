@@ -167,6 +167,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '', roles: ['TEACHER'] },
   },
   {
+    path: '/settings/ai-credentials',
+    name: 'ai-credentials',
+    component: () => import('@/views/AiCredentialsView.vue'),
+    meta: { title: 'API 密钥', roles: ['TEACHER', 'LEADER'], scene: 'COURSE_DEVELOPMENT' },
+  },
+  {
     path: '/projects',
     name: 'projects',
     component: () => import('@/views/ProjectListView.vue'),
@@ -304,7 +310,7 @@ router.beforeEach(async (to) => {
     'projects', 'project-create', 'project-mode', 'project-overview', 'project-requirements',
     'project-materials', 'project-outline', 'project-lesson-plan', 'project-ppt',
     'recent-projects', 'recycle-bin', 'resource-library',
-    'knowledge-library', 'template-center', 'ai-assistant',
+    'knowledge-library', 'template-center', 'ai-assistant', 'ai-credentials',
   ]);
   const leaderCanUseCourseRoute = auth.activeRole === 'LEADER' && leaderCourseRouteNames.has(String(to.name));
   if (allowedRoles.length > 0 && (!auth.activeRole || (!allowedRoles.includes(auth.activeRole) && !leaderCanUseCourseRoute))) {

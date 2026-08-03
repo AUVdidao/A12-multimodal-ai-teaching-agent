@@ -53,9 +53,10 @@ export function formatRelativeTime(value?: string) {
 }
 
 export function stageTone(stage?: string): 'purple' | 'green' | 'orange' | 'blue' | 'red' {
-  if (stage === 'FINALIZED' || stage === 'INTENT_CONFIRMED') return 'green';
-  if (stage === 'MATERIAL_ANALYZING' || stage === 'KNOWLEDGE_INDEXED') return 'blue';
-  if (stage === 'CONTENT_GENERATED') return 'purple';
+  if (stage === 'PPT' || stage === 'FINALIZED' || stage === 'INTENT_CONFIRMED') return 'green';
+  if (stage === 'MATERIALS' || stage === 'MATERIAL_ANALYZING' || stage === 'KNOWLEDGE_INDEXED') return 'blue';
+  if (stage === 'OUTLINE') return 'green';
+  if (stage === 'LESSON_PLAN' || stage === 'CONTENT_GENERATED') return 'purple';
   if (stage === 'FAILED') return 'red';
   return 'orange';
 }

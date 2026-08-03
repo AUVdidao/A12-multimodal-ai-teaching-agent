@@ -219,14 +219,21 @@ async function sendMessage() {
     const nextRound = Math.max(0, ...(workspace.value?.dialogues.map((item) => item.roundNo) || [0])) + 1;
     await saveDialogueMessage(projectId.value, { sessionId: sessionId.value, sender: 'TEACHER', content, roundNo: nextRound });
     const questionToAnswer = currentQuestion.value;
-    if (!questionToAnswer) {
-      throw new Error('当前没有可回答的澄清问题');
+    if (questionToAnswer) {
+      const updatedRequirement = await saveClarificationAnswer(
+        projectId.value,
+        { questionId: questionToAnswer.questionId, answer: content },
+      );
+      Object.assign(form, updatedRequirement);
+    } else {
+      form.rawRequirementText = [form.rawRequirementText?.trim(), content]
+        .filter(Boolean)
+        .join('\n');
+      await saveTeachingRequirement(projectId.value, {
+        ...form,
+        outputTypes: [...form.outputTypes],
+      });
     }
-    const updatedRequirement = await saveClarificationAnswer(
-      projectId.value,
-      { questionId: questionToAnswer.questionId, answer: content },
-    );
-    Object.assign(form, updatedRequirement);
     const clarification = await getClarificationQuestions(projectId.value, form);
     const question = clarification.questions[0];
     if (question) {
@@ -236,10 +243,21 @@ async function sendMessage() {
         content: question.question,
         roundNo: nextRound,
       });
+    } else if (!questionToAnswer) {
+      await saveDialogueMessage(projectId.value, {
+        sessionId: sessionId.value,
+        sender: 'AI',
+        content: clarification.complete
+          ? '当前教学需求信息已完整，已保存本次补充内容，可以进入需求摘要。'
+          : '已保存本次补充内容，请继续完善右侧待补充字段。',
+        roundNo: nextRound,
+      });
     }
     currentQuestion.value = question || null;
     draft.value = '';
     await loadWorkspace();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '消息发送失败，请稍后重试');
   } finally {
     sending.value = false;
   }

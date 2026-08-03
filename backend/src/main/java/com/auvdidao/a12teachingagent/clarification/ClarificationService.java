@@ -47,13 +47,25 @@ public class ClarificationService {
     private final ProjectAccessService projectAccessService;
     private final ClarificationQuestionRepository questionRepository;
     private final RequirementInputService requirementInputService;
+    private final ClarificationQuestionTransactionService questionTransactionService;
 
     public ClarificationService(
             AIWorkflowGateway aiWorkflowGateway,
             ProjectRepository projectRepository,
             ProjectAccessService projectAccessService
     ) {
-        this(aiWorkflowGateway, projectRepository, projectAccessService, null, null);
+        this(aiWorkflowGateway, projectRepository, projectAccessService, null, null, null);
+    }
+
+    public ClarificationService(
+            AIWorkflowGateway aiWorkflowGateway,
+            ProjectRepository projectRepository,
+            ProjectAccessService projectAccessService,
+            ObjectProvider<ClarificationQuestionRepository> questionRepositoryProvider,
+            ObjectProvider<RequirementInputService> requirementInputServiceProvider
+    ) {
+        this(aiWorkflowGateway, projectRepository, projectAccessService,
+                questionRepositoryProvider, requirementInputServiceProvider, null);
     }
 
     @Autowired
@@ -62,13 +74,16 @@ public class ClarificationService {
             ProjectRepository projectRepository,
             ProjectAccessService projectAccessService,
             ObjectProvider<ClarificationQuestionRepository> questionRepositoryProvider,
-            ObjectProvider<RequirementInputService> requirementInputServiceProvider
+            ObjectProvider<RequirementInputService> requirementInputServiceProvider,
+            ObjectProvider<ClarificationQuestionTransactionService> questionTransactionServiceProvider
     ) {
         this.aiWorkflowGateway = aiWorkflowGateway;
         this.projectRepository = projectRepository;
         this.projectAccessService = projectAccessService;
         this.questionRepository = questionRepositoryProvider.getIfAvailable();
         this.requirementInputService = requirementInputServiceProvider.getIfAvailable();
+        this.questionTransactionService = questionTransactionServiceProvider == null
+                ? null : questionTransactionServiceProvider.getIfAvailable();
     }
 
     @Transactional(readOnly = true)
@@ -78,30 +93,50 @@ public class ClarificationService {
         return new ClarificationResult(evaluation.complete(), evaluation.missingFields(), List.of());
     }
 
-    @Transactional
     public ClarificationResult questions(Long projectId, ClarificationCheckRequest request) {
-        Project project = requireProjectForUpdate(projectId);
+        Project project = questionTransactionService == null
+                ? requireProjectForUpdate(projectId)
+                : requireProject(projectId);
         Evaluation evaluation = evaluate(project, request);
 
         if (questionRepository != null) {
-            ClarificationQuestionEntity pending = questionRepository
-                    .findFirstByProjectIdAndStatusOrderByCreatedAtDescIdDesc(
-                            projectId, ClarificationQuestionStatus.PENDING)
-                    .orElse(null);
-            if (pending != null) {
-                boolean targetStillMissing = evaluation.missingFields().stream()
+            if (questionTransactionService != null) {
+                List<String> missingCodes = evaluation.missingFields().stream()
                         .map(MissingField::field)
-                        .anyMatch(field -> java.util.Objects.equals(field, pending.getTargetField()));
-                if (targetStillMissing) {
+                        .toList();
+                ClarificationQuestionTransactionService.ClarificationQuestionSnapshot pending =
+                        questionTransactionService.findValidPendingOrObsolete(projectId, missingCodes);
+                if (pending != null) {
                     return new ClarificationResult(
                             false,
                             evaluation.missingFields(),
                             List.of(new ClarificationQuestion(
-                                    pending.getQuestionId(), pending.getTargetField(), pending.getQuestion()))
+                                    pending.questionId(), pending.targetField(), pending.question()))
                     );
                 }
-                pending.setStatus(ClarificationQuestionStatus.OBSOLETE);
-                questionRepository.save(pending);
+            } else {
+                ClarificationQuestionEntity pending = questionRepository
+                        .findFirstByProjectIdAndStatusOrderByCreatedAtDescIdDesc(
+                                projectId, ClarificationQuestionStatus.PENDING)
+                        .orElse(null);
+                if (pending != null) {
+                    boolean targetStillMissing = evaluation.missingFields().stream()
+                            .map(MissingField::field)
+                            .anyMatch(field -> java.util.Objects.equals(field, pending.getTargetField()));
+                    if (targetStillMissing) {
+                        return new ClarificationResult(
+                                false,
+                                evaluation.missingFields(),
+                                List.of(new ClarificationQuestion(
+                                        pending.getQuestionId(), pending.getTargetField(), pending.getQuestion()))
+                        );
+                    }
+                    // Existing H2 file databases may still have a CHECK constraint
+                    // that only permits PENDING/ANSWERED. A stale pending question
+                    // is no longer answerable, so remove it instead of persisting
+                    // OBSOLETE into that legacy schema.
+                    questionRepository.delete(pending);
+                }
             }
         }
 
@@ -127,6 +162,17 @@ public class ClarificationService {
         }
 
         ClarificationQuestion first = questions.get(0);
+        if (questionTransactionService != null) {
+            ClarificationQuestionTransactionService.ClarificationQuestionSnapshot saved =
+                    questionTransactionService.saveIfAbsent(projectId, first.targetField(), first.question());
+            return new ClarificationResult(
+                    false,
+                    evaluation.missingFields(),
+                    List.of(new ClarificationQuestion(
+                            saved.questionId(), saved.targetField(), saved.question()))
+            );
+        }
+
         ClarificationQuestionEntity entity = new ClarificationQuestionEntity();
         entity.setQuestionId(UUID.randomUUID().toString());
         entity.setProjectId(projectId);

@@ -1,5 +1,6 @@
 package com.auvdidao.a12teachingagent.workspace;
 
+import com.auvdidao.a12teachingagent.clarification.ClarificationField;
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
@@ -78,8 +79,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -277,7 +280,7 @@ public class WorkspaceService {
                 dialogues,
                 completeness,
                 questions,
-                value.requirement() != null && completeness.collected() >= 6
+                value.requirement() != null && completeness.complete()
         );
     }
 
@@ -487,7 +490,7 @@ public class WorkspaceService {
 
     private String legacyNextAction(Snapshot value) {
         if (value.requirement() == null) return "完善教学需求";
-        if (completeness(value.project(), value.requirement()).collected() < 9) return "完善教学需求";
+        if (!completeness(value.project(), value.requirement()).complete()) return "完善教学需求";
         if (value.summary() == null || value.summary().getStatus() != RequirementSummaryStatus.CONFIRMED) return "确认需求摘要";
         if (value.materials().isEmpty()) return "上传参考资料";
         if (parsedMaterialCount(value) < value.materials().size()) return "完成资料解析";
@@ -502,7 +505,7 @@ public class WorkspaceService {
     private String legacyActionPath(Snapshot value) {
         String root = "/projects/" + value.project().getId();
         if (value.requirement() == null) return root + "/requirements";
-        if (completeness(value.project(), value.requirement()).collected() < 9) return root + "/requirements";
+        if (!completeness(value.project(), value.requirement()).complete()) return root + "/requirements";
         if (value.summary() == null || value.summary().getStatus() != RequirementSummaryStatus.CONFIRMED) return root + "/summary";
         if (value.materials().isEmpty() || parsedMaterialCount(value) < value.materials().size()) return root + "/materials";
         if (value.chunks().isEmpty()) return root + "/knowledge";
@@ -661,7 +664,7 @@ public class WorkspaceService {
 
     private boolean requirementsComplete(Snapshot value) {
         return value.requirement() != null
-                && completeness(value.project(), value.requirement()).collected() >= 9
+                && completeness(value.project(), value.requirement()).complete()
                 && value.summary() != null
                 && value.summary().getStatus() == RequirementSummaryStatus.CONFIRMED;
     }
@@ -771,21 +774,36 @@ public class WorkspaceService {
                 requirement == null ? null : requirement.getLessonDuration(),
                 lessonDurationLabel(project.getLessonDurationMinutes())
         );
-        String keyDifficulties = requirement == null ? null : joinNonBlank(requirement.getKeyPoints(), requirement.getDifficultPoints());
+        String keyDifficulties = requirement == null ? null : firstNonBlank(
+                requirement.getDifficultPoints(),
+                requirement.getKeyPoints()
+        );
         String outputs = requirement == null ? null : String.join("、", requirement.getOutputTypes());
         List<RequirementFieldState> fields = List.of(
                 field("topic", "课程主题", topic),
                 field("teachingGoals", "教学目标", requirement == null ? null : requirement.getTeachingGoals()),
-                field("audience", "授课对象", audience),
+                field("gradeLevel", "授课对象", audience),
                 field("baselineLevel", "基础水平", requirement == null ? null : requirement.getBaselineLevel()),
                 field("lessonDuration", "课时长度", duration),
-                field("keyDifficulties", "重点难点", keyDifficulties),
+                field("difficultPoints", "重点难点", keyDifficulties),
                 field("stylePreference", "教学风格", requirement == null ? null : requirement.getStylePreference()),
                 field("interactionType", "互动设计", requirement == null ? null : requirement.getInteractionType()),
                 field("outputTypes", "输出内容", outputs)
         );
-        int collected = (int) fields.stream().filter(RequirementFieldState::completed).count();
-        return new RequirementCompleteness(collected, fields.size(), collected * 100 / fields.size(), fields);
+        List<RequirementFieldState> requiredFields = ClarificationField.REQUIRED_FIELDS.stream()
+                .map(field -> fields.stream()
+                        .filter(state -> state.code().equals(field.code()))
+                        .findFirst()
+                        .orElseThrow())
+                .toList();
+        int collected = (int) requiredFields.stream().filter(RequirementFieldState::completed).count();
+        return new RequirementCompleteness(
+                collected,
+                ClarificationField.REQUIRED_FIELDS.size(),
+                collected * 100 / ClarificationField.REQUIRED_FIELDS.size(),
+                collected == ClarificationField.REQUIRED_FIELDS.size(),
+                requiredFields
+        );
     }
 
     private RequirementInputView requirementView(RequirementInput requirement) {
@@ -908,8 +926,28 @@ public class WorkspaceService {
     }
 
     private static boolean matchesStage(ProjectBrief project, String stage) {
-        if (stage == null || "ALL".equalsIgnoreCase(stage)) return true;
-        return project.stage().equalsIgnoreCase(stage) || project.status().name().equalsIgnoreCase(stage);
+        String expected = normalizeStageFilter(stage);
+        if (expected == null) return true;
+        return normalizeProjectStage(project.stage()).equals(expected)
+                || normalizeProjectStage(project.status().name()).equals(expected);
+    }
+
+    private static String normalizeStageFilter(String value) {
+        String normalized = trimToNull(value);
+        if (normalized == null) return null;
+        return switch (normalized.toUpperCase(Locale.ROOT)) {
+            case "ALL", "\u5168\u90e8\u72b6\u6001" -> null;
+            case "REQUIREMENTS", "REQUIREMENT", "REQUIREMENT_CLARIFYING", "REQUIREMENT_CONFIRMED",
+                    "\u9700\u6c42\u6f84\u6e05\u4e2d" -> "REQUIREMENTS";
+            case "MATERIALS", "MATERIAL_ANALYZING", "\u8d44\u6599\u89e3\u6790\u4e2d" -> "MATERIALS";
+            case "OUTLINE", "INTENT_CONFIRMED", "KNOWLEDGE_INDEXED", "\u610f\u56fe\u5df2\u786e\u8ba4" -> "OUTLINE";
+            case "PPT", "CONTENT_GENERATED", "FINALIZED", "\u5df2\u5b9a\u7a3f" -> "PPT";
+            default -> normalized.toUpperCase(Locale.ROOT);
+        };
+    }
+
+    private static String normalizeProjectStage(String value) {
+        return normalizeStageFilter(value);
     }
 
     private static RequirementFieldState field(String code, String label, String value) {
@@ -977,6 +1015,11 @@ public class WorkspaceService {
 
     private static String stageLabel(String stage) {
         return switch (stage) {
+            case "REQUIREMENTS" -> "\u9700\u6c42\u6f84\u6e05\u4e2d";
+            case "MATERIALS" -> "\u8d44\u6599\u89e3\u6790\u4e2d";
+            case "OUTLINE" -> "\u610f\u56fe\u5df2\u786e\u8ba4";
+            case "LESSON_PLAN" -> "\u6559\u6848\u5df2\u751f\u6210";
+            case "PPT" -> "\u5185\u5bb9\u5df2\u751f\u6210";
             case "REQUIREMENT_CLARIFYING" -> "需求澄清中";
             case "REQUIREMENT_CONFIRMED" -> "需求已确认";
             case "MATERIAL_ANALYZING" -> "资料解析中";

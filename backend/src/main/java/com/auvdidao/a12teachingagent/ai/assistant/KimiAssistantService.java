@@ -1,5 +1,6 @@
 package com.auvdidao.a12teachingagent.ai.assistant;
 
+import com.auvdidao.a12teachingagent.ai.credential.AiApiCredentialService;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiChatClient;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiClientException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
@@ -10,6 +11,7 @@ import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +35,7 @@ public class KimiAssistantService {
     private final ProjectRepository projectRepository;
     private final TeachingIntentRepository teachingIntentRepository;
     private final KimiChatClient kimiChatClient;
+    private final AiApiCredentialService credentialService;
 
     public KimiAssistantService(
             ObjectMapper objectMapper,
@@ -41,15 +44,28 @@ public class KimiAssistantService {
             TeachingIntentRepository teachingIntentRepository,
             KimiChatClient kimiChatClient
     ) {
+        this(objectMapper, properties, projectRepository, teachingIntentRepository, kimiChatClient, null);
+    }
+
+    @Autowired
+    public KimiAssistantService(
+            ObjectMapper objectMapper,
+            KimiAssistantProperties properties,
+            ProjectRepository projectRepository,
+            TeachingIntentRepository teachingIntentRepository,
+            KimiChatClient kimiChatClient,
+            AiApiCredentialService credentialService
+    ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.projectRepository = projectRepository;
         this.teachingIntentRepository = teachingIntentRepository;
         this.kimiChatClient = kimiChatClient;
+        this.credentialService = credentialService;
     }
 
     public KimiAssistantDtos.ChatResponse chat(Long projectId, KimiAssistantDtos.ChatRequest request) {
-        if (!properties.isAssistantConfigured()) {
+        if (!assistantConfigured()) {
             throw new KimiAssistantException(
                     "KIMI_NOT_CONFIGURED",
                     "Kimi teaching assistant is not configured on this server",
@@ -138,5 +154,10 @@ public class KimiAssistantService {
 
     private static Map<String, String> message(String role, String content) {
         return Map.of("role", role, "content", content);
+    }
+
+    private boolean assistantConfigured() {
+        return properties.isAssistantConfigured()
+                || (credentialService != null && credentialService.hasActiveCredential());
     }
 }

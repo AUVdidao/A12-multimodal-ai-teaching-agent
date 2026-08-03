@@ -65,6 +65,8 @@ a12:
     workflow-timeout-seconds: ${KIMI_WORKFLOW_TIMEOUT_SECONDS:180}
     workflow-max-completion-tokens: ${KIMI_WORKFLOW_MAX_COMPLETION_TOKENS:8000}
     workflow-max-input-characters: ${KIMI_WORKFLOW_MAX_INPUT_CHARACTERS:60000}
+  credentials:
+    encryption-key: ${A12_CREDENTIAL_ENCRYPTION_KEY:}
   artifact-generator:
     mode: ${A12_ARTIFACT_GENERATOR_MODE:local}
     base-url: ${A12_ARTIFACT_GENERATOR_BASE_URL:http://file-generator-service:8080}

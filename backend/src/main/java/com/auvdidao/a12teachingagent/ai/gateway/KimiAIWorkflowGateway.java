@@ -2,6 +2,7 @@ package com.auvdidao.a12teachingagent.ai.gateway;
 
 import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantProperties;
 import com.auvdidao.a12teachingagent.ai.config.WorkflowCode;
+import com.auvdidao.a12teachingagent.ai.credential.AiApiCredentialService;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanRequest;
@@ -29,6 +30,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -50,15 +52,27 @@ public class KimiAIWorkflowGateway {
     private final ObjectMapper objectMapper;
     private final KimiAssistantProperties properties;
     private final KimiChatClient kimiChatClient;
+    private final AiApiCredentialService credentialService;
 
     public KimiAIWorkflowGateway(
             ObjectMapper objectMapper,
             KimiAssistantProperties properties,
             KimiChatClient kimiChatClient
     ) {
+        this(objectMapper, properties, kimiChatClient, null);
+    }
+
+    @Autowired
+    public KimiAIWorkflowGateway(
+            ObjectMapper objectMapper,
+            KimiAssistantProperties properties,
+            KimiChatClient kimiChatClient,
+            AiApiCredentialService credentialService
+    ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.kimiChatClient = kimiChatClient;
+        this.credentialService = credentialService;
     }
 
     public ClarificationResponse clarifyRequirement(ClarificationRequest request) {
@@ -164,7 +178,7 @@ public class KimiAIWorkflowGateway {
             Class<T> responseType,
             Consumer<T> validator
     ) {
-        if (!properties.isWorkflowConfigured()) {
+        if (!workflowConfigured()) {
             throw unavailable(workflowCode, "Kimi workflow provider is not configured");
         }
 
@@ -194,7 +208,7 @@ public class KimiAIWorkflowGateway {
                     properties.getWorkflowTimeoutSeconds()
             );
         } catch (KimiClientException exception) {
-            throw unavailable(workflowCode, sanitizeReason(exception.getMessage()));
+            throw unavailable(workflowCode, exception);
         }
 
         JsonNode parsed;
@@ -241,7 +255,7 @@ public class KimiAIWorkflowGateway {
             );
             return parseModelJson(repaired, workflowCode);
         } catch (KimiClientException exception) {
-            throw unavailable(workflowCode, "Kimi JSON repair failed: " + sanitizeReason(exception.getMessage()));
+            throw unavailable(workflowCode, exception);
         }
     }
 
@@ -643,5 +657,26 @@ public class KimiAIWorkflowGateway {
 
     private static AiWorkflowUnavailableException unavailable(WorkflowCode workflowCode, String reason) {
         return new AiWorkflowUnavailableException(workflowCode.code() + ": " + reason + ".");
+    }
+
+    private boolean workflowConfigured() {
+        return properties.isWorkflowConfigured()
+                || (credentialService != null && credentialService.hasActiveCredential());
+    }
+
+    private static AiWorkflowUnavailableException unavailable(
+            WorkflowCode workflowCode,
+            KimiClientException exception
+    ) {
+        String code = StringUtils.hasText(exception.getCode()) ? exception.getCode() : "KIMI_REQUEST_FAILED";
+        String reason = sanitizeReason(exception.getMessage());
+        String message = workflowCode.code() + ": " + code;
+        if (exception.getStatusCode() > 0) {
+            message += " (HTTP " + exception.getStatusCode() + ")";
+        }
+        if (!reason.isBlank() && !reason.equalsIgnoreCase(code)) {
+            message += ": " + reason;
+        }
+        return new AiWorkflowUnavailableException(message + ".", code, exception.getStatusCode());
     }
 }

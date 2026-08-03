@@ -132,6 +132,14 @@ class WorkspaceControllerTest {
                 .andExpect(jsonPath("$.data.totalElements", is(1)))
                 .andExpect(jsonPath("$.data.items[0].id", is(project.getId().intValue())))
                 .andExpect(jsonPath("$.data.items[0].progress", greaterThan(0)));
+
+        mockMvc.perform(get("/api/workspace/projects")
+                        .param("stage", "\u9700\u6c42\u6f84\u6e05\u4e2d")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements", is(1)))
+                .andExpect(jsonPath("$.data.items[0].stage", is("REQUIREMENTS")));
     }
 
     @Test
@@ -150,6 +158,7 @@ class WorkspaceControllerTest {
                 .andExpect(jsonPath("$.data.completeness.total", is(9)))
                 .andExpect(jsonPath("$.data.completeness.collected", is(9)))
                 .andExpect(jsonPath("$.data.completeness.percentage", is(100)))
+                .andExpect(jsonPath("$.data.completeness.complete", is(true)))
                 .andExpect(jsonPath("$.data.dialogues", hasSize(2)))
                 .andExpect(jsonPath("$.data.canGenerateSummary", is(true)));
 
@@ -160,6 +169,21 @@ class WorkspaceControllerTest {
         mockMvc.perform(get("/api/projects/{projectId}/dialogues", project.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(0)));
+    }
+
+    @Test
+    void emptyOutputTypesKeepRequirementIncomplete() throws Exception {
+        Project project = createProject("光合作用");
+        RequirementInput requirement = createRequirement(project, true);
+        requirement.setOutputTypes(List.of());
+        requirementRepository.save(requirement);
+
+        mockMvc.perform(get("/api/projects/{projectId}/requirements/workspace", project.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.completeness.total", is(9)))
+                .andExpect(jsonPath("$.data.completeness.complete", is(false)))
+                .andExpect(jsonPath("$.data.completeness.collected", is(8)))
+                .andExpect(jsonPath("$.data.completeness.percentage", is(88)));
     }
 
     @Test

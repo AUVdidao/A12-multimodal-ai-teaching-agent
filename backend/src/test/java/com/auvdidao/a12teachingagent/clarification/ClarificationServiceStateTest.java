@@ -12,6 +12,7 @@ import com.auvdidao.a12teachingagent.requirement.dto.RequirementInputDtos.Requir
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import jakarta.persistence.Table;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
@@ -25,7 +26,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.times;
@@ -78,11 +81,11 @@ class ClarificationServiceStateTest {
         ClarificationResult result = service.questions(1L, request(null, null, null, null, null, null, null, null, null,
                 List.of("PPT")));
 
-        assertThat(pending.getStatus()).isEqualTo(ClarificationQuestionStatus.OBSOLETE);
         assertThat(result.questions()).hasSize(1);
         assertThat(result.questions().get(0).targetField()).isEqualTo("gradeLevel");
         assertThat(result.questions().get(0).targetField()).isNotEqualTo("outputTypes");
-        verify(questions, times(2)).save(any(ClarificationQuestionEntity.class));
+        verify(questions).delete(pending);
+        verify(questions).save(any(ClarificationQuestionEntity.class));
     }
 
     @Test
@@ -105,8 +108,7 @@ class ClarificationServiceStateTest {
 
         assertThat(result.complete()).isTrue();
         assertThat(result.questions()).isEmpty();
-        assertThat(pending.getStatus()).isEqualTo(ClarificationQuestionStatus.OBSOLETE);
-        verify(questions).save(pending);
+        verify(questions).delete(pending);
         verifyNoInteractions(gateway);
     }
 
@@ -154,6 +156,40 @@ class ClarificationServiceStateTest {
     }
 
     @Test
+    void performsAiCallBeforeTheQuestionSavePhase() {
+        AIWorkflowGateway gateway = mock(AIWorkflowGateway.class);
+        ProjectRepository projects = mock(ProjectRepository.class);
+        ProjectAccessService access = mock(ProjectAccessService.class);
+        ClarificationQuestionRepository questions = mock(ClarificationQuestionRepository.class);
+        RequirementInputService requirements = mock(RequirementInputService.class);
+        ClarificationQuestionTransactionService transactions = mock(ClarificationQuestionTransactionService.class);
+        when(projects.findById(1L)).thenReturn(Optional.of(project(1L)));
+        when(transactions.findValidPendingOrObsolete(eq(1L), any())).thenReturn(null);
+        when(gateway.clarifyRequirement(any(ClarificationRequest.class))).thenReturn(
+                new ClarificationResponse(
+                        "WF-01",
+                        List.of("gradeLevel"),
+                        List.of(new ClarificationQuestion("gradeLevel", "请输入授课年级")),
+                        Map.of(),
+                        "ASK"));
+        when(transactions.saveIfAbsent(eq(1L), eq("gradeLevel"), anyString()))
+                .thenReturn(new ClarificationQuestionTransactionService.ClarificationQuestionSnapshot(
+                        "q-new", "gradeLevel", "请输入授课年级"));
+
+        ClarificationService service = service(gateway, projects, access, questions, requirements, transactions);
+        ClarificationResult result = service.questions(
+                1L, request(null, null, null, null, null, null, null, null, null, List.of()));
+
+        assertThat(result.questions()).hasSize(1);
+        assertThat(result.questions().get(0).questionId()).isEqualTo("q-new");
+        InOrder order = inOrder(transactions, gateway);
+        order.verify(transactions).findValidPendingOrObsolete(eq(1L), any());
+        order.verify(gateway).clarifyRequirement(any(ClarificationRequest.class));
+        order.verify(transactions).saveIfAbsent(eq(1L), eq("gradeLevel"), anyString());
+        verify(projects, never()).findByIdForUpdate(anyLong());
+    }
+
+    @Test
     void questionIdHasAUniqueDatabaseConstraint() {
         Table table = ClarificationQuestionEntity.class.getAnnotation(Table.class);
 
@@ -177,6 +213,27 @@ class ClarificationServiceStateTest {
         when(questionProvider.getIfAvailable()).thenReturn(questions);
         when(requirementProvider.getIfAvailable()).thenReturn(requirements);
         return new ClarificationService(gateway, projects, access, questionProvider, requirementProvider);
+    }
+
+    private static ClarificationService service(
+            AIWorkflowGateway gateway,
+            ProjectRepository projects,
+            ProjectAccessService access,
+            ClarificationQuestionRepository questions,
+            RequirementInputService requirements,
+            ClarificationQuestionTransactionService transactions
+    ) {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<ClarificationQuestionRepository> questionProvider = mock(ObjectProvider.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<RequirementInputService> requirementProvider = mock(ObjectProvider.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<ClarificationQuestionTransactionService> transactionProvider = mock(ObjectProvider.class);
+        when(questionProvider.getIfAvailable()).thenReturn(questions);
+        when(requirementProvider.getIfAvailable()).thenReturn(requirements);
+        when(transactionProvider.getIfAvailable()).thenReturn(transactions);
+        return new ClarificationService(
+                gateway, projects, access, questionProvider, requirementProvider, transactionProvider);
     }
 
     private static Project project(Long id) {

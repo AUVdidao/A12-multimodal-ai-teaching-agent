@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.clarification;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 public enum ClarificationField {
@@ -60,6 +61,18 @@ public enum ClarificationField {
             "你希望生成 PPT、教案还是互动内容？"
     );
 
+    public static final List<ClarificationField> REQUIRED_FIELDS = List.of(
+            GRADE_LEVEL,
+            TOPIC,
+            LESSON_DURATION,
+            TEACHING_GOALS,
+            BASELINE_LEVEL,
+            DIFFICULT_POINTS,
+            STYLE_PREFERENCE,
+            INTERACTION_TYPE,
+            OUTPUT_TYPES
+    );
+
     private final String code;
     private final String label;
     private final String reason;
@@ -74,6 +87,10 @@ public enum ClarificationField {
 
     public String code() {
         return code;
+    }
+
+    public String label() {
+        return label;
     }
 
     public String defaultQuestion() {

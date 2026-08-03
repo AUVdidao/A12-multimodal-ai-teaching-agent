@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.ai.gateway;
 
 import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantProperties;
+import com.auvdidao.a12teachingagent.ai.credential.AiApiCredentialService;
 import com.auvdidao.a12teachingagent.ai.config.AiProvider;
 import com.auvdidao.a12teachingagent.ai.config.AiWorkflowProperties;
 import com.auvdidao.a12teachingagent.ai.config.WorkflowCode;
@@ -24,6 +25,7 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRespons
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -39,6 +41,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
     private final KimiAssistantProperties kimiProperties;
     private final MockAIWorkflowGateway mockGateway;
     private final KimiAIWorkflowGateway kimiGateway;
+    private final AiApiCredentialService credentialService;
     private final AtomicReference<String> lastActiveProvider = new AtomicReference<>();
     private final AtomicReference<String> lastFallbackReason = new AtomicReference<>();
 
@@ -48,10 +51,22 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             MockAIWorkflowGateway mockGateway,
             KimiAIWorkflowGateway kimiGateway
     ) {
+        this(properties, kimiProperties, mockGateway, kimiGateway, null);
+    }
+
+    @Autowired
+    public AIWorkflowGatewayRouter(
+            AiWorkflowProperties properties,
+            KimiAssistantProperties kimiProperties,
+            MockAIWorkflowGateway mockGateway,
+            KimiAIWorkflowGateway kimiGateway,
+            AiApiCredentialService credentialService
+    ) {
         this.properties = properties;
         this.kimiProperties = kimiProperties;
         this.mockGateway = mockGateway;
         this.kimiGateway = kimiGateway;
+        this.credentialService = credentialService;
     }
 
     @Override
@@ -67,7 +82,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
                 requestedProvider.name(),
                 activeProvider,
                 requestedProvider == AiProvider.MOCK || properties.isFallbackToMock(),
-                kimiProperties.isWorkflowConfigured(),
+                kimiConfigured(),
                 properties.isFallbackToMock(),
                 statusMessage(requestedProvider)
         );
@@ -140,7 +155,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             return mockCall.get();
         }
 
-        if (!kimiProperties.isWorkflowConfigured()) {
+        if (!kimiConfigured()) {
             return fallbackOrThrow(
                     workflowCode,
                     operation,
@@ -188,7 +203,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
     }
 
     private String initialProviderStatus() {
-        if (kimiProperties.isWorkflowConfigured()) {
+        if (kimiConfigured()) {
             return AiProvider.KIMI.name();
         }
         return properties.isFallbackToMock() ? AiProvider.MOCK.name() : "UNAVAILABLE";
@@ -202,7 +217,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             message.append("Kimi structured workflow routing is requested. ");
         }
         message.append("Kimi workflow configuration: ")
-                .append(kimiProperties.isWorkflowConfigured() ? "ready" : "missing")
+                .append(kimiConfigured() ? "ready" : "missing")
                 .append("; model: ")
                 .append(StringUtils.hasText(kimiProperties.getWorkflowModel())
                         ? kimiProperties.getWorkflowModel().strip()
@@ -216,6 +231,11 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             message.append(" Last fallback reason: ").append(fallbackReason);
         }
         return message.toString();
+    }
+
+    private boolean kimiConfigured() {
+        return kimiProperties.isWorkflowConfigured()
+                || (credentialService != null && credentialService.hasActiveCredential());
     }
 
     private String sanitizeReason(String reason) {

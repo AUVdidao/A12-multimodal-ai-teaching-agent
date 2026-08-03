@@ -186,6 +186,7 @@ public final class WorkspaceDtos {
             int collected,
             int total,
             int percentage,
+            boolean complete,
             List<RequirementFieldState> fields
     ) {
     }

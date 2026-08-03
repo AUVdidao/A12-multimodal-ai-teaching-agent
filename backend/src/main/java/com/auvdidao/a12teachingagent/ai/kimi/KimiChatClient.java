@@ -1,8 +1,10 @@
 package com.auvdidao.a12teachingagent.ai.kimi;
 
 import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantProperties;
+import com.auvdidao.a12teachingagent.ai.credential.AiApiCredentialService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -21,11 +23,22 @@ public class KimiChatClient {
 
     private final ObjectMapper objectMapper;
     private final KimiAssistantProperties properties;
+    private final AiApiCredentialService credentialService;
     private final HttpClient httpClient;
 
     public KimiChatClient(ObjectMapper objectMapper, KimiAssistantProperties properties) {
+        this(objectMapper, properties, null);
+    }
+
+    @Autowired
+    public KimiChatClient(
+            ObjectMapper objectMapper,
+            KimiAssistantProperties properties,
+            AiApiCredentialService credentialService
+    ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.credentialService = credentialService;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(Math.max(1, properties.getConnectTimeoutSeconds())))
                 .build();
@@ -37,7 +50,8 @@ public class KimiChatClient {
             int maxCompletionTokens,
             int timeoutSeconds
     ) {
-        requireConfiguration(model);
+        String apiKey = resolveApiKey();
+        requireConfiguration(model, apiKey);
         int attempts = Math.max(1, properties.getRequestAttempts());
         KimiClientException lastFailure = null;
 
@@ -51,7 +65,7 @@ public class KimiChatClient {
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(normalizedBaseUrl() + "/chat/completions"))
                         .timeout(Duration.ofSeconds(Math.max(1, timeoutSeconds)))
-                        .header("Authorization", "Bearer " + properties.getApiKey().strip())
+                        .header("Authorization", "Bearer " + apiKey.strip())
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
                         .build();
@@ -60,7 +74,7 @@ public class KimiChatClient {
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
                     lastFailure = new KimiClientException(
                             "KIMI_REQUEST_FAILED",
-                            "Kimi returned HTTP " + response.statusCode(),
+                            describeHttpFailure(response),
                             response.statusCode()
                     );
                     if (isRetryableStatus(response.statusCode()) && attempt < attempts) {
@@ -95,7 +109,11 @@ public class KimiChatClient {
                 }
                 throw lastFailure;
             } catch (IOException exception) {
-                lastFailure = new KimiClientException("KIMI_UNAVAILABLE", "Kimi cannot be reached", 502);
+                lastFailure = new KimiClientException(
+                        "KIMI_UNAVAILABLE",
+                        "Kimi transport failed (" + exception.getClass().getSimpleName() + ")",
+                        502
+                );
                 if (attempt < attempts) {
                     pauseBeforeRetry();
                     continue;
@@ -114,9 +132,19 @@ public class KimiChatClient {
                 : lastFailure;
     }
 
-    private void requireConfiguration(String model) {
+    private String resolveApiKey() {
+        if (credentialService != null) {
+            String stored = credentialService.activeApiKey();
+            if (StringUtils.hasText(stored)) {
+                return stored;
+            }
+        }
+        return properties.getApiKey();
+    }
+
+    private void requireConfiguration(String model, String apiKey) {
         if (!StringUtils.hasText(properties.getBaseUrl())
-                || !StringUtils.hasText(properties.getApiKey())
+                || !StringUtils.hasText(apiKey)
                 || !StringUtils.hasText(model)) {
             throw new KimiClientException("KIMI_NOT_CONFIGURED", "Kimi is not configured", 503);
         }
@@ -124,6 +152,44 @@ public class KimiChatClient {
 
     private String normalizedBaseUrl() {
         return properties.getBaseUrl().strip().replaceAll("/+$", "");
+    }
+
+    private String describeHttpFailure(HttpResponse<String> response) {
+        String suffix = "";
+        try {
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode error = root.path("error");
+            String providerCode = text(error, "code");
+            if (!StringUtils.hasText(providerCode)) {
+                providerCode = text(root, "code");
+            }
+            String providerMessage = text(error, "message");
+            if (!StringUtils.hasText(providerMessage)) {
+                providerMessage = text(root, "message");
+            }
+            if (StringUtils.hasText(providerCode) || StringUtils.hasText(providerMessage)) {
+                String details = String.join("; ",
+                        StringUtils.hasText(providerCode) ? "code=" + redact(providerCode) : "",
+                        StringUtils.hasText(providerMessage) ? redact(providerMessage) : ""
+                ).replaceAll("^; |; $", "");
+                suffix = ": " + details;
+            }
+        } catch (Exception ignored) {
+            // Keep the stable HTTP failure when the provider error body is not JSON.
+        }
+        return "Kimi returned HTTP " + response.statusCode() + suffix;
+    }
+
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        return value != null && value.isTextual() ? value.asText().strip() : "";
+    }
+
+    private static String redact(String value) {
+        String sanitized = value.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').strip();
+        sanitized = sanitized.replaceAll("(?i)sk-[A-Za-z0-9_-]+", "[REDACTED]");
+        sanitized = sanitized.replaceAll("(?i)(api[_ -]?key|authorization|bearer)\\s*[:=]\\s*\\S+", "$1=[REDACTED]");
+        return sanitized.length() <= 160 ? sanitized : sanitized.substring(0, 160);
     }
 
     private boolean isRetryableStatus(int statusCode) {
