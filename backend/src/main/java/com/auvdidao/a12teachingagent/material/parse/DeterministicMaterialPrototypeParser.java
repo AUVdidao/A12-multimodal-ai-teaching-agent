@@ -49,7 +49,15 @@ public class DeterministicMaterialPrototypeParser implements MaterialPrototypePa
         String analysisText = extraction.hasText()
                 ? abbreviate(extraction.text().strip(), ANALYSIS_TEXT_LIMIT)
                 : summary;
-        return new ParsedContent(summary, keywords, stages, analysisText);
+        return new ParsedContent(
+                summary,
+                keywords,
+                stages,
+                analysisText,
+                extraction.hasText() ? extraction.text() : null,
+                extraction.pageCount(),
+                extraction.sections()
+        );
     }
 
     private static String extractedSummary(

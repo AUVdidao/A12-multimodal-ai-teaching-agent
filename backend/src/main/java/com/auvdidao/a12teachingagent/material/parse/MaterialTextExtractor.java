@@ -32,6 +32,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -461,20 +462,51 @@ final class MaterialTextExtractor {
         return sanitized.toString().strip();
     }
 
-    record Extraction(String text, String sourceLabel, String noTextReason, boolean truncated) {
+record Extraction(
+        String text,
+        String sourceLabel,
+        String noTextReason,
+        boolean truncated,
+        Integer pageCount,
+        List<String> sections
+) {
 
-        static Extraction extracted(String text, String sourceLabel, boolean truncated) {
-            return new Extraction(text, sourceLabel, null, truncated);
-        }
-
-        static Extraction unavailable(String reason) {
-            return new Extraction("", null, reason, false);
-        }
-
-        boolean hasText() {
-            return text != null && !text.isBlank();
-        }
+    static Extraction extracted(String text, String sourceLabel, boolean truncated) {
+        return extracted(text, sourceLabel, truncated, null, splitSections(text));
     }
+
+    static Extraction extracted(
+            String text,
+            String sourceLabel,
+            boolean truncated,
+            Integer pageCount,
+            List<String> sections
+    ) {
+        return new Extraction(text, sourceLabel, null, truncated, pageCount, sections);
+    }
+
+    static Extraction unavailable(String reason) {
+        return new Extraction("", null, reason, false, null, List.of());
+    }
+
+    boolean hasText() {
+        return text != null && !text.isBlank();
+    }
+
+    private static List<String> splitSections(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (String section : text.replace("\r\n", "\n").replace('\r', '\n').split("\\n\\s*\\n")) {
+            String normalized = section.strip();
+            if (!normalized.isBlank()) {
+                result.add(normalized);
+            }
+        }
+        return List.copyOf(result);
+    }
+}
 
     private record TextValue(String text, boolean truncated, boolean mostlyReadable) {
     }

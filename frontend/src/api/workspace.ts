@@ -238,6 +238,11 @@ export interface ParsePreview {
   failureReason?: string;
   parsedAt?: string;
   prototype: boolean;
+  extractedTextPreview?: string;
+  pageCount?: number;
+  sections?: string[];
+  chunkCount?: number;
+  parseDurationMs?: number;
 }
 
 export interface MaterialWorkspaceItem {

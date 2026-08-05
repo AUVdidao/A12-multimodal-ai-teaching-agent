@@ -27,6 +27,12 @@ public class ParseResult extends BaseAuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String summary;
 
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String extractedText;
+
+    private Integer pageCount;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "parse_result_keywords", joinColumns = @JoinColumn(name = "parse_result_id"))
     @Column(name = "keyword_value")
@@ -36,6 +42,15 @@ public class ParseResult extends BaseAuditableEntity {
     @CollectionTable(name = "parse_result_stages", joinColumns = @JoinColumn(name = "parse_result_id"))
     @Column(name = "stage_value")
     private List<String> applicableTeachingStages = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "parse_result_sections", joinColumns = @JoinColumn(name = "parse_result_id"))
+    @Column(name = "section_value")
+    private List<String> sections = new ArrayList<>();
+
+    private Integer chunkCount;
+
+    private Long parseDurationMs;
 
     @Enumerated(EnumType.STRING)
     private MaterialParseStatus parseStatus;
@@ -59,6 +74,22 @@ public class ParseResult extends BaseAuditableEntity {
         this.summary = summary;
     }
 
+    public String getExtractedText() {
+        return extractedText;
+    }
+
+    public void setExtractedText(String extractedText) {
+        this.extractedText = extractedText;
+    }
+
+    public Integer getPageCount() {
+        return pageCount;
+    }
+
+    public void setPageCount(Integer pageCount) {
+        this.pageCount = pageCount;
+    }
+
     public List<String> getKeywords() {
         return List.copyOf(keywords);
     }
@@ -75,6 +106,30 @@ public class ParseResult extends BaseAuditableEntity {
         this.applicableTeachingStages = applicableTeachingStages == null
                 ? new ArrayList<>()
                 : new ArrayList<>(applicableTeachingStages);
+    }
+
+    public List<String> getSections() {
+        return List.copyOf(sections);
+    }
+
+    public void setSections(List<String> sections) {
+        this.sections = sections == null ? new ArrayList<>() : new ArrayList<>(sections);
+    }
+
+    public Integer getChunkCount() {
+        return chunkCount;
+    }
+
+    public void setChunkCount(Integer chunkCount) {
+        this.chunkCount = chunkCount;
+    }
+
+    public Long getParseDurationMs() {
+        return parseDurationMs;
+    }
+
+    public void setParseDurationMs(Long parseDurationMs) {
+        this.parseDurationMs = parseDurationMs;
     }
 
     public MaterialParseStatus getParseStatus() {

@@ -19,6 +19,7 @@ import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummary;
 import com.auvdidao.a12teachingagent.knowledge.KnowledgeIndexService;
 import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.ParseResultResponse;
 import com.auvdidao.a12teachingagent.material.parse.MaterialPrototypeParser;
+import com.auvdidao.a12teachingagent.material.chunk.TextCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,7 +77,8 @@ class MaterialParseServiceGatewayTest {
                 parseResultRepository,
                 prototypeParser,
                 aiWorkflowGateway,
-                knowledgeIndexService
+                knowledgeIndexService,
+                new TextCleaner()
         );
     }
 

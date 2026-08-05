@@ -14,11 +14,18 @@ public interface MaterialPrototypeParser {
             String summary,
             List<String> keywords,
             List<String> teachingStages,
-            String analysisText
+            String analysisText,
+            String extractedText,
+            Integer pageCount,
+            List<String> sections
     ) {
 
+        public ParsedContent(String summary, List<String> keywords, List<String> teachingStages, String analysisText) {
+            this(summary, keywords, teachingStages, analysisText, analysisText, null, List.of());
+        }
+
         public ParsedContent(String summary, List<String> keywords, List<String> teachingStages) {
-            this(summary, keywords, teachingStages, summary);
+            this(summary, keywords, teachingStages, summary, summary, null, List.of());
         }
     }
 }

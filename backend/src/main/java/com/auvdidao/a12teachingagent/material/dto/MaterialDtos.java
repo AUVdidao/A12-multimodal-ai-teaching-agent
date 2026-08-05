@@ -61,7 +61,12 @@ public final class MaterialDtos {
             List<String> applicableTeachingStages,
             String failureReason,
             LocalDateTime parsedAt,
-            boolean prototype
+            boolean prototype,
+            String extractedTextPreview,
+            Integer pageCount,
+            List<String> sections,
+            Integer chunkCount,
+            Long parseDurationMs
     ) {
     }
 }

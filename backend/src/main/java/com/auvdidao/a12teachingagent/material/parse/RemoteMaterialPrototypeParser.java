@@ -76,11 +76,17 @@ public class RemoteMaterialPrototypeParser implements MaterialPrototypeParser {
             String analysisText = response.analysisText() == null || response.analysisText().isBlank()
                     ? response.summary()
                     : response.analysisText();
+            String extractedText = response.extractedText() == null || response.extractedText().isBlank()
+                    ? analysisText
+                    : response.extractedText();
             return new ParsedContent(
                     response.summary(),
                     response.keywords(),
                     response.teachingStages(),
-                    analysisText
+                    analysisText,
+                    extractedText,
+                    response.pageCount(),
+                    response.sections() == null ? List.of() : response.sections()
             );
         } catch (RestClientResponseException exception) {
             throw new MaterialParsingException("Remote material parser rejected the material: HTTP " + exception.getStatusCode().value() + ".");
@@ -147,7 +153,10 @@ public class RemoteMaterialPrototypeParser implements MaterialPrototypeParser {
             String summary,
             List<String> keywords,
             List<String> teachingStages,
-            String analysisText
+            String analysisText,
+            String extractedText,
+            Integer pageCount,
+            List<String> sections
     ) {
     }
 }

@@ -57,6 +57,11 @@ export interface MaterialParseResult {
   failureReason?: string;
   parsedAt?: string;
   prototype: boolean;
+  extractedTextPreview?: string;
+  pageCount?: number;
+  sections?: string[];
+  chunkCount?: number;
+  parseDurationMs?: number;
 }
 
 export async function uploadMaterial(

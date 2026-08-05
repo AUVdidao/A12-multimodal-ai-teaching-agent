@@ -115,6 +115,18 @@
               <strong>{{ selectedMaterial.originalFilename }}</strong>
               <p v-if="selectedMaterial.parsePreview?.summary">{{ selectedMaterial.parsePreview.summary }}</p>
               <p v-else class="muted">{{ selectedMaterial.parsePreview?.failureReason || '该资料尚无解析摘要。' }}</p>
+              <div v-if="selectedMaterial.parsePreview" class="parse-metadata">
+                <span v-if="selectedMaterial.parsePreview.pageCount">页数 {{ selectedMaterial.parsePreview.pageCount }}</span>
+                <span v-if="selectedMaterial.parsePreview.chunkCount != null">分段 {{ selectedMaterial.parsePreview.chunkCount }}</span>
+                <span v-if="selectedMaterial.parsePreview.parseDurationMs != null">耗时 {{ selectedMaterial.parsePreview.parseDurationMs }} ms</span>
+              </div>
+              <pre v-if="selectedMaterial.parsePreview?.extractedTextPreview" class="parse-text-preview">{{ selectedMaterial.parsePreview.extractedTextPreview }}</pre>
+              <template v-if="selectedMaterial.parsePreview?.sections?.length">
+                <h3>文本分段预览</h3>
+                <ol class="parse-sections">
+                  <li v-for="(section, index) in selectedMaterial.parsePreview.sections.slice(0, 6)" :key="`${index}-${section}`">{{ section }}</li>
+                </ol>
+              </template>
               <h3>知识点提炼</h3>
               <div class="inline-actions preview-tags">
                 <span v-for="tag in selectedMaterial.parsePreview?.keywords || []" :key="tag" class="tag-soft">{{ tag }}</span>
@@ -409,6 +421,45 @@ onMounted(loadWorkspace);
 
 .preview-tags {
   flex-wrap: wrap;
+}
+
+.parse-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 12px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
+.parse-text-preview {
+  max-height: 148px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.parse-sections {
+  max-height: 180px;
+  margin: 8px 0 0;
+  padding-left: 24px;
+  overflow: auto;
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.parse-sections li + li {
+  margin-top: 6px;
 }
 
 @media (max-width: 1120px) {

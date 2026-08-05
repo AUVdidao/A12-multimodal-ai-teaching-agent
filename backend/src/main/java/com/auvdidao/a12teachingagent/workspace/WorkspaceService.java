@@ -841,7 +841,9 @@ public class WorkspaceService {
         ParseResult parseResult = parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(material.getId()).orElse(null);
         ParsePreview preview = parseResult == null ? null : new ParsePreview(
                 parseResult.getId(), parseResult.getParseStatus(), parseResult.getSummary(), parseResult.getKeywords(),
-                parseResult.getApplicableTeachingStages(), parseResult.getFailureReason(), parseResult.getParsedAt(), true
+                parseResult.getApplicableTeachingStages(), parseResult.getFailureReason(), parseResult.getParsedAt(), true,
+                previewText(parseResult.getExtractedText()), parseResult.getPageCount(), parseResult.getSections(),
+                parseResult.getChunkCount(), parseResult.getParseDurationMs()
         );
         return new MaterialItem(
                 material.getId(), material.getOriginalFileName(), material.getFileExtension(), material.getFileType(),
@@ -930,6 +932,13 @@ public class WorkspaceService {
         if (expected == null) return true;
         return normalizeProjectStage(project.stage()).equals(expected)
                 || normalizeProjectStage(project.status().name()).equals(expected);
+    }
+
+    private String previewText(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        return text.substring(0, Math.min(text.length(), 2000));
     }
 
     private static String normalizeStageFilter(String value) {

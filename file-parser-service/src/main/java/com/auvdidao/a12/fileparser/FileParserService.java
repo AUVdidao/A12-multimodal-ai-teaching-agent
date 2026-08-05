@@ -28,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -67,7 +68,7 @@ public class FileParserService {
     public ParseResponse parse(MultipartFile file, String declaredType, String topic, List<String> usageTypes) {
         byte[] content = readBounded(file);
         String fileType = normalizeFileType(declaredType);
-        Extraction extraction = extract(content, fileType);
+        Extraction extraction = withPageCount(extract(content, fileType), content, fileType);
         String safeTopic = topic == null || topic.isBlank() ? "当前课题" : topic.strip();
         String summary = extraction.hasText()
                 ? "确定性原型摘要（实际提取文本，来源：" + extraction.sourceLabel() + "）："
@@ -82,7 +83,10 @@ public class FileParserService {
                 teachingStages(usageTypes),
                 extraction.hasText()
                         ? abbreviate(extraction.text().strip(), ANALYSIS_TEXT_LIMIT)
-                        : summary
+                        : summary,
+                extraction.hasText() ? abbreviate(extraction.text().strip(), maxExtractedCharacters) : "",
+                extraction.pageCount(),
+                extraction.sections()
         );
     }
 
@@ -119,6 +123,31 @@ public class FileParserService {
             case "PPT", "WORD", "XLSX", "OTHER" -> Extraction.unavailable("该文件格式当前不支持正文提取，未生成或推断正文摘要。");
             default -> throw new ParserException("UNSUPPORTED_FILE_TYPE", "Material file type is unsupported.");
         };
+    }
+
+    private Extraction withPageCount(Extraction extraction, byte[] content, String fileType) {
+        if (!extraction.hasText() || extraction.pageCount() != null) return extraction;
+        try {
+            Integer pageCount = switch (fileType) {
+                case "PDF" -> {
+                    try (PDDocument document = Loader.loadPDF(content)) {
+                        yield Math.min(document.getNumberOfPages(), MAX_PDF_PAGES);
+                    }
+                }
+                case "PPTX" -> {
+                    try (XMLSlideShow slideShow = new XMLSlideShow(new ByteArrayInputStream(content))) {
+                        yield Math.min(slideShow.getSlides().size(), MAX_PPTX_SLIDES);
+                    }
+                }
+                default -> null;
+            };
+            return pageCount == null
+                    ? extraction
+                    : new Extraction(extraction.text(), extraction.sourceLabel(), extraction.noTextReason(),
+                    extraction.truncated(), pageCount, extraction.sections());
+        } catch (IOException | RuntimeException ignored) {
+            return extraction;
+        }
     }
 
     private Extraction extractPdf(byte[] content) {
@@ -306,14 +335,50 @@ public class FileParserService {
             String summary,
             List<String> keywords,
             List<String> teachingStages,
-            String analysisText
+            String analysisText,
+            String extractedText,
+            Integer pageCount,
+            List<String> sections
     ) {
     }
 
-    private record Extraction(String text, String sourceLabel, String noTextReason, boolean truncated) {
-        static Extraction extracted(String text, String sourceLabel, boolean truncated) { return new Extraction(text, sourceLabel, null, truncated); }
-        static Extraction unavailable(String reason) { return new Extraction("", null, reason, false); }
+    private record Extraction(
+            String text,
+            String sourceLabel,
+            String noTextReason,
+            boolean truncated,
+            Integer pageCount,
+            List<String> sections
+    ) {
+        static Extraction extracted(String text, String sourceLabel, boolean truncated) {
+            return extracted(text, sourceLabel, truncated, null);
+        }
+        static Extraction extracted(String text, String sourceLabel, boolean truncated, Integer pageCount) {
+            return new Extraction(text, sourceLabel, null, truncated, pageCount, splitSections(text));
+        }
+        static Extraction unavailable(String reason) {
+            return new Extraction("", null, reason, false, null, List.of());
+        }
         boolean hasText() { return text != null && !text.isBlank(); }
+
+        private static List<String> splitSections(String text) {
+            if (text == null || text.isBlank()) return List.of();
+            String normalized = sanitize(text);
+            List<String> result = new ArrayList<>();
+            for (String paragraph : normalized.split("\\R\\s*\\R")) {
+                String section = sanitize(paragraph);
+                if (!section.isBlank()) result.add(section);
+                if (result.size() >= 200) break;
+            }
+            if (result.isEmpty()) {
+                for (String line : normalized.split("\\R")) {
+                    String section = sanitize(line);
+                    if (!section.isBlank()) result.add(section);
+                    if (result.size() >= 200) break;
+                }
+            }
+            return List.copyOf(result);
+        }
     }
 
     private static final class TextAccumulator {
