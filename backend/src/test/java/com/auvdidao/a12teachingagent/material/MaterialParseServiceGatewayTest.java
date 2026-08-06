@@ -27,6 +27,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -36,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -184,6 +186,63 @@ class MaterialParseServiceGatewayTest {
         assertThat(fixture.material().getUploadStatus()).isEqualTo(UploadStatus.PARSED);
         verify(aiWorkflowGateway, times(1)).analyzeMaterial(any());
         verify(knowledgeIndexService, times(1)).index(fixture.material());
+    }
+
+    @Test
+    void preservesOneAuthenticSection() {
+        assertThat(parseWithSections(List.of("  第一段真实内容  ")).getSections())
+                .containsExactly("第一段真实内容");
+    }
+
+    @Test
+    void preservesTwoAuthenticSectionsInOriginalOrder() {
+        assertThat(parseWithSections(List.of("第一段", "第二段")).getSections())
+                .containsExactly("第一段", "第二段");
+    }
+
+    @Test
+    void filtersNullAndBlankSectionsWithoutChangingAuthenticContent() {
+        assertThat(parseWithSections(Arrays.asList(null, "  第一段  ", " ", "\t", "第二段")).getSections())
+                .containsExactly("第一段", "第二段");
+    }
+
+    @Test
+    void storesEmptySectionsWhenParserProvidesNone() {
+        assertThat(parseWithSections(null).getSections()).isEmpty();
+    }
+
+    @Test
+    void doesNotSynthesizeSectionsFromOtherFields() {
+        assertThat(parseWithSections(List.of("真实文档段落")).getSections())
+                .noneMatch(section -> section.contains("核心摘要：")
+                        || section.contains("教学应用：")
+                        || section.contains("目标关联："));
+    }
+
+    private ParseResult parseWithSections(List<String> sections) {
+        Fixture fixture = fixture();
+        stubAccessAndUsage(fixture);
+        when(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(MATERIAL_ID))
+                .thenReturn(Optional.empty());
+        assignParseResultIdOnFlush();
+        when(prototypeParser.parse(fixture.material(), fixture.usages(), fixture.summary()))
+                .thenReturn(new MaterialPrototypeParser.ParsedContent(
+                        "本地真实提取摘要",
+                        List.of("本地关键词"),
+                        List.of("概念讲解"),
+                        "叶绿体中的叶绿素吸收光能，并将光能转换为化学能。",
+                        "真实提取全文",
+                        1,
+                        sections
+                ));
+        when(aiWorkflowGateway.analyzeMaterial(any())).thenReturn(successfulAnalysis());
+
+        service.parse(PROJECT_ID, MATERIAL_ID);
+
+        ArgumentCaptor<ParseResult> captor = ArgumentCaptor.forClass(ParseResult.class);
+        verify(parseResultRepository, atLeastOnce()).saveAndFlush(captor.capture());
+        List<ParseResult> saved = captor.getAllValues();
+        return saved.get(saved.size() - 1);
     }
 
     private void stubAccessAndUsage(Fixture fixture) {

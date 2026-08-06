@@ -169,7 +169,7 @@ public class MaterialParseService {
                     enriched.teachingStages(),
                     extractedText,
                     parsed.pageCount(),
-                    normalizeSections(parsed.sections(), enriched, extractedText, summary),
+                    normalizeSections(parsed.sections()),
                     startedAt
             ));
         } catch (RuntimeException exception) {
@@ -280,59 +280,14 @@ public class MaterialParseService {
         return List.copyOf(merged);
     }
 
-    private static List<String> normalizeSections(
-            List<String> sections,
-            EnrichedContent enriched,
-            String extractedText,
-            RequirementSummary requirementSummary
-    ) {
-        List<String> normalized = sections == null
-                ? List.of()
-                : sections.stream()
+    private static List<String> normalizeSections(List<String> sections) {
+        if (sections == null || sections.isEmpty()) {
+            return List.of();
+        }
+        return sections.stream()
                 .filter(value -> value != null && !value.isBlank())
                 .map(String::strip)
                 .toList();
-        if (normalized.size() >= 3) {
-            return normalized;
-        }
-
-        String fallback = extractedText == null ? "" : extractedText.strip();
-        String summary = firstNonBlank(enriched.summary(), fallback, "课程材料");
-        String teachingUses = joinValues(enriched.teachingStages(), fallback);
-        String context = requirementSummary == null
-                ? "课程需求上下文未提供"
-                : "教师已确认教学需求，课程主题："
-                + firstNonBlank(requirementSummary.getTopic(), "当前课程");
-        String goals = joinValues(enriched.keywords(), fallback) + "；" + context;
-        return List.of(
-                "核心摘要：" + summary,
-                "教学应用：" + teachingUses,
-                "目标关联：" + goals
-        );
-    }
-
-    private static String joinValues(List<String> values, String fallback) {
-        if (values != null) {
-            String joined = values.stream()
-                    .filter(value -> value != null && !value.isBlank())
-                    .map(String::strip)
-                    .distinct()
-                    .reduce((left, right) -> left + "、" + right)
-                    .orElse("");
-            if (!joined.isBlank()) {
-                return joined;
-            }
-        }
-        return firstNonBlank(fallback, "待补充");
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value.strip();
-            }
-        }
-        return "待补充";
     }
 
     private static List<String> sanitizeExternalList(List<String> values) {

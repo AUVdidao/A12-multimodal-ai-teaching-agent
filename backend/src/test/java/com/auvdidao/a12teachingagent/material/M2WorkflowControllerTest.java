@@ -134,10 +134,7 @@ class M2WorkflowControllerTest {
         mockMvc.perform(get("/api/projects/{projectId}/knowledge/overview", pipeline.projectId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.indexedMaterialCount", is(1)))
-                .andExpect(jsonPath("$.data.chunkCount", is(3)))
-                .andExpect(jsonPath("$.data.chunks[0].title", containsString("核心摘要")))
-                .andExpect(jsonPath("$.data.chunks[1].title", containsString("教学应用")))
-                .andExpect(jsonPath("$.data.chunks[2].title", containsString("目标关联")));
+                 .andExpect(jsonPath("$.data.chunkCount", is(1)));
     }
 
     @Test
@@ -149,10 +146,10 @@ class M2WorkflowControllerTest {
         parse(pipeline.projectId(), pipeline.materialId())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id", is(firstResultId.intValue())));
-        index(pipeline.projectId(), pipeline.materialId()).andExpect(jsonPath("$.data", hasSize(3)));
-        index(pipeline.projectId(), pipeline.materialId()).andExpect(jsonPath("$.data", hasSize(3)));
+         index(pipeline.projectId(), pipeline.materialId()).andExpect(jsonPath("$.data", hasSize(1)));
+         index(pipeline.projectId(), pipeline.materialId()).andExpect(jsonPath("$.data", hasSize(1)));
 
-        org.assertj.core.api.Assertions.assertThat(chunkRepository.countByProjectId(pipeline.projectId())).isEqualTo(3);
+         org.assertj.core.api.Assertions.assertThat(chunkRepository.countByProjectId(pipeline.projectId())).isEqualTo(1);
     }
 
     @Test
@@ -188,9 +185,6 @@ class M2WorkflowControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hits", not(empty())))
                 .andExpect(jsonPath("$.data.hits[0].hitReason", containsString("教材依据")));
-        search(pipeline.projectId(), "教学应用", 10)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.hits[0].title", containsString("教学应用")));
         search(pipeline.projectId(), "教师已确认", 10)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hits", not(empty())));
@@ -354,7 +348,9 @@ class M2WorkflowControllerTest {
 
     private Pipeline parsedPipeline(String topic, String filename, List<String> usages) throws Exception {
         Project project = createProject(topic, true);
-        long materialId = upload(project.getId(), filename);
+         long materialId = upload(project.getId(), filename,
+                 topic + "\u6559\u6750\u4f9d\u636e:" + topic
+                         + "\u6559\u5e08\u5df2\u786e\u8ba4:\u7528\u4e8e\u6559\u5b66\u8bbe\u8ba1");
         bindUsages(project.getId(), materialId, usages);
         parse(project.getId(), materialId)
                 .andExpect(status().isOk())
@@ -362,12 +358,16 @@ class M2WorkflowControllerTest {
         return new Pipeline(project.getId(), materialId);
     }
 
-    private long upload(Long projectId, String filename) throws Exception {
+     private long upload(Long projectId, String filename) throws Exception {
+         return upload(projectId, filename, "prototype material");
+     }
+
+     private long upload(Long projectId, String filename, String content) throws Exception {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 filename,
                 "application/pdf",
-                "prototype material".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                 content.getBytes(java.nio.charset.StandardCharsets.UTF_8)
         );
         Number value = JsonPath.read(mockMvc.perform(multipart("/api/projects/{projectId}/materials", projectId).file(file))
                 .andExpect(status().isOk())

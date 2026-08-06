@@ -98,7 +98,7 @@ class MaterialParseRetryTest {
 
         mockMvc.perform(get("/api/projects/{projectId}/knowledge/overview", fixture.projectId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.chunks", hasSize(3)));
+                .andExpect(jsonPath("$.data.chunks", hasSize(1)));
     }
 
     private Fixture createFixture() {
