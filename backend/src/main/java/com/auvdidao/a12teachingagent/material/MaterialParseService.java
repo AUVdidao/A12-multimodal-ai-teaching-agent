@@ -8,7 +8,6 @@ import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
 import com.auvdidao.a12teachingagent.domain.common.PurposeType;
 import com.auvdidao.a12teachingagent.domain.common.UploadStatus;
-import com.auvdidao.a12teachingagent.domain.material.MaterialPurpose;
 import com.auvdidao.a12teachingagent.domain.material.ParseResult;
 import com.auvdidao.a12teachingagent.domain.material.UploadedMaterial;
 import com.auvdidao.a12teachingagent.domain.material.repository.MaterialPurposeRepository;
@@ -20,6 +19,7 @@ import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeChunkR
 import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.ParseResultResponse;
 import com.auvdidao.a12teachingagent.material.chunk.TextCleaner;
 import com.auvdidao.a12teachingagent.material.parse.MaterialPrototypeParser;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -54,6 +54,7 @@ public class MaterialParseService {
     private final AIWorkflowGateway aiWorkflowGateway;
     private final KnowledgeIndexService knowledgeIndexService;
     private final TextCleaner textCleaner;
+    private final MaterialParseTransactionService transactionService;
 
     public MaterialParseService(
             MaterialService materialService,
@@ -65,6 +66,37 @@ public class MaterialParseService {
             KnowledgeIndexService knowledgeIndexService,
             TextCleaner textCleaner
     ) {
+        this(
+                materialService,
+                materialRepository,
+                purposeRepository,
+                parseResultRepository,
+                prototypeParser,
+                aiWorkflowGateway,
+                knowledgeIndexService,
+                textCleaner,
+                new MaterialParseTransactionService(
+                        materialService,
+                        materialRepository,
+                        purposeRepository,
+                        parseResultRepository,
+                        knowledgeIndexService
+                )
+        );
+    }
+
+    @Autowired
+    public MaterialParseService(
+            MaterialService materialService,
+            UploadedMaterialRepository materialRepository,
+            MaterialPurposeRepository purposeRepository,
+            ParseResultRepository parseResultRepository,
+            MaterialPrototypeParser prototypeParser,
+            AIWorkflowGateway aiWorkflowGateway,
+            KnowledgeIndexService knowledgeIndexService,
+            TextCleaner textCleaner,
+            MaterialParseTransactionService transactionService
+    ) {
         this.materialService = materialService;
         this.materialRepository = materialRepository;
         this.purposeRepository = purposeRepository;
@@ -73,43 +105,32 @@ public class MaterialParseService {
         this.aiWorkflowGateway = aiWorkflowGateway;
         this.knowledgeIndexService = knowledgeIndexService;
         this.textCleaner = textCleaner;
+        this.transactionService = transactionService;
     }
 
-    @Transactional
     public ParseResultResponse parse(Long projectId, Long materialId) {
         return parse(projectId, materialId, false);
     }
 
-    @Transactional
     public ParseResultResponse parse(Long projectId, Long materialId, boolean forceReparse) {
-        RequirementSummary summary = materialService.requireConfirmedSummary(projectId);
-        UploadedMaterial material = materialService.requireMaterial(projectId, materialId);
-        List<PurposeType> usages = usageTypes(materialId);
-        if (usages.isEmpty()) {
-            throw new ConflictException("At least one material usage is required before prototype parsing");
+        MaterialParseTransactionService.ParsePreparation preparation = transactionService.prepare(
+                projectId,
+                materialId,
+                forceReparse,
+                false
+        );
+        if (preparation.hasExistingResponse()) {
+            return preparation.existingResponse();
         }
+        return executeParse(preparation);
+    }
 
-        ParseResult result = parseResultRepository
-                .findFirstByMaterialIdOrderByCreatedAtDescIdDesc(materialId)
-                .orElse(null);
-        if (result != null && result.getParseStatus() == MaterialParseStatus.SUCCEEDED && !forceReparse) {
-            return toResponse(result);
-        }
-        if (result != null && result.getParseStatus() == MaterialParseStatus.PROCESSING) {
-            throw new ConflictException("Material parsing is already in progress");
-        }
-
-        material.setParseStatus(MaterialParseStatus.PROCESSING);
-        materialRepository.saveAndFlush(material);
-        if (result == null) {
-            result = new ParseResult();
-            result.setMaterialId(materialId);
-        }
-        result.setParseStatus(MaterialParseStatus.PROCESSING);
-        result.setFailureReason(null);
-        result = parseResultRepository.saveAndFlush(result);
-        long startedAt = System.nanoTime();
-
+    private ParseResultResponse executeParse(MaterialParseTransactionService.ParsePreparation preparation) {
+        RequirementSummary summary = preparation.summary();
+        UploadedMaterial material = preparation.material();
+        List<PurposeType> usages = preparation.usages();
+        ParseResult result = preparation.result();
+        long startedAt = preparation.startedAtNanos();
         try {
             MaterialPrototypeParser.ParsedContent parsed = prototypeParser.parse(material, usages, summary);
             String extractedText = textCleaner.clean(parsed.extractedText());
@@ -119,7 +140,7 @@ public class MaterialParseService {
             EnrichedContent enriched;
             try {
                 MaterialAnalysisResponse analysis = aiWorkflowGateway.analyzeMaterial(new MaterialAnalysisRequest(
-                        projectId,
+                        preparation.projectId(),
                         analysisFileName(material),
                         analysisMaterialType(material),
                         analysisPurpose(usages),
@@ -138,54 +159,41 @@ public class MaterialParseService {
                         parsed.teachingStages()
                 );
             }
-            result.setSummary(enriched.summary());
-            result.setKeywords(enriched.keywords());
-            result.setApplicableTeachingStages(enriched.teachingStages());
-            result.setExtractedText(extractedText);
-            result.setPageCount(parsed.pageCount());
-            result.setSections(normalizeSections(parsed.sections(), enriched, extractedText, summary));
-            result.setParseDurationMs((System.nanoTime() - startedAt) / 1_000_000L);
-            // Indexing requires a successfully parsed result. Persist that state before
-            // indexing; any indexing failure is converted to a failed parse below.
-            result.setParseStatus(MaterialParseStatus.SUCCEEDED);
-            result.setParsedAt(LocalDateTime.now());
-            result.setFailureReason(null);
-            result = parseResultRepository.saveAndFlush(result);
-
-            material.setParseStatus(MaterialParseStatus.SUCCEEDED);
-            material.setUploadStatus(UploadStatus.PARSED);
-            materialRepository.saveAndFlush(material);
-            knowledgeIndexService.index(material);
-            result.setParseDurationMs((System.nanoTime() - startedAt) / 1_000_000L);
-            result = parseResultRepository.saveAndFlush(result);
-            return toResponse(result);
+            return transactionService.complete(new MaterialParseTransactionService.ParseCompletion(
+                    preparation.projectId(),
+                    preparation.materialId(),
+                    material,
+                    result,
+                    enriched.summary(),
+                    enriched.keywords(),
+                    enriched.teachingStages(),
+                    extractedText,
+                    parsed.pageCount(),
+                    normalizeSections(parsed.sections(), enriched, extractedText, summary),
+                    startedAt
+            ));
         } catch (RuntimeException exception) {
-            result.setParseStatus(MaterialParseStatus.FAILED);
-            result.setFailureReason("Prototype parsing could not be completed. Please retry.");
-            result.setParsedAt(LocalDateTime.now());
-            result.setParseDurationMs((System.nanoTime() - startedAt) / 1_000_000L);
-            parseResultRepository.save(result);
-            material.setParseStatus(MaterialParseStatus.FAILED);
-            material.setUploadStatus(UploadStatus.FAILED);
-            materialRepository.save(material);
-            return toResponse(result);
+            return transactionService.fail(new MaterialParseTransactionService.ParseFailure(
+                    preparation.projectId(),
+                    preparation.materialId(),
+                    material,
+                    result,
+                    startedAt
+            ));
         }
     }
 
-    @Transactional
     public ParseResultResponse retry(Long projectId, Long materialId) {
-        materialService.requireProject(projectId);
-        materialService.requireMaterial(projectId, materialId);
-        ParseResult existing = parseResultRepository
-                .findFirstByMaterialIdOrderByCreatedAtDescIdDesc(materialId)
-                .orElseThrow(() -> new ConflictException("No failed parse result is available for retry"));
-        if (existing.getParseStatus() == MaterialParseStatus.SUCCEEDED) {
-            return toResponse(existing);
+        MaterialParseTransactionService.ParsePreparation preparation = transactionService.prepare(
+                projectId,
+                materialId,
+                true,
+                true
+        );
+        if (preparation.hasExistingResponse()) {
+            return preparation.existingResponse();
         }
-        if (existing.getParseStatus() != MaterialParseStatus.FAILED) {
-            throw new ConflictException("Only failed prototype parsing can be retried");
-        }
-        return parse(projectId, materialId, true);
+        return executeParse(preparation);
     }
 
     @Transactional(readOnly = true)
@@ -217,13 +225,6 @@ public class MaterialParseService {
         materialService.requireProject(projectId);
         UploadedMaterial material = materialService.requireMaterial(projectId, materialId);
         return knowledgeIndexService.index(material);
-    }
-
-    private List<PurposeType> usageTypes(Long materialId) {
-        return purposeRepository.findByMaterialIdOrderByIdAsc(materialId).stream()
-                .map(MaterialPurpose::getPurposeType)
-                .distinct()
-                .toList();
     }
 
     private static EnrichedContent mergeAnalysis(

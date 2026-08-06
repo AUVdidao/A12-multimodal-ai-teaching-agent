@@ -147,7 +147,7 @@ class MaterialParseServiceGatewayTest {
     }
 
     @Test
-    void aiFailureMovesToFailedWithoutLeakingDetailsAndCanBeRetried() {
+    void aiFailureFallsBackToParserResultAndCanBeRetried() {
         Fixture fixture = fixture();
         stubAccessAndUsage(fixture);
         AtomicReference<ParseResult> storedResult = new AtomicReference<>();
@@ -161,34 +161,28 @@ class MaterialParseServiceGatewayTest {
             storedResult.set(result);
             return result;
         });
-        when(parseResultRepository.save(any(ParseResult.class))).thenAnswer(invocation -> {
-            ParseResult result = invocation.getArgument(0);
-            storedResult.set(result);
-            return result;
-        });
         when(prototypeParser.parse(fixture.material(), fixture.usages(), fixture.summary()))
                 .thenReturn(localParsedContent());
         when(aiWorkflowGateway.analyzeMaterial(any()))
                 .thenThrow(new AiWorkflowUnavailableException("sensitive Kimi response body and token"))
                 .thenReturn(successfulAnalysis());
 
-        ParseResultResponse failed = service.parse(PROJECT_ID, MATERIAL_ID);
+        ParseResultResponse firstAttempt = service.parse(PROJECT_ID, MATERIAL_ID);
 
-        assertThat(failed.parseStatus()).isEqualTo(MaterialParseStatus.FAILED);
-        assertThat(failed.failureReason())
-                .isEqualTo("Prototype parsing could not be completed. Please retry.")
-                .doesNotContain("sensitive", "Kimi", "token");
-        assertThat(fixture.material().getParseStatus()).isEqualTo(MaterialParseStatus.FAILED);
-        assertThat(fixture.material().getUploadStatus()).isEqualTo(UploadStatus.FAILED);
+        assertThat(firstAttempt.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
+        assertThat(firstAttempt.failureReason()).isNull();
+        assertThat(firstAttempt.summary()).isEqualTo(localParsedContent().summary());
+        assertThat(fixture.material().getParseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
+        assertThat(fixture.material().getUploadStatus()).isEqualTo(UploadStatus.PARSED);
 
         ParseResultResponse retried = service.retry(PROJECT_ID, MATERIAL_ID);
 
         assertThat(retried.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
         assertThat(retried.failureReason()).isNull();
-        assertThat(retried.summary()).contains("本地真实提取摘要", "重试后的 AI 分析");
+        assertThat(retried.summary()).isEqualTo(localParsedContent().summary());
         assertThat(fixture.material().getParseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
         assertThat(fixture.material().getUploadStatus()).isEqualTo(UploadStatus.PARSED);
-        verify(aiWorkflowGateway, times(2)).analyzeMaterial(any());
+        verify(aiWorkflowGateway, times(1)).analyzeMaterial(any());
         verify(knowledgeIndexService, times(1)).index(fixture.material());
     }
 
