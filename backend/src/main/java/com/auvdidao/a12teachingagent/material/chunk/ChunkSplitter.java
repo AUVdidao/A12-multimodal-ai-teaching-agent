@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.material.chunk;
 
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,7 @@ public class ChunkSplitter {
     private final int overlapChars;
     private final int minUsefulChars;
 
+    @Autowired
     public ChunkSplitter(TextCleaner cleaner) {
         this(cleaner, 1000, 120, 80);
     }

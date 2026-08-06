@@ -58,7 +58,12 @@ public class KnowledgeIndexService {
             throw new ConflictException("Material purpose is required before indexing");
         }
 
-        List<String> contents = chunkSplitter.split(extractedText);
+        List<String> contents = parseResult.getSections() == null || parseResult.getSections().isEmpty()
+                ? chunkSplitter.split(extractedText)
+                : parseResult.getSections().stream()
+                .filter(content -> content != null && !content.isBlank())
+                .map(String::strip)
+                .toList();
         if (contents.isEmpty()) {
             throw new ConflictException("Parsed material does not contain useful text");
         }
@@ -109,11 +114,28 @@ public class KnowledgeIndexService {
         chunk.setMaterialId(material.getId());
         chunk.setChunkNo(chunkNo);
         chunk.setSourceFilename(material.getOriginalFileName());
-        chunk.setTitle("Chunk " + chunkNo + " - " + material.getOriginalFileName());
+        chunk.setTitle(chunkTitle(content, chunkNo, material.getOriginalFileName()));
         chunk.setContent(content);
         chunk.setKeywords(keywords(parseResult, content));
         chunk.setUsageTypes(usages);
         return chunk;
+    }
+
+    private static String chunkTitle(String content, int chunkNo, String filename) {
+        if (content != null) {
+            int chineseColon = content.indexOf('：');
+            int asciiColon = content.indexOf(':');
+            int separator = chineseColon >= 0 && asciiColon >= 0
+                    ? Math.min(chineseColon, asciiColon)
+                    : Math.max(chineseColon, asciiColon);
+            if (separator > 0 && separator <= 32) {
+                String title = content.substring(0, separator).strip();
+                if (!title.isBlank()) {
+                    return title;
+                }
+            }
+        }
+        return "Chunk " + chunkNo + " - " + filename;
     }
 
     private static List<String> keywords(ParseResult parseResult, String content) {

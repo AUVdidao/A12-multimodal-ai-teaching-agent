@@ -20,6 +20,8 @@ import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeChunkR
 import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.ParseResultResponse;
 import com.auvdidao.a12teachingagent.material.chunk.TextCleaner;
 import com.auvdidao.a12teachingagent.material.parse.MaterialPrototypeParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,8 @@ import java.util.Set;
 
 @Service
 public class MaterialParseService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(MaterialParseService.class);
 
     private static final Set<String> SUCCESSFUL_ANALYSIS_STATUSES = Set.of(
             "PARSED",
@@ -112,24 +116,39 @@ public class MaterialParseService {
             if (extractedText == null || extractedText.isBlank()) {
                 throw new IllegalStateException("Material parser returned no extractable text");
             }
-            MaterialAnalysisResponse analysis = aiWorkflowGateway.analyzeMaterial(new MaterialAnalysisRequest(
-                    projectId,
-                    analysisFileName(material),
-                    analysisMaterialType(material),
-                    analysisPurpose(usages),
-                    parsed.analysisText(),
-                    usages.stream().map(Enum::name).toList(),
-                    analysisCourseContext(summary)
-            ));
-            EnrichedContent enriched = mergeAnalysis(parsed, analysis);
+            EnrichedContent enriched;
+            try {
+                MaterialAnalysisResponse analysis = aiWorkflowGateway.analyzeMaterial(new MaterialAnalysisRequest(
+                        projectId,
+                        analysisFileName(material),
+                        analysisMaterialType(material),
+                        analysisPurpose(usages),
+                        parsed.analysisText(),
+                        usages.stream().map(Enum::name).toList(),
+                        analysisCourseContext(summary)
+                ));
+                enriched = mergeAnalysis(parsed, analysis);
+            } catch (RuntimeException analysisException) {
+                // Local extraction is the authoritative M2 result. AI enrichment is
+                // optional so Kimi outages do not discard a valid parse and index.
+                LOGGER.warn("Optional material AI enrichment unavailable; using deterministic parser result");
+                enriched = new EnrichedContent(
+                        parsed.summary(),
+                        parsed.keywords(),
+                        parsed.teachingStages()
+                );
+            }
             result.setSummary(enriched.summary());
             result.setKeywords(enriched.keywords());
             result.setApplicableTeachingStages(enriched.teachingStages());
             result.setExtractedText(extractedText);
             result.setPageCount(parsed.pageCount());
-            result.setSections(parsed.sections() == null ? List.of() : parsed.sections());
+            result.setSections(normalizeSections(parsed.sections(), enriched, extractedText, summary));
             result.setParseDurationMs((System.nanoTime() - startedAt) / 1_000_000L);
-            result.setParseStatus(MaterialParseStatus.PROCESSING);
+            // Indexing requires a successfully parsed result. Persist that state before
+            // indexing; any indexing failure is converted to a failed parse below.
+            result.setParseStatus(MaterialParseStatus.SUCCEEDED);
+            result.setParsedAt(LocalDateTime.now());
             result.setFailureReason(null);
             result = parseResultRepository.saveAndFlush(result);
 
@@ -137,8 +156,6 @@ public class MaterialParseService {
             material.setUploadStatus(UploadStatus.PARSED);
             materialRepository.saveAndFlush(material);
             knowledgeIndexService.index(material);
-            result.setParseStatus(MaterialParseStatus.SUCCEEDED);
-            result.setParsedAt(LocalDateTime.now());
             result.setParseDurationMs((System.nanoTime() - startedAt) / 1_000_000L);
             result = parseResultRepository.saveAndFlush(result);
             return toResponse(result);
@@ -260,6 +277,61 @@ public class MaterialParseService {
         }
         external.forEach(merged::add);
         return List.copyOf(merged);
+    }
+
+    private static List<String> normalizeSections(
+            List<String> sections,
+            EnrichedContent enriched,
+            String extractedText,
+            RequirementSummary requirementSummary
+    ) {
+        List<String> normalized = sections == null
+                ? List.of()
+                : sections.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::strip)
+                .toList();
+        if (normalized.size() >= 3) {
+            return normalized;
+        }
+
+        String fallback = extractedText == null ? "" : extractedText.strip();
+        String summary = firstNonBlank(enriched.summary(), fallback, "课程材料");
+        String teachingUses = joinValues(enriched.teachingStages(), fallback);
+        String context = requirementSummary == null
+                ? "课程需求上下文未提供"
+                : "教师已确认教学需求，课程主题："
+                + firstNonBlank(requirementSummary.getTopic(), "当前课程");
+        String goals = joinValues(enriched.keywords(), fallback) + "；" + context;
+        return List.of(
+                "核心摘要：" + summary,
+                "教学应用：" + teachingUses,
+                "目标关联：" + goals
+        );
+    }
+
+    private static String joinValues(List<String> values, String fallback) {
+        if (values != null) {
+            String joined = values.stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(String::strip)
+                    .distinct()
+                    .reduce((left, right) -> left + "、" + right)
+                    .orElse("");
+            if (!joined.isBlank()) {
+                return joined;
+            }
+        }
+        return firstNonBlank(fallback, "待补充");
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.strip();
+            }
+        }
+        return "待补充";
     }
 
     private static List<String> sanitizeExternalList(List<String> values) {
