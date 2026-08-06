@@ -58,12 +58,7 @@ public class KnowledgeIndexService {
             throw new ConflictException("Material purpose is required before indexing");
         }
 
-        List<String> contents = parseResult.getSections() == null || parseResult.getSections().isEmpty()
-                ? chunkSplitter.split(extractedText)
-                : parseResult.getSections().stream()
-                .filter(content -> content != null && !content.isBlank())
-                .map(String::strip)
-                .toList();
+        List<String> contents = chunkContents(parseResult.getSections(), extractedText);
         if (contents.isEmpty()) {
             throw new ConflictException("Parsed material does not contain useful text");
         }
@@ -85,6 +80,17 @@ public class KnowledgeIndexService {
         parseResult.setChunkCount(saved.size());
         parseResultRepository.saveAndFlush(parseResult);
         return saved.stream().map(KnowledgeIndexService::toResponse).toList();
+    }
+
+    private List<String> chunkContents(List<String> sections, String extractedText) {
+        if (sections == null || sections.isEmpty()) {
+            return chunkSplitter.split(extractedText);
+        }
+        return sections.stream()
+                .filter(section -> section != null && !section.isBlank())
+                .map(String::strip)
+                .flatMap(section -> chunkSplitter.split(section).stream())
+                .toList();
     }
 
     public static KnowledgeChunkResponse toResponse(KnowledgeChunk chunk) {
