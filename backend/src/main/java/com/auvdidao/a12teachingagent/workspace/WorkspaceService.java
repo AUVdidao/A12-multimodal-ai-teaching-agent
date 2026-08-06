@@ -839,10 +839,14 @@ public class WorkspaceService {
     private MaterialItem materialItem(UploadedMaterial material) {
         List<MaterialPurpose> purposes = purposeRepository.findByMaterialIdOrderByIdAsc(material.getId());
         ParseResult parseResult = parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(material.getId()).orElse(null);
+        long sectionCount = parseResult == null ? 0L
+                : parseResultRepository.countSectionsByParseResultId(parseResult.getId());
+        List<String> sectionsPreview = parseResult == null ? List.of()
+                : parseResultRepository.findSectionsPreviewByParseResultId(parseResult.getId());
         ParsePreview preview = parseResult == null ? null : new ParsePreview(
                 parseResult.getId(), parseResult.getParseStatus(), parseResult.getSummary(), parseResult.getKeywords(),
                 parseResult.getApplicableTeachingStages(), parseResult.getFailureReason(), parseResult.getParsedAt(), true,
-                previewText(parseResult.getExtractedText()), parseResult.getPageCount(), parseResult.getSections(),
+                previewText(parseResult.getExtractedText()), parseResult.getPageCount(), Math.toIntExact(sectionCount), sectionsPreview,
                 parseResult.getChunkCount(), parseResult.getParseDurationMs()
         );
         return new MaterialItem(

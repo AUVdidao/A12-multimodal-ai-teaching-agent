@@ -277,7 +277,8 @@ public final class WorkspaceDtos {
             boolean prototype,
             String extractedTextPreview,
             Integer pageCount,
-            List<String> sections,
+            Integer sectionCount,
+            List<String> sectionsPreview,
             Integer chunkCount,
             Long parseDurationMs
     ) {

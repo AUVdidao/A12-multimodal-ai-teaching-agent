@@ -249,6 +249,14 @@ class WorkspaceControllerTest {
         RequirementInput requirement = createRequirement(project, true);
         createSummary(project, requirement, true);
         UploadedMaterial material = createParsedMaterial(project, "机器学习基础.pdf");
+        ParseResult parseResult = parseResultRepository
+                .findFirstByMaterialIdOrderByCreatedAtDescIdDesc(material.getId())
+                .orElseThrow();
+        parseResult.setSections(List.of(
+                "Section 01", "Section 02", "Section 03", "Section 04",
+                "Section 05", "Section 06", "Section 07", "Section 08"
+        ));
+        parseResultRepository.saveAndFlush(parseResult);
         createKnowledgeChunk(project, material, "过拟合的定义与解决方法", "过拟合会降低模型在新数据上的泛化能力。", List.of("过拟合", "泛化"));
 
         mockMvc.perform(get("/api/projects/{projectId}/materials/workspace", project.getId()))
@@ -260,7 +268,20 @@ class WorkspaceControllerTest {
                 .andExpect(jsonPath("$.data.statistics.parsed", is(1)))
                 .andExpect(jsonPath("$.data.statistics.indexed", is(1)))
                 .andExpect(jsonPath("$.data.materials[0].parsePreview.summary", containsString("机器学习")))
+                .andExpect(jsonPath("$.data.materials[0].parsePreview.sectionCount", is(8)))
+                .andExpect(jsonPath("$.data.materials[0].parsePreview.sectionsPreview", hasSize(6)))
+                .andExpect(jsonPath("$.data.materials[0].parsePreview.sectionsPreview[0]", is("Section 01")))
+                .andExpect(jsonPath("$.data.materials[0].parsePreview.sectionsPreview[5]", is("Section 06")))
+                .andExpect(jsonPath("$.data.materials[0].parsePreview.sections").doesNotExist())
                 .andExpect(jsonPath("$.data.materials[0].usageTypes", contains("TEXTBOOK_BASIS")));
+
+        mockMvc.perform(get("/api/projects/{projectId}/materials/{materialId}/parse-result",
+                        project.getId(), material.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sections", contains(
+                        "Section 01", "Section 02", "Section 03", "Section 04",
+                        "Section 05", "Section 06", "Section 07", "Section 08"
+                )));
 
         mockMvc.perform(post("/api/projects/{projectId}/knowledge/workspace-search", project.getId())
                         .contentType(MediaType.APPLICATION_JSON)

@@ -240,7 +240,8 @@ export interface ParsePreview {
   prototype: boolean;
   extractedTextPreview?: string;
   pageCount?: number;
-  sections?: string[];
+  sectionCount?: number;
+  sectionsPreview?: string[];
   chunkCount?: number;
   parseDurationMs?: number;
 }

@@ -117,14 +117,15 @@
               <p v-else class="muted">{{ selectedMaterial.parsePreview?.failureReason || '该资料尚无解析摘要。' }}</p>
               <div v-if="selectedMaterial.parsePreview" class="parse-metadata">
                 <span v-if="selectedMaterial.parsePreview.pageCount">页数 {{ selectedMaterial.parsePreview.pageCount }}</span>
+                <span v-if="selectedMaterial.parsePreview.sectionCount != null">原文分段 {{ selectedMaterial.parsePreview.sectionCount }}</span>
                 <span v-if="selectedMaterial.parsePreview.chunkCount != null">分段 {{ selectedMaterial.parsePreview.chunkCount }}</span>
                 <span v-if="selectedMaterial.parsePreview.parseDurationMs != null">耗时 {{ selectedMaterial.parsePreview.parseDurationMs }} ms</span>
               </div>
               <pre v-if="selectedMaterial.parsePreview?.extractedTextPreview" class="parse-text-preview">{{ selectedMaterial.parsePreview.extractedTextPreview }}</pre>
-              <template v-if="selectedMaterial.parsePreview?.sections?.length">
+              <template v-if="selectedMaterial.parsePreview?.sectionsPreview?.length">
                 <h3>文本分段预览</h3>
                 <ol class="parse-sections">
-                  <li v-for="(section, index) in selectedMaterial.parsePreview.sections.slice(0, 6)" :key="`${index}-${section}`">{{ section }}</li>
+                  <li v-for="(section, index) in selectedMaterial.parsePreview.sectionsPreview" :key="`${index}-${section}`">{{ section }}</li>
                 </ol>
               </template>
               <h3>知识点提炼</h3>

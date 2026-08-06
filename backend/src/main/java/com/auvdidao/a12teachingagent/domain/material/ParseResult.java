@@ -44,7 +44,7 @@ public class ParseResult extends BaseAuditableEntity {
     @Column(name = "stage_value")
     private List<String> applicableTeachingStages = new ArrayList<>();
 
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "parse_result_sections", joinColumns = @JoinColumn(name = "parse_result_id"))
     @Column(name = "section_value")
     @OrderColumn(name = "section_order")
