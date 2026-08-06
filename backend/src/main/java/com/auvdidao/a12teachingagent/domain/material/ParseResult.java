@@ -11,6 +11,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
@@ -46,6 +47,7 @@ public class ParseResult extends BaseAuditableEntity {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "parse_result_sections", joinColumns = @JoinColumn(name = "parse_result_id"))
     @Column(name = "section_value")
+    @OrderColumn(name = "section_order")
     private List<String> sections = new ArrayList<>();
 
     private Integer chunkCount;
