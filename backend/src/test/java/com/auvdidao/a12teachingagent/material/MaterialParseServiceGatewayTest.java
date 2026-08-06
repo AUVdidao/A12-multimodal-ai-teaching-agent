@@ -166,7 +166,11 @@ class MaterialParseServiceGatewayTest {
         when(prototypeParser.parse(fixture.material(), fixture.usages(), fixture.summary()))
                 .thenReturn(localParsedContent());
         when(aiWorkflowGateway.analyzeMaterial(any()))
-                .thenThrow(new AiWorkflowUnavailableException("sensitive Kimi response body and token"))
+                .thenThrow(new AiWorkflowUnavailableException(
+                        "KIMI_TIMEOUT: provider request timed out",
+                        "KIMI_TIMEOUT",
+                        504
+                ))
                 .thenReturn(successfulAnalysis());
 
         ParseResultResponse firstAttempt = service.parse(PROJECT_ID, MATERIAL_ID);
@@ -186,6 +190,93 @@ class MaterialParseServiceGatewayTest {
         assertThat(fixture.material().getUploadStatus()).isEqualTo(UploadStatus.PARSED);
         verify(aiWorkflowGateway, times(1)).analyzeMaterial(any());
         verify(knowledgeIndexService, times(1)).index(fixture.material());
+    }
+
+    @Test
+    void connectionFailureFallsBackToDeterministicParserResult() {
+        ParseResultResponse response = parseWithAiFailure(
+                new AiWorkflowUnavailableException("KIMI_UNAVAILABLE", "KIMI_UNAVAILABLE", 502));
+
+        assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
+    }
+
+    @Test
+    void timeoutFallsBackToDeterministicParserResult() {
+        ParseResultResponse response = parseWithAiFailure(
+                new AiWorkflowUnavailableException("KIMI_TIMEOUT", "KIMI_TIMEOUT", 504));
+
+        assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
+    }
+
+    @Test
+    void temporaryServerFailureFallsBackToDeterministicParserResult() {
+        ParseResultResponse response = parseWithAiFailure(
+                new AiWorkflowUnavailableException(
+                        "KIMI_REQUEST_FAILED",
+                        "KIMI_REQUEST_FAILED",
+                        503
+                ));
+
+        assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
+    }
+
+    @Test
+    void rateLimitFallsBackToDeterministicParserResult() {
+        ParseResultResponse response = parseWithAiFailure(
+                new AiWorkflowUnavailableException(
+                        "KIMI_REQUEST_FAILED",
+                        "KIMI_REQUEST_FAILED",
+                        429
+                ));
+
+        assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
+    }
+
+    @Test
+    void programmingFailureIsNotTreatedAsOptionalAiFailure() {
+        ParseResultResponse response = parseWithAiFailure(new NullPointerException("programming defect"));
+
+        assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.FAILED);
+        verify(knowledgeIndexService, never()).index(any());
+    }
+
+    @Test
+    void dtoMappingFailureIsNotTreatedAsOptionalAiFailure() {
+        ParseResultResponse response = parseWithAiFailure(
+                new AiWorkflowUnavailableException(
+                        "WF-03: Kimi output does not match the gateway DTO",
+                        null,
+                        0
+                ));
+
+        assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.FAILED);
+        verify(knowledgeIndexService, never()).index(any());
+    }
+
+    @Test
+    void optionalAiFallbackDoesNotExposeProviderMessage() {
+        String secret = "sensitive Kimi response body and token";
+        ParseResultResponse response = parseWithAiFailure(
+                new AiWorkflowUnavailableException(
+                        "KIMI_TIMEOUT: " + secret,
+                        "KIMI_TIMEOUT",
+                        504
+                ));
+
+        assertThat(response.toString()).doesNotContain(secret);
+    }
+
+    private ParseResultResponse parseWithAiFailure(RuntimeException exception) {
+        Fixture fixture = fixture();
+        stubAccessAndUsage(fixture);
+        when(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(MATERIAL_ID))
+                .thenReturn(Optional.empty());
+        assignParseResultIdOnFlush();
+        when(prototypeParser.parse(fixture.material(), fixture.usages(), fixture.summary()))
+                .thenReturn(localParsedContent());
+        when(aiWorkflowGateway.analyzeMaterial(any())).thenThrow(exception);
+
+        return service.parse(PROJECT_ID, MATERIAL_ID);
     }
 
     @Test

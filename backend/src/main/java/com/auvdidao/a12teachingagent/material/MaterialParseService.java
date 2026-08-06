@@ -3,6 +3,7 @@ package com.auvdidao.a12teachingagent.material;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.RequirementSummaryData;
+import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
@@ -35,6 +36,10 @@ import java.util.Set;
 public class MaterialParseService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MaterialParseService.class);
+    private static final Set<String> AI_FALLBACK_CODES = Set.of(
+            "KIMI_UNAVAILABLE",
+            "KIMI_TIMEOUT"
+    );
 
     private static final Set<String> SUCCESSFUL_ANALYSIS_STATUSES = Set.of(
             "PARSED",
@@ -149,10 +154,19 @@ public class MaterialParseService {
                         analysisCourseContext(summary)
                 ));
                 enriched = mergeAnalysis(parsed, analysis);
-            } catch (RuntimeException analysisException) {
+            } catch (AiWorkflowUnavailableException analysisException) {
+                if (!isOptionalAiFailure(analysisException)) {
+                    throw analysisException;
+                }
                 // Local extraction is the authoritative M2 result. AI enrichment is
                 // optional so Kimi outages do not discard a valid parse and index.
-                LOGGER.warn("Optional material AI enrichment unavailable; using deterministic parser result");
+                LOGGER.warn(
+                        "Optional material AI enrichment unavailable; using deterministic parser result "
+                                + "(type={}, code={}, status={})",
+                        analysisException.getClass().getSimpleName(),
+                        providerCode(analysisException),
+                        analysisException.getProviderStatusCode()
+                );
                 enriched = new EnrichedContent(
                         parsed.summary(),
                         parsed.keywords(),
@@ -181,6 +195,19 @@ public class MaterialParseService {
                     startedAt
             ));
         }
+    }
+
+    private static boolean isOptionalAiFailure(AiWorkflowUnavailableException exception) {
+        String code = exception.getProviderCode();
+        int statusCode = exception.getProviderStatusCode();
+        return AI_FALLBACK_CODES.contains(code)
+                || ("KIMI_REQUEST_FAILED".equals(code)
+                && (statusCode == 429 || (statusCode >= 500 && statusCode <= 599)));
+    }
+
+    private static String providerCode(AiWorkflowUnavailableException exception) {
+        String code = exception.getProviderCode();
+        return code == null || code.isBlank() ? "UNKNOWN" : code;
     }
 
     public ParseResultResponse retry(Long projectId, Long materialId) {

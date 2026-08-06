@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.material;
 
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
+import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
 import com.auvdidao.a12teachingagent.domain.common.PurposeType;
@@ -123,7 +124,11 @@ class MaterialParseTransactionBoundaryTest {
                         List.of("text")
                 ));
         when(aiWorkflowGateway.analyzeMaterial(any()))
-                .thenThrow(new RuntimeException("optional analysis failure"));
+                .thenThrow(new AiWorkflowUnavailableException(
+                        "KIMI_TIMEOUT: provider request timed out",
+                        "KIMI_TIMEOUT",
+                        504
+                ));
         when(transactionService.complete(any())).thenReturn(response);
 
         assertThat(service.parse(PROJECT_ID, MATERIAL_ID)).isSameAs(response);
