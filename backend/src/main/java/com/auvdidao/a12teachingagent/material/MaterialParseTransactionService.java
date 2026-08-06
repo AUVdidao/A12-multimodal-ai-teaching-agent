@@ -118,14 +118,16 @@ public class MaterialParseTransactionService {
         result.setParseStatus(MaterialParseStatus.SUCCEEDED);
         result.setParsedAt(LocalDateTime.now());
         result.setFailureReason(null);
+        // Keep this provisional state inside the completion transaction. If indexing
+        // fails, the transaction rolls back this flush together with the chunks.
         result = parseResultRepository.saveAndFlush(result);
 
         UploadedMaterial material = completion.material();
         material.setParseStatus(MaterialParseStatus.SUCCEEDED);
         material.setUploadStatus(UploadStatus.PARSED);
-        materialRepository.saveAndFlush(material);
         knowledgeIndexService.index(material);
 
+        materialRepository.saveAndFlush(material);
         result.setParseDurationMs(elapsedMillis(completion.startedAtNanos()));
         return MaterialParseService.toResponse(parseResultRepository.saveAndFlush(result));
     }
