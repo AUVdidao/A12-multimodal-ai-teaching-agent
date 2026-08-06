@@ -16,6 +16,7 @@ import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummary;
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummaryStatus;
 import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementSummaryRepository;
 import com.auvdidao.a12teachingagent.material.parse.MaterialPrototypeParser;
+import com.auvdidao.a12teachingagent.material.parse.MaterialParsingException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -69,7 +70,7 @@ class MaterialParseRetryTest {
     void failedPrototypeParseCanRetryWithoutExposingStackTrace() throws Exception {
         Fixture fixture = createFixture();
         when(prototypeParser.parse(any(), anyList(), any()))
-                .thenThrow(new IllegalStateException("sensitive parser detail"))
+                .thenThrow(new MaterialParsingException("sensitive parser detail"))
                 .thenReturn(new MaterialPrototypeParser.ParsedContent(
                         "重试后的确定性原型摘要",
                         List.of("光合作用", "教材依据", "概念讲解"),

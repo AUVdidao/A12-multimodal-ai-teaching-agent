@@ -19,6 +19,7 @@ import com.auvdidao.a12teachingagent.knowledge.KnowledgeIndexService;
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeChunkResponse;
 import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.ParseResultResponse;
 import com.auvdidao.a12teachingagent.material.chunk.TextCleaner;
+import com.auvdidao.a12teachingagent.material.parse.MaterialParsingException;
 import com.auvdidao.a12teachingagent.material.parse.MaterialPrototypeParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
@@ -140,7 +141,7 @@ public class MaterialParseService {
             MaterialPrototypeParser.ParsedContent parsed = prototypeParser.parse(material, usages, summary);
             String extractedText = textCleaner.clean(parsed.extractedText());
             if (extractedText == null || extractedText.isBlank()) {
-                throw new IllegalStateException("Material parser returned no extractable text");
+                throw new MaterialParsingException("Material parser returned no extractable text");
             }
             EnrichedContent enriched;
             try {
@@ -186,7 +187,7 @@ public class MaterialParseService {
                     normalizeSections(parsed.sections()),
                     startedAt
             ));
-        } catch (RuntimeException exception) {
+        } catch (MaterialParsingException exception) {
             return transactionService.fail(new MaterialParseTransactionService.ParseFailure(
                     preparation.projectId(),
                     preparation.materialId(),
@@ -194,6 +195,19 @@ public class MaterialParseService {
                     result,
                     startedAt
             ));
+        } catch (RuntimeException exception) {
+            try {
+                transactionService.fail(new MaterialParseTransactionService.ParseFailure(
+                        preparation.projectId(),
+                        preparation.materialId(),
+                        material,
+                        result,
+                        startedAt
+                ));
+            } catch (RuntimeException failureException) {
+                exception.addSuppressed(failureException);
+            }
+            throw exception;
         }
     }
 

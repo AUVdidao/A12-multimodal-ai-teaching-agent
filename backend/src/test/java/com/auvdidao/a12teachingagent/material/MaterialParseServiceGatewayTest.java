@@ -18,8 +18,9 @@ import com.auvdidao.a12teachingagent.domain.material.repository.UploadedMaterial
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummary;
 import com.auvdidao.a12teachingagent.knowledge.KnowledgeIndexService;
 import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.ParseResultResponse;
-import com.auvdidao.a12teachingagent.material.parse.MaterialPrototypeParser;
 import com.auvdidao.a12teachingagent.material.chunk.TextCleaner;
+import com.auvdidao.a12teachingagent.material.parse.MaterialParsingException;
+import com.auvdidao.a12teachingagent.material.parse.MaterialPrototypeParser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +34,9 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -233,24 +236,72 @@ class MaterialParseServiceGatewayTest {
     }
 
     @Test
-    void programmingFailureIsNotTreatedAsOptionalAiFailure() {
-        ParseResultResponse response = parseWithAiFailure(new NullPointerException("programming defect"));
+    void programmingFailureIsMarkedFailedAndPropagated() {
+        AtomicReference<Fixture> fixtureReference = new AtomicReference<>();
 
-        assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.FAILED);
+        assertThatThrownBy(() -> parseWithAiFailure(
+                new NullPointerException("programming defect"),
+                fixtureReference
+        ))
+                .isExactlyInstanceOf(NullPointerException.class)
+                .hasMessage("programming defect");
+        assertThat(fixtureReference.get().material().getParseStatus())
+                .isEqualTo(MaterialParseStatus.FAILED);
         verify(knowledgeIndexService, never()).index(any());
     }
 
     @Test
-    void dtoMappingFailureIsNotTreatedAsOptionalAiFailure() {
-        ParseResultResponse response = parseWithAiFailure(
+    void dtoMappingFailureIsMarkedFailedAndPropagated() {
+        assertThatThrownBy(() -> parseWithAiFailure(
                 new AiWorkflowUnavailableException(
                         "WF-03: Kimi output does not match the gateway DTO",
-                        null,
-                        0
-                ));
-
-        assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.FAILED);
+                        "KIMI_RESPONSE_INVALID",
+                        502
+                )
+        ))
+                .isExactlyInstanceOf(AiWorkflowUnavailableException.class)
+                .hasMessage("WF-03: Kimi output does not match the gateway DTO");
         verify(knowledgeIndexService, never()).index(any());
+    }
+
+    @Test
+    void completionFailureIsMarkedFailedAndPropagatesOriginalException() {
+        Fixture fixture = fixture();
+        stubAccessAndUsage(fixture);
+        when(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(MATERIAL_ID))
+                .thenReturn(Optional.empty());
+        assignParseResultIdOnFlush();
+        when(prototypeParser.parse(fixture.material(), fixture.usages(), fixture.summary()))
+                .thenReturn(localParsedContent());
+        when(aiWorkflowGateway.analyzeMaterial(any())).thenReturn(successfulAnalysis());
+        doThrow(new IllegalStateException("index failure"))
+                .when(knowledgeIndexService).index(any());
+
+        assertThatThrownBy(() -> service.parse(PROJECT_ID, MATERIAL_ID))
+                .isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessage("index failure");
+        assertThat(fixture.material().getParseStatus()).isEqualTo(MaterialParseStatus.FAILED);
+    }
+
+    @Test
+    void failureTransactionFailureDoesNotReplaceUnexpectedException() {
+        Fixture fixture = fixture();
+        stubAccessAndUsage(fixture);
+        when(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(MATERIAL_ID))
+                .thenReturn(Optional.empty());
+        assignParseResultIdOnFlush();
+        doThrow(new IllegalStateException("failure tx broken"))
+                .when(parseResultRepository).save(any(ParseResult.class));
+        when(prototypeParser.parse(fixture.material(), fixture.usages(), fixture.summary()))
+                .thenReturn(localParsedContent());
+        when(aiWorkflowGateway.analyzeMaterial(any()))
+                .thenThrow(new NullPointerException("original"));
+
+        assertThatThrownBy(() -> service.parse(PROJECT_ID, MATERIAL_ID))
+                .isExactlyInstanceOf(NullPointerException.class)
+                .hasMessage("original")
+                .satisfies(exception -> assertThat(exception.getSuppressed())
+                        .anyMatch(suppressed -> "failure tx broken".equals(suppressed.getMessage())));
     }
 
     @Test
@@ -267,7 +318,15 @@ class MaterialParseServiceGatewayTest {
     }
 
     private ParseResultResponse parseWithAiFailure(RuntimeException exception) {
+        return parseWithAiFailure(exception, new AtomicReference<>());
+    }
+
+    private ParseResultResponse parseWithAiFailure(
+            RuntimeException exception,
+            AtomicReference<Fixture> fixtureReference
+    ) {
         Fixture fixture = fixture();
+        fixtureReference.set(fixture);
         stubAccessAndUsage(fixture);
         when(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(MATERIAL_ID))
                 .thenReturn(Optional.empty());

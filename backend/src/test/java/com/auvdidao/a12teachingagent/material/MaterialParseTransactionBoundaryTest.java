@@ -16,6 +16,7 @@ import com.auvdidao.a12teachingagent.knowledge.KnowledgeIndexService;
 import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.ParseResultResponse;
 import com.auvdidao.a12teachingagent.material.parse.MaterialPrototypeParser;
 import com.auvdidao.a12teachingagent.material.chunk.TextCleaner;
+import com.auvdidao.a12teachingagent.material.parse.MaterialParsingException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -188,7 +189,7 @@ class MaterialParseTransactionBoundaryTest {
 
         when(transactionService.prepare(PROJECT_ID, MATERIAL_ID, false, false)).thenReturn(preparation);
         when(prototypeParser.parse(material, preparation.usages(), summary))
-                .thenThrow(new RuntimeException("parser failure"));
+                .thenThrow(new MaterialParsingException("parser failure"));
         when(transactionService.fail(any())).thenReturn(failedResponse);
 
         assertThat(service.parse(PROJECT_ID, MATERIAL_ID)).isSameAs(failedResponse);
