@@ -63,4 +63,95 @@ class H2EnumCompatibilityMigrationTest {
         assertEquals("OBSOLETE", jdbcTemplate.queryForObject(
                 "SELECT status FROM clarification_questions WHERE id = 1", String.class));
     }
+
+    @Test
+    void backfillsNullSectionOrdersPerParseResultAndIsIdempotent() {
+        createParseResultSectionsTable();
+        insertSection(10L, "第一章", null);
+        insertSection(10L, "第二章", null);
+        insertSection(10L, "第三章", null);
+        insertSection(20L, "甲", null);
+        insertSection(20L, "乙", null);
+
+        migration.migrateParseResultSectionOrderIfNeeded();
+        List<Map<String, Object>> firstRun = sectionRows();
+
+        assertEquals(List.of(
+                        "10:第一章:0", "10:第二章:1", "10:第三章:2",
+                        "20:甲:0", "20:乙:1"),
+                formatSectionRows(firstRun));
+
+        migration.migrateParseResultSectionOrderIfNeeded();
+        assertEquals(firstRun, sectionRows());
+    }
+
+    @Test
+    void preservesExistingOrdersAndFillsTheSmallestAvailableOrder() {
+        createParseResultSectionsTable();
+        insertSection(30L, "已有零", 0);
+        insertSection(30L, "待回填", null);
+        insertSection(30L, "已有二", 2);
+
+        migration.migrateParseResultSectionOrderIfNeeded();
+
+        assertEquals(List.of(
+                        "30:已有零:0", "30:待回填:1", "30:已有二:2"),
+                formatSectionRows(sectionRows()));
+    }
+
+    @Test
+    void skipsWhenSectionOrderColumnDoesNotExist() {
+        jdbcTemplate.execute("""
+                CREATE TABLE parse_result_sections (
+                    parse_result_id BIGINT NOT NULL,
+                    section_value VARCHAR(255)
+                )
+                """);
+        insertSectionWithoutOrder(40L, "第一章");
+
+        assertDoesNotThrow(() -> migration.migrateParseResultSectionOrderIfNeeded());
+        assertEquals("第一章", jdbcTemplate.queryForObject(
+                "SELECT section_value FROM parse_result_sections WHERE parse_result_id = 40",
+                String.class));
+    }
+
+    private void createParseResultSectionsTable() {
+        jdbcTemplate.execute("""
+                CREATE TABLE parse_result_sections (
+                    parse_result_id BIGINT NOT NULL,
+                    section_value VARCHAR(255),
+                    section_order INT
+                )
+                """);
+    }
+
+    private void insertSection(Long parseResultId, String sectionValue, Integer sectionOrder) {
+        jdbcTemplate.update("""
+                INSERT INTO parse_result_sections (parse_result_id, section_value, section_order)
+                VALUES (?, ?, ?)
+                """, parseResultId, sectionValue, sectionOrder);
+    }
+
+    private void insertSectionWithoutOrder(Long parseResultId, String sectionValue) {
+        jdbcTemplate.update("""
+                INSERT INTO parse_result_sections (parse_result_id, section_value)
+                VALUES (?, ?)
+                """, parseResultId, sectionValue);
+    }
+
+    private List<Map<String, Object>> sectionRows() {
+        return jdbcTemplate.queryForList("""
+                SELECT parse_result_id, section_value, section_order
+                FROM parse_result_sections
+                ORDER BY parse_result_id, section_order
+                """);
+    }
+
+    private List<String> formatSectionRows(List<Map<String, Object>> rows) {
+        return rows.stream()
+                .map(row -> row.get("PARSE_RESULT_ID") + ":"
+                        + row.get("SECTION_VALUE") + ":"
+                        + row.get("SECTION_ORDER"))
+                .toList();
+    }
 }
