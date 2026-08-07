@@ -216,7 +216,7 @@ class MaterialParseTransactionBoundaryTest {
         processingResult.setParseStatus(MaterialParseStatus.PROCESSING);
 
         when(materialService.requireConfirmedSummary(PROJECT_ID)).thenReturn(new RequirementSummary());
-        when(materialService.requireMaterial(PROJECT_ID, MATERIAL_ID)).thenReturn(material);
+        when(materialService.requireMaterialForParse(PROJECT_ID, MATERIAL_ID)).thenReturn(material);
         when(purposeRepository.findByMaterialIdOrderByIdAsc(MATERIAL_ID)).thenReturn(List.of(purpose));
         when(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(MATERIAL_ID))
                 .thenReturn(Optional.of(processingResult));

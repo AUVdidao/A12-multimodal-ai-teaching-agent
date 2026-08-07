@@ -397,7 +397,7 @@ class MaterialParseServiceGatewayTest {
 
     private void stubAccessAndUsage(Fixture fixture) {
         when(materialService.requireConfirmedSummary(PROJECT_ID)).thenReturn(fixture.summary());
-        when(materialService.requireMaterial(PROJECT_ID, MATERIAL_ID)).thenReturn(fixture.material());
+        when(materialService.requireMaterialForParse(PROJECT_ID, MATERIAL_ID)).thenReturn(fixture.material());
         when(purposeRepository.findByMaterialIdOrderByIdAsc(MATERIAL_ID)).thenReturn(fixture.purposes());
     }
 

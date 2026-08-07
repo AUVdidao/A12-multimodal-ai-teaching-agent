@@ -210,6 +210,14 @@ public class MaterialService {
                 .orElseThrow(() -> new ResourceNotFoundException("Material not found in project: " + materialId));
     }
 
+    UploadedMaterial requireMaterialForParse(Long projectId, Long materialId) {
+        if (materialId == null || materialId <= 0) {
+            throw new BadRequestException("materialId must be greater than 0");
+        }
+        return materialRepository.findByIdAndProjectIdForUpdate(materialId, projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Material not found in project: " + materialId));
+    }
+
     MaterialResponse toResponse(UploadedMaterial material) {
         List<MaterialPurpose> purposes = purposeRepository.findByMaterialIdOrderByIdAsc(material.getId());
         return new MaterialResponse(

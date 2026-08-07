@@ -50,7 +50,7 @@ public class MaterialParseTransactionService {
     @Transactional
     public ParsePreparation prepare(Long projectId, Long materialId, boolean forceReparse, boolean retryOnly) {
         RequirementSummary summary = materialService.requireConfirmedSummary(projectId);
-        UploadedMaterial material = materialService.requireMaterial(projectId, materialId);
+        UploadedMaterial material = materialService.requireMaterialForParse(projectId, materialId);
         List<PurposeType> usages = purposeRepository.findByMaterialIdOrderByIdAsc(materialId).stream()
                 .map(purpose -> purpose.getPurposeType())
                 .distinct()
