@@ -50,21 +50,37 @@ public class KimiChatClient {
             int maxCompletionTokens,
             int timeoutSeconds
     ) {
+        return complete(new KimiChatRequest(
+                messages,
+                model,
+                maxCompletionTokens,
+                timeoutSeconds,
+                null
+        )).content();
+    }
+
+    public KimiChatResponse complete(KimiChatRequest chatRequest) {
+        if (chatRequest == null) {
+            throw new KimiClientException("KIMI_INVALID_CONFIGURATION", "Kimi request is required", 503);
+        }
         String apiKey = resolveApiKey();
-        requireConfiguration(model, apiKey);
+        requireConfiguration(chatRequest.model(), apiKey);
         int attempts = Math.max(1, properties.getRequestAttempts());
         KimiClientException lastFailure = null;
 
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
                 Map<String, Object> body = new LinkedHashMap<>();
-                body.put("model", model.strip());
-                body.put("max_tokens", Math.max(1, maxCompletionTokens));
-                body.put("messages", messages);
+                body.put("model", chatRequest.model().strip());
+                body.put("max_completion_tokens", Math.max(1, chatRequest.maxCompletionTokens()));
+                body.put("messages", chatRequest.messages());
+                if (chatRequest.responseFormat() != null) {
+                    body.put("response_format", chatRequest.responseFormat());
+                }
 
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(normalizedBaseUrl() + "/chat/completions"))
-                        .timeout(Duration.ofSeconds(Math.max(1, timeoutSeconds)))
+                        .timeout(Duration.ofSeconds(Math.max(1, chatRequest.timeoutSeconds())))
                         .header("Authorization", "Bearer " + apiKey.strip())
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
@@ -84,8 +100,8 @@ public class KimiChatClient {
                     throw lastFailure;
                 }
 
-                JsonNode content = objectMapper.readTree(response.body())
-                        .path("choices").path(0).path("message").path("content");
+                JsonNode choice = objectMapper.readTree(response.body()).path("choices").path(0);
+                JsonNode content = choice.path("message").path("content");
                 if (!content.isTextual() || !StringUtils.hasText(content.asText())) {
                     throw new KimiClientException(
                             "KIMI_INVALID_RESPONSE",
@@ -93,7 +109,11 @@ public class KimiChatClient {
                             502
                     );
                 }
-                return content.asText().strip();
+                JsonNode finishReason = choice.path("finish_reason");
+                return new KimiChatResponse(
+                        content.asText().strip(),
+                        finishReason.isTextual() ? finishReason.asText().strip() : null
+                );
             } catch (KimiClientException exception) {
                 lastFailure = exception;
                 if (isRetryableStatus(exception.getStatusCode()) && attempt < attempts) {
