@@ -4,10 +4,14 @@ import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantProperties;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationQuestion;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeRetrievalRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiChatClient;
+import com.auvdidao.a12teachingagent.ai.kimi.KimiChatRequest;
+import com.auvdidao.a12teachingagent.ai.kimi.KimiChatResponse;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiClientException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -20,7 +24,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -154,6 +160,44 @@ class KimiAIWorkflowGatewayTest {
 
         assertThat(response.nextAction()).isEqualTo("需求信息已足够。");
         verify(client, times(2)).complete(anyList(), anyString(), anyInt(), anyInt());
+    }
+
+    @Test
+    void materialAnalysisUsesStrictStructuredOutputAndPreservesPublicContract() {
+        when(client.complete(any(KimiChatRequest.class))).thenReturn(new KimiChatResponse("""
+                {"summary":"Photosynthesis converts light energy.","keywords":["photosynthesis","light"],"teachingUses":["diagram discussion"]}
+                """, "stop"));
+
+        var response = gateway.analyzeMaterial(new MaterialAnalysisRequest(
+                7L,
+                "photosynthesis.txt",
+                "TEXT",
+                "teaching evidence",
+                "Plants use light energy to synthesize organic matter.",
+                List.of("TEACHING_EVIDENCE"),
+                null
+        ));
+
+        assertThat(response.workflow()).isEqualTo("kimi:kimi-k2.6:WF-03");
+        assertThat(response.status()).isEqualTo("PARSED");
+        assertThat(response.summary()).isEqualTo("Photosynthesis converts light energy.");
+        assertThat(response.keywords()).containsExactly("photosynthesis", "light");
+        assertThat(response.teachingUses()).containsExactly("diagram discussion");
+        assertThat(response.suggestedChunks()).isEmpty();
+
+        ArgumentCaptor<KimiChatRequest> requestCaptor = ArgumentCaptor.forClass(KimiChatRequest.class);
+        verify(client).complete(requestCaptor.capture());
+        verify(client, never()).complete(anyList(), anyString(), anyInt(), anyInt());
+
+        KimiChatRequest request = requestCaptor.getValue();
+        assertThat(request.responseFormat().path("type").asText()).isEqualTo("json_schema");
+        assertThat(request.responseFormat().path("json_schema").path("name").asText())
+                .isEqualTo("material_analysis");
+        assertThat(request.responseFormat().path("json_schema").path("strict").asBoolean()).isTrue();
+        var schema = request.responseFormat().path("json_schema").path("schema");
+        assertThat(schema.path("required")).extracting(JsonNode::asText)
+                .containsExactly("summary", "keywords", "teachingUses");
+        assertThat(schema.path("additionalProperties").asBoolean()).isFalse();
     }
 
     @Test

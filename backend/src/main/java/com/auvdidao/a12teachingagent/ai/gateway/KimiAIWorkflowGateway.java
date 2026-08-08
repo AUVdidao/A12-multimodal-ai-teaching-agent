@@ -26,6 +26,9 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRespons
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiChatClient;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiClientException;
+import com.auvdidao.a12teachingagent.ai.kimi.KimiStructuredExecutor;
+import com.auvdidao.a12teachingagent.ai.kimi.MaterialAnalysisModelOutput;
+import com.auvdidao.a12teachingagent.ai.kimi.MaterialAnalysisStructuredContract;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,13 +56,25 @@ public class KimiAIWorkflowGateway {
     private final KimiAssistantProperties properties;
     private final KimiChatClient kimiChatClient;
     private final AiApiCredentialService credentialService;
+    private final KimiStructuredExecutor structuredExecutor;
 
     public KimiAIWorkflowGateway(
             ObjectMapper objectMapper,
             KimiAssistantProperties properties,
             KimiChatClient kimiChatClient
     ) {
-        this(objectMapper, properties, kimiChatClient, null);
+        this(objectMapper, properties, kimiChatClient, null,
+                new KimiStructuredExecutor(objectMapper, kimiChatClient));
+    }
+
+    public KimiAIWorkflowGateway(
+            ObjectMapper objectMapper,
+            KimiAssistantProperties properties,
+            KimiChatClient kimiChatClient,
+            AiApiCredentialService credentialService
+    ) {
+        this(objectMapper, properties, kimiChatClient, credentialService,
+                new KimiStructuredExecutor(objectMapper, kimiChatClient));
     }
 
     @Autowired
@@ -67,12 +82,14 @@ public class KimiAIWorkflowGateway {
             ObjectMapper objectMapper,
             KimiAssistantProperties properties,
             KimiChatClient kimiChatClient,
-            AiApiCredentialService credentialService
+            AiApiCredentialService credentialService,
+            KimiStructuredExecutor structuredExecutor
     ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.kimiChatClient = kimiChatClient;
         this.credentialService = credentialService;
+        this.structuredExecutor = structuredExecutor;
     }
 
     public ClarificationResponse clarifyRequirement(ClarificationRequest request) {
@@ -98,13 +115,49 @@ public class KimiAIWorkflowGateway {
     }
 
     public MaterialAnalysisResponse analyzeMaterial(MaterialAnalysisRequest request) {
-        return execute(
-                WorkflowCode.MATERIAL_ANALYSIS,
-                "material-analysis",
-                request.projectId(),
-                request,
-                MaterialAnalysisResponse.class,
-                this::validateMaterialAnalysis
+        WorkflowCode workflowCode = WorkflowCode.MATERIAL_ANALYSIS;
+        if (!workflowConfigured()) {
+            throw unavailable(workflowCode, "Kimi workflow provider is not configured");
+        }
+
+        String inputJson = serializeInput(workflowCode, request);
+        if (inputJson.length() > Math.max(1000, properties.getWorkflowMaxInputCharacters())) {
+            throw unavailable(workflowCode, "controlled workflow input is too large");
+        }
+
+        String systemPrompt = """
+                You analyze controlled teaching material for classroom use.
+                Use only the supplied content. Do not invent facts, sources, sections, or citations.
+                """;
+        String userPrompt = """
+                Summarize the material, extract concise keywords, and suggest practical classroom teaching uses.
+
+                Controlled material JSON:
+                %s
+                """.formatted(inputJson);
+
+        MaterialAnalysisModelOutput output;
+        try {
+            output = structuredExecutor.execute(
+                    List.of(message("system", systemPrompt), message("user", userPrompt)),
+                    properties.getWorkflowModel(),
+                    properties.getWorkflowMaxCompletionTokens(),
+                    properties.getWorkflowTimeoutSeconds(),
+                    MaterialAnalysisStructuredContract.responseFormat(objectMapper),
+                    MaterialAnalysisModelOutput.class
+            );
+        } catch (KimiClientException exception) {
+            throw unavailable(workflowCode, exception);
+        }
+        validateMaterialAnalysis(output);
+
+        return new MaterialAnalysisResponse(
+                workflowReference(workflowCode),
+                "PARSED",
+                output.summary(),
+                output.keywords(),
+                output.teachingUses(),
+                List.of()
         );
     }
 
@@ -443,14 +496,12 @@ public class KimiAIWorkflowGateway {
         require(StringUtils.hasText(response.confirmationQuestion()), code, "confirmationQuestion is missing");
     }
 
-    private void validateMaterialAnalysis(MaterialAnalysisResponse response) {
+    private void validateMaterialAnalysis(MaterialAnalysisModelOutput response) {
         WorkflowCode code = WorkflowCode.MATERIAL_ANALYSIS;
         require(response != null, code, "material analysis output is missing");
-        require(StringUtils.hasText(response.status()), code, "status is missing");
         require(StringUtils.hasText(response.summary()), code, "summary is missing");
         require(response.keywords() != null, code, "keywords is missing");
         require(response.teachingUses() != null, code, "teachingUses is missing");
-        require(response.suggestedChunks() != null, code, "suggestedChunks is missing");
     }
 
     private void validateKnowledgeRetrieval(KnowledgeRetrievalResponse response) {
