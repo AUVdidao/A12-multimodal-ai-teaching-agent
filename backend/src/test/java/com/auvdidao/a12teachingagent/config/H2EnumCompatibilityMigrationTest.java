@@ -11,6 +11,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class H2EnumCompatibilityMigrationTest {
 
@@ -115,6 +116,68 @@ class H2EnumCompatibilityMigrationTest {
                 String.class));
     }
 
+    @Test
+    void widensLegacySectionValuesAndPreservesLongDataIdempotently() {
+        createParseResultSectionsTable();
+        insertSection(50L, "short section", 0);
+        String longSection = "long-section-content-".repeat(300);
+        insertSection(50L, longSection.substring(0, 200), 1);
+
+        migration.migrateParseResultSectionValueIfNeeded();
+
+        assertTrue(isLongTextColumn(), "section_value should be a long text type after migration");
+        jdbcTemplate.update("""
+                UPDATE parse_result_sections
+                SET section_value = ?
+                WHERE parse_result_id = 50 AND section_order = 1
+                """, longSection);
+        assertEquals(longSection, jdbcTemplate.queryForObject("""
+                SELECT section_value
+                FROM parse_result_sections
+                WHERE parse_result_id = 50 AND section_order = 1
+                """, String.class));
+
+        List<Map<String, Object>> firstRun = sectionRows();
+        migration.migrateParseResultSectionValueIfNeeded();
+
+        assertEquals(firstRun, sectionRows());
+        assertTrue(isLongTextColumn(), "repeated migration must keep the long text type");
+    }
+
+    @Test
+    void skipsWhenSectionTableOrValueColumnDoesNotExist() {
+        assertDoesNotThrow(() -> migration.migrateParseResultSectionValueIfNeeded());
+
+        jdbcTemplate.execute("""
+            CREATE TABLE parse_result_sections (
+                parse_result_id BIGINT NOT NULL
+            )
+            """);
+        assertDoesNotThrow(() -> migration.migrateParseResultSectionValueIfNeeded());
+    }
+
+    @Test
+    void skipsAlreadyLongSectionValueWithoutChangingRows() {
+        jdbcTemplate.execute("""
+                CREATE TABLE parse_result_sections (
+                    parse_result_id BIGINT NOT NULL,
+                    section_value CLOB,
+                    section_order INT
+                )
+                """);
+        String longSection = "already-long-".repeat(400);
+        insertSection(60L, longSection, 0);
+
+        String typeBefore = sectionValueType();
+        migration.migrateParseResultSectionValueIfNeeded();
+
+        assertEquals(typeBefore, sectionValueType());
+        assertEquals(longSection, jdbcTemplate.queryForObject("""
+                SELECT section_value FROM parse_result_sections
+                WHERE parse_result_id = 60 AND section_order = 0
+                """, String.class));
+    }
+
     private void createParseResultSectionsTable() {
         jdbcTemplate.execute("""
                 CREATE TABLE parse_result_sections (
@@ -153,5 +216,20 @@ class H2EnumCompatibilityMigrationTest {
                         + row.get("SECTION_VALUE") + ":"
                         + row.get("SECTION_ORDER"))
                 .toList();
+    }
+
+    private boolean isLongTextColumn() {
+        String type = sectionValueType().toUpperCase();
+        return type.contains("CLOB") || type.contains("LARGE OBJECT") || type.contains("TEXT");
+    }
+
+    private String sectionValueType() {
+        return jdbcTemplate.queryForObject("""
+                SELECT COALESCE(DATA_TYPE, '') || ':' || COALESCE(DECLARED_DATA_TYPE, '')
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = CURRENT_SCHEMA()
+                  AND TABLE_NAME = 'PARSE_RESULT_SECTIONS'
+                  AND COLUMN_NAME = 'SECTION_VALUE'
+                """, String.class);
     }
 }

@@ -20,7 +20,7 @@ public interface ParseResultRepository extends JpaRepository<ParseResult, Long> 
     long countSectionsByParseResultId(@Param("parseResultId") Long parseResultId);
 
     @Query(value = """
-            select section_value
+            select cast(section_value as varchar)
             from parse_result_sections
             where parse_result_id = :parseResultId
             order by section_order asc

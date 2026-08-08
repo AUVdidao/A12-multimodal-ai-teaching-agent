@@ -44,11 +44,46 @@ public class H2EnumCompatibilityMigration implements ApplicationRunner {
             jdbcTemplate.execute("ALTER TABLE material_purposes ALTER COLUMN purpose_type VARCHAR(48)");
             jdbcTemplate.execute("ALTER TABLE knowledge_chunk_usages ALTER COLUMN usage_type VARCHAR(48)");
             migrateClarificationQuestionStatusIfNeeded();
+            migrateParseResultSectionValueIfNeeded();
             migrateParseResultSectionOrderIfNeeded();
             log.info("H2 enum compatibility migration completed");
         } catch (RuntimeException exception) {
             log.error("H2 enum compatibility migration failed; application startup is stopped to protect existing data", exception);
             throw exception;
+        }
+    }
+
+    /**
+     * Widens the legacy collection value column without rebuilding the table.
+     * Hibernate's @Lob mapping is represented as CLOB by H2; older prototype
+     * databases may still have VARCHAR(255), which truncates real sections.
+     */
+    void migrateParseResultSectionValueIfNeeded() {
+        if (!tableExists("PARSE_RESULT_SECTIONS")
+                || !columnExists("PARSE_RESULT_SECTIONS", "SECTION_VALUE")) {
+            return;
+        }
+
+        Map<String, Object> column = jdbcTemplate.queryForList("""
+                SELECT DATA_TYPE, DECLARED_DATA_TYPE
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = CURRENT_SCHEMA()
+                  AND TABLE_NAME = 'PARSE_RESULT_SECTIONS'
+                  AND COLUMN_NAME = 'SECTION_VALUE'
+                """).stream().findFirst().orElse(null);
+        if (column == null) {
+            return;
+        }
+
+        String dataType = String.valueOf(column.get("DATA_TYPE"));
+        String declaredDataType = String.valueOf(column.get("DECLARED_DATA_TYPE"));
+        if (isLongTextType(dataType, declaredDataType)) {
+            return;
+        }
+        if (isCharacterType(dataType, declaredDataType)) {
+            jdbcTemplate.execute("ALTER TABLE \"PARSE_RESULT_SECTIONS\" "
+                    + "ALTER COLUMN \"SECTION_VALUE\" CLOB");
+            log.info("Widened H2 parse result section values to CLOB");
         }
     }
 
@@ -214,6 +249,22 @@ public class H2EnumCompatibilityMigration implements ApplicationRunner {
                   AND COLUMN_NAME = ?
                 """, Integer.class, tableName, columnName);
         return count != null && count > 0;
+    }
+
+    private boolean isLongTextType(String dataType, String declaredDataType) {
+        String type = (dataType + " " + declaredDataType).toUpperCase(java.util.Locale.ROOT);
+        return type.contains("CLOB")
+                || type.contains("CHARACTER LARGE OBJECT")
+                || type.contains("TEXT");
+    }
+
+    private boolean isCharacterType(String dataType, String declaredDataType) {
+        String type = (dataType + " " + declaredDataType).toUpperCase(java.util.Locale.ROOT);
+        return type.contains("CHARACTER VARYING")
+                || type.contains("VARCHAR")
+                || type.equals("CHARACTER")
+                || type.endsWith(" CHARACTER")
+                || type.contains("CHAR(");
     }
 
     private boolean allowsObsolete(ConstraintDefinition constraint) {

@@ -56,6 +56,22 @@ class ParseResultPersistenceOrderTest {
     }
 
     @Test
+    void longSectionsSurvivePersistenceContextClearWithoutTruncation() {
+        String longSection = "光合作用真实解析段落：".repeat(600);
+        String secondSection = "第二段：光能转换与有机物合成。";
+        List<String> sections = List.of(longSection, secondSection);
+
+        ParseResult saved = parseResultRepository.saveAndFlush(parseResult(sections));
+        entityManager.clear();
+
+        ParseResult reloaded = parseResultRepository.findById(saved.getId()).orElseThrow();
+
+        assertThat(longSection).hasSizeGreaterThan(4000);
+        assertThat(reloaded.getSections()).containsExactly(longSection, secondSection);
+        assertThat(reloaded.getSections().get(0)).hasSize(longSection.length());
+    }
+
+    @Test
     void reindexUsesPersistedSectionOrderForContinuousChunkNumbers() {
         ParseResult saved = parseResultRepository.saveAndFlush(parseResult(SECTIONS));
         entityManager.clear();

@@ -46,7 +46,8 @@ public class ParseResult extends BaseAuditableEntity {
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "parse_result_sections", joinColumns = @JoinColumn(name = "parse_result_id"))
-    @Column(name = "section_value")
+    @Lob
+    @Column(name = "section_value", columnDefinition = "TEXT")
     @OrderColumn(name = "section_order")
     private List<String> sections = new ArrayList<>();
 
