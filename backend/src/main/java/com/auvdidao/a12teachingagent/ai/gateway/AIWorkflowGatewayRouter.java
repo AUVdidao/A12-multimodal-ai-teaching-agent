@@ -22,6 +22,7 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequ
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
+import com.auvdidao.a12teachingagent.ai.exception.AiFailureKind;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,9 +160,12 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             return fallbackOrThrow(
                     workflowCode,
                     operation,
-                    new AiWorkflowUnavailableException(
-                            workflowCode.code() + ": Kimi workflow provider is not configured."
-                    ),
+                new AiWorkflowUnavailableException(
+                        workflowCode.code() + ": Kimi workflow provider is not configured.",
+                        "KIMI_NOT_CONFIGURED",
+                        0,
+                        AiFailureKind.NOT_CONFIGURED
+                ),
                     mockCall
             );
         }

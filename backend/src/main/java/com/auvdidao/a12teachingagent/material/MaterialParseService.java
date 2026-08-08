@@ -37,11 +37,6 @@ import java.util.Set;
 public class MaterialParseService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MaterialParseService.class);
-    private static final Set<String> AI_FALLBACK_CODES = Set.of(
-            "KIMI_UNAVAILABLE",
-            "KIMI_TIMEOUT"
-    );
-
     private static final Set<String> SUCCESSFUL_ANALYSIS_STATUSES = Set.of(
             "PARSED",
             "SUCCESS",
@@ -156,16 +151,17 @@ public class MaterialParseService {
                 ));
                 enriched = mergeAnalysis(parsed, analysis);
             } catch (AiWorkflowUnavailableException analysisException) {
-                if (!isOptionalAiFailure(analysisException)) {
+                if (!analysisException.getFailureKind().isTransient()) {
                     throw analysisException;
                 }
                 // Local extraction is the authoritative M2 result. AI enrichment is
                 // optional so Kimi outages do not discard a valid parse and index.
                 LOGGER.warn(
                         "Optional material AI enrichment unavailable; using deterministic parser result "
-                                + "(type={}, code={}, status={})",
+                                + "(type={}, kind={}, code={}, status={})",
                         analysisException.getClass().getSimpleName(),
-                        providerCode(analysisException),
+                        analysisException.getFailureKind(),
+                        analysisException.getProviderCode(),
                         analysisException.getProviderStatusCode()
                 );
                 enriched = new EnrichedContent(
@@ -209,19 +205,6 @@ public class MaterialParseService {
             }
             throw exception;
         }
-    }
-
-    private static boolean isOptionalAiFailure(AiWorkflowUnavailableException exception) {
-        String code = exception.getProviderCode();
-        int statusCode = exception.getProviderStatusCode();
-        return AI_FALLBACK_CODES.contains(code)
-                || ("KIMI_REQUEST_FAILED".equals(code)
-                && (statusCode == 429 || (statusCode >= 500 && statusCode <= 599)));
-    }
-
-    private static String providerCode(AiWorkflowUnavailableException exception) {
-        String code = exception.getProviderCode();
-        return code == null || code.isBlank() ? "UNKNOWN" : code;
     }
 
     public ParseResultResponse retry(Long projectId, Long materialId) {

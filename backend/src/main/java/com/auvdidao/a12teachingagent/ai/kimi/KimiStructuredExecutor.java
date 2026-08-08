@@ -1,5 +1,6 @@
 package com.auvdidao.a12teachingagent.ai.kimi;
 
+import com.auvdidao.a12teachingagent.ai.exception.AiFailureKind;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,7 +44,7 @@ public class KimiStructuredExecutor {
         ));
 
         if ("length".equalsIgnoreCase(response.finishReason())) {
-            throw invalidResponse("Kimi structured output was truncated");
+            throw invalidResponse("Kimi structured output was truncated", AiFailureKind.TRUNCATED_RESPONSE);
         }
 
         JsonNode payload = parse(response.content());
@@ -51,7 +52,7 @@ public class KimiStructuredExecutor {
         try {
             return objectMapper.treeToValue(payload, responseType);
         } catch (JsonProcessingException | IllegalArgumentException exception) {
-            throw invalidResponse("Kimi structured output does not match the target DTO");
+            throw invalidResponse("Kimi structured output does not match the target DTO", AiFailureKind.SCHEMA_MISMATCH);
         }
     }
 
@@ -59,11 +60,11 @@ public class KimiStructuredExecutor {
         try {
             JsonNode payload = objectMapper.readTree(content);
             if (payload == null || payload.isNull()) {
-                throw invalidResponse("Kimi returned empty JSON");
+                throw invalidResponse("Kimi returned empty JSON", AiFailureKind.INVALID_JSON);
             }
             return payload;
         } catch (JsonProcessingException | IllegalArgumentException exception) {
-            throw invalidResponse("Kimi structured output is not valid JSON");
+            throw invalidResponse("Kimi structured output is not valid JSON", AiFailureKind.INVALID_JSON);
         }
     }
 
@@ -72,18 +73,18 @@ public class KimiStructuredExecutor {
                 ? null
                 : responseFormat.path("json_schema").path("schema");
         if (schemaNode == null || schemaNode.isMissingNode() || schemaNode.isNull()) {
-            throw invalidResponse("Kimi structured output schema is missing");
+            throw invalidResponse("Kimi structured output schema is missing", AiFailureKind.SCHEMA_MISMATCH);
         }
 
         JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012)
                 .getSchema(schemaNode);
         Set<ValidationMessage> errors = schema.validate(payload);
         if (!errors.isEmpty()) {
-            throw invalidResponse("Kimi structured output failed local schema validation");
+            throw invalidResponse("Kimi structured output failed local schema validation", AiFailureKind.SCHEMA_MISMATCH);
         }
     }
 
-    private static KimiClientException invalidResponse(String message) {
-        return new KimiClientException(INVALID_RESPONSE, message, 502);
+    private static KimiClientException invalidResponse(String message, AiFailureKind failureKind) {
+        return new KimiClientException(INVALID_RESPONSE, message, 502, failureKind);
     }
 }

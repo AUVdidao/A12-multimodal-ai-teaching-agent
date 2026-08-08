@@ -23,6 +23,7 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequ
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentResponse;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
+import com.auvdidao.a12teachingagent.ai.exception.AiFailureKind;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiChatClient;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiClientException;
@@ -117,12 +118,12 @@ public class KimiAIWorkflowGateway {
     public MaterialAnalysisResponse analyzeMaterial(MaterialAnalysisRequest request) {
         WorkflowCode workflowCode = WorkflowCode.MATERIAL_ANALYSIS;
         if (!workflowConfigured()) {
-            throw unavailable(workflowCode, "Kimi workflow provider is not configured");
+            throw unavailable(workflowCode, "Kimi workflow provider is not configured", AiFailureKind.NOT_CONFIGURED);
         }
 
         String inputJson = serializeInput(workflowCode, request);
         if (inputJson.length() > Math.max(1000, properties.getWorkflowMaxInputCharacters())) {
-            throw unavailable(workflowCode, "controlled workflow input is too large");
+            throw unavailable(workflowCode, "controlled workflow input is too large", AiFailureKind.INVALID_REQUEST);
         }
 
         String systemPrompt = """
@@ -232,12 +233,12 @@ public class KimiAIWorkflowGateway {
             Consumer<T> validator
     ) {
         if (!workflowConfigured()) {
-            throw unavailable(workflowCode, "Kimi workflow provider is not configured");
+            throw unavailable(workflowCode, "Kimi workflow provider is not configured", AiFailureKind.NOT_CONFIGURED);
         }
 
         String inputJson = serializeInput(workflowCode, input);
         if (inputJson.length() > Math.max(1000, properties.getWorkflowMaxInputCharacters())) {
-            throw unavailable(workflowCode, "controlled workflow input is too large");
+            throw unavailable(workflowCode, "controlled workflow input is too large", AiFailureKind.INVALID_REQUEST);
         }
 
         String userPrompt = """
@@ -272,13 +273,14 @@ public class KimiAIWorkflowGateway {
         }
 
         ObjectNode payload = normalizePayload(parsed, workflowCode, operation, projectId);
+        T response;
         try {
-            T response = objectMapper.treeToValue(payload, responseType);
-            validator.accept(response);
-            return response;
+            response = objectMapper.treeToValue(payload, responseType);
         } catch (JsonProcessingException | IllegalArgumentException exception) {
-            throw unavailable(workflowCode, "Kimi output does not match the gateway DTO");
+            throw unavailable(workflowCode, "Kimi output does not match the gateway DTO", AiFailureKind.SCHEMA_MISMATCH);
         }
+        validator.accept(response);
+        return response;
     }
 
     private JsonNode repairJson(
@@ -350,7 +352,7 @@ public class KimiAIWorkflowGateway {
     private JsonNode unwrapClarificationPayload(JsonNode parsed, WorkflowCode workflowCode) {
         JsonNode payload = parsed;
         for (int depth = 0; depth < 3; depth++) {
-            require(payload != null, workflowCode, "Kimi clarification output is missing");
+            requireSchema(payload != null, workflowCode, "Kimi clarification output is missing");
             if (payload.isTextual()) {
                 payload = parseModelJson(payload.asText(), workflowCode);
                 continue;
@@ -370,7 +372,7 @@ public class KimiAIWorkflowGateway {
             }
             return payload;
         }
-        throw unavailable(workflowCode, "Kimi clarification output has too many wrapper layers");
+        throw unavailable(workflowCode, "Kimi clarification output has too many wrapper layers", AiFailureKind.SCHEMA_MISMATCH);
     }
 
     private JsonNode firstObjectOrText(JsonNode object, String... names) {
@@ -387,23 +389,23 @@ public class KimiAIWorkflowGateway {
         try {
             return objectMapper.writeValueAsString(input);
         } catch (JsonProcessingException exception) {
-            throw unavailable(workflowCode, "workflow input could not be serialized");
+            throw unavailable(workflowCode, "workflow input could not be serialized", AiFailureKind.INVALID_REQUEST);
         }
     }
 
     private JsonNode parseModelJson(String value, WorkflowCode workflowCode) {
         String normalized = stripCodeFence(stripModelReasoning(value));
         if (!StringUtils.hasText(normalized)) {
-            throw unavailable(workflowCode, "Kimi returned empty JSON");
+            throw unavailable(workflowCode, "Kimi returned empty JSON", AiFailureKind.INVALID_JSON);
         }
         try {
             JsonNode parsed = objectMapper.readTree(normalized);
             if (parsed == null) {
-                throw unavailable(workflowCode, "Kimi returned empty JSON");
+                throw unavailable(workflowCode, "Kimi returned empty JSON", AiFailureKind.INVALID_JSON);
             }
             return parsed;
         } catch (JsonProcessingException exception) {
-            throw unavailable(workflowCode, "Kimi returned invalid JSON");
+            throw unavailable(workflowCode, "Kimi returned invalid JSON", AiFailureKind.INVALID_JSON);
         }
     }
 
@@ -702,12 +704,32 @@ public class KimiAIWorkflowGateway {
 
     private static void require(boolean condition, WorkflowCode workflowCode, String reason) {
         if (!condition) {
-            throw unavailable(workflowCode, reason);
+            throw unavailable(workflowCode, reason, AiFailureKind.VALIDATION_FAILED);
+        }
+    }
+
+    private static void requireSchema(boolean condition, WorkflowCode workflowCode, String reason) {
+        if (!condition) {
+            throw unavailable(workflowCode, reason, AiFailureKind.SCHEMA_MISMATCH);
         }
     }
 
     private static AiWorkflowUnavailableException unavailable(WorkflowCode workflowCode, String reason) {
-        return new AiWorkflowUnavailableException(workflowCode.code() + ": " + reason + ".");
+        return unavailable(workflowCode, reason, AiFailureKind.UNKNOWN);
+    }
+
+    private static AiWorkflowUnavailableException unavailable(
+            WorkflowCode workflowCode,
+            String reason,
+            AiFailureKind failureKind
+    ) {
+        String providerCode = failureKind == AiFailureKind.NOT_CONFIGURED ? "KIMI_NOT_CONFIGURED" : null;
+        return new AiWorkflowUnavailableException(
+                workflowCode.code() + ": " + reason + ".",
+                providerCode,
+                0,
+                failureKind
+        );
     }
 
     private boolean workflowConfigured() {
@@ -728,6 +750,52 @@ public class KimiAIWorkflowGateway {
         if (!reason.isBlank() && !reason.equalsIgnoreCase(code)) {
             message += ": " + reason;
         }
-        return new AiWorkflowUnavailableException(message + ".", code, exception.getStatusCode());
+        return new AiWorkflowUnavailableException(
+                message + ".",
+                code,
+                exception.getStatusCode(),
+                classifyKimiFailure(code, exception.getStatusCode(), exception.getFailureKind())
+        );
+    }
+
+    private static AiFailureKind classifyKimiFailure(
+            String code,
+            int statusCode,
+            AiFailureKind existingKind
+    ) {
+        if (existingKind != null && existingKind != AiFailureKind.UNKNOWN) {
+            return existingKind;
+        }
+        return switch (code) {
+            case "KIMI_NOT_CONFIGURED" -> AiFailureKind.NOT_CONFIGURED;
+            case "KIMI_INVALID_CONFIGURATION" -> AiFailureKind.INVALID_REQUEST;
+            case "KIMI_TIMEOUT" -> AiFailureKind.TIMEOUT;
+            case "KIMI_UNAVAILABLE" -> AiFailureKind.TRANSPORT;
+            case "KIMI_INTERRUPTED" -> AiFailureKind.INTERRUPTED;
+            case "KIMI_REQUEST_FAILED" -> classifyKimiStatus(statusCode);
+            default -> AiFailureKind.UNKNOWN;
+        };
+    }
+
+    private static AiFailureKind classifyKimiStatus(int statusCode) {
+        if (statusCode == 401) {
+            return AiFailureKind.AUTHENTICATION;
+        }
+        if (statusCode == 403) {
+            return AiFailureKind.PERMISSION;
+        }
+        if (statusCode == 408) {
+            return AiFailureKind.TIMEOUT;
+        }
+        if (statusCode == 429) {
+            return AiFailureKind.RATE_LIMITED;
+        }
+        if (statusCode >= 500 && statusCode <= 599) {
+            return AiFailureKind.UPSTREAM_FAILURE;
+        }
+        if (statusCode >= 400 && statusCode <= 499) {
+            return AiFailureKind.INVALID_REQUEST;
+        }
+        return AiFailureKind.UNKNOWN;
     }
 }

@@ -2,6 +2,7 @@ package com.auvdidao.a12teachingagent.material;
 
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisResponse;
+import com.auvdidao.a12teachingagent.ai.exception.AiFailureKind;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.ai.gateway.MockAIWorkflowGateway;
@@ -172,7 +173,8 @@ class MaterialParseServiceGatewayTest {
                 .thenThrow(new AiWorkflowUnavailableException(
                         "KIMI_TIMEOUT: provider request timed out",
                         "KIMI_TIMEOUT",
-                        504
+                        504,
+                        AiFailureKind.TIMEOUT
                 ))
                 .thenReturn(successfulAnalysis());
 
@@ -198,7 +200,12 @@ class MaterialParseServiceGatewayTest {
     @Test
     void connectionFailureFallsBackToDeterministicParserResult() {
         ParseResultResponse response = parseWithAiFailure(
-                new AiWorkflowUnavailableException("KIMI_UNAVAILABLE", "KIMI_UNAVAILABLE", 502));
+                new AiWorkflowUnavailableException(
+                        "KIMI_UNAVAILABLE",
+                        "KIMI_UNAVAILABLE",
+                        502,
+                        AiFailureKind.TRANSPORT
+                ));
 
         assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
     }
@@ -206,7 +213,12 @@ class MaterialParseServiceGatewayTest {
     @Test
     void timeoutFallsBackToDeterministicParserResult() {
         ParseResultResponse response = parseWithAiFailure(
-                new AiWorkflowUnavailableException("KIMI_TIMEOUT", "KIMI_TIMEOUT", 504));
+                new AiWorkflowUnavailableException(
+                        "KIMI_TIMEOUT",
+                        "KIMI_TIMEOUT",
+                        504,
+                        AiFailureKind.TIMEOUT
+                ));
 
         assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
     }
@@ -217,7 +229,8 @@ class MaterialParseServiceGatewayTest {
                 new AiWorkflowUnavailableException(
                         "KIMI_REQUEST_FAILED",
                         "KIMI_REQUEST_FAILED",
-                        503
+                        503,
+                        AiFailureKind.UPSTREAM_FAILURE
                 ));
 
         assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
@@ -229,7 +242,8 @@ class MaterialParseServiceGatewayTest {
                 new AiWorkflowUnavailableException(
                         "KIMI_REQUEST_FAILED",
                         "KIMI_REQUEST_FAILED",
-                        429
+                        429,
+                        AiFailureKind.RATE_LIMITED
                 ));
 
         assertThat(response.parseStatus()).isEqualTo(MaterialParseStatus.SUCCEEDED);
@@ -311,7 +325,8 @@ class MaterialParseServiceGatewayTest {
                 new AiWorkflowUnavailableException(
                         "KIMI_TIMEOUT: " + secret,
                         "KIMI_TIMEOUT",
-                        504
+                        504,
+                        AiFailureKind.TIMEOUT
                 ));
 
         assertThat(response.toString()).doesNotContain(secret);

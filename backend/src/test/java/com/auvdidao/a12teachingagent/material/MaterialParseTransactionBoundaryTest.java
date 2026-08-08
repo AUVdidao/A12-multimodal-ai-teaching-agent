@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.material;
 
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
+import com.auvdidao.a12teachingagent.ai.exception.AiFailureKind;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
@@ -128,7 +129,8 @@ class MaterialParseTransactionBoundaryTest {
                 .thenThrow(new AiWorkflowUnavailableException(
                         "KIMI_TIMEOUT: provider request timed out",
                         "KIMI_TIMEOUT",
-                        504
+                        504,
+                        AiFailureKind.TIMEOUT
                 ));
         when(transactionService.complete(any())).thenReturn(response);
 
