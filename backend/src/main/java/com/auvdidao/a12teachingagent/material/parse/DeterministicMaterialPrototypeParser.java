@@ -47,7 +47,7 @@ public class DeterministicMaterialPrototypeParser implements MaterialPrototypePa
                 : List.of();
 
         String analysisText = extraction.hasText()
-                ? abbreviate(extraction.text().strip(), ANALYSIS_TEXT_LIMIT)
+                ? limitText(extraction.text().strip(), ANALYSIS_TEXT_LIMIT)
                 : summary;
         return new ParsedContent(
                 summary,
@@ -197,5 +197,16 @@ public class DeterministicMaterialPrototypeParser implements MaterialPrototypePa
             return value;
         }
         return value.substring(0, limit) + "…";
+    }
+
+    private static String limitText(String value, int limit) {
+        if (value.length() <= limit) {
+            return value;
+        }
+        int end = limit;
+        if (end > 0 && Character.isHighSurrogate(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(0, end);
     }
 }

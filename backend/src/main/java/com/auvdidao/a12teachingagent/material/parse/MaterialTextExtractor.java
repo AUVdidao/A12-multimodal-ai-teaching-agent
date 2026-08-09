@@ -39,7 +39,7 @@ import java.util.zip.ZipInputStream;
 
 final class MaterialTextExtractor {
 
-    static final int MAX_EXTRACTED_CHARACTERS = 200_000;
+    static final int MAX_EXTRACTED_CHARACTERS = 1_000_000;
     static final int MAX_INPUT_BYTES = 20 * 1024 * 1024;
 
     private static final int MAX_PDF_PAGES = 500;
@@ -582,6 +582,7 @@ record Extraction(
                 throw new TextLimitReachedException();
             }
             int accepted = Math.min(length, remaining);
+            if (accepted > 0 && Character.isHighSurrogate(buffer[offset + accepted - 1])) accepted--;
             value.append(buffer, offset, accepted);
             if (accepted < length) {
                 truncated = true;

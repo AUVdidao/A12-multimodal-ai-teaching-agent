@@ -59,7 +59,7 @@ public class FileParserService {
 
     public FileParserService(
             @Value("${parser.max-input-bytes:20971520}") long maxInputBytes,
-            @Value("${parser.max-extracted-characters:200000}") int maxExtractedCharacters
+            @Value("${parser.max-extracted-characters:1000000}") int maxExtractedCharacters
     ) {
         this.maxInputBytes = maxInputBytes;
         this.maxExtractedCharacters = maxExtractedCharacters;
@@ -82,9 +82,9 @@ public class FileParserService {
                 extraction.hasText() ? keywords(extraction.text(), safeTopic) : List.of(),
                 teachingStages(usageTypes),
                 extraction.hasText()
-                        ? abbreviate(extraction.text().strip(), ANALYSIS_TEXT_LIMIT)
+                        ? limitText(extraction.text().strip(), ANALYSIS_TEXT_LIMIT)
                         : summary,
-                extraction.hasText() ? abbreviate(extraction.text().strip(), maxExtractedCharacters) : "",
+                extraction.hasText() ? extraction.text().strip() : "",
                 extraction.pageCount(),
                 extraction.sections()
         );
@@ -326,6 +326,13 @@ public class FileParserService {
         return value.length() <= limit ? value : value.substring(0, limit) + "…";
     }
 
+    private static String limitText(String value, int limit) {
+        if (value.length() <= limit) return value;
+        int end = limit;
+        if (end > 0 && Character.isHighSurrogate(value.charAt(end - 1))) end--;
+        return value.substring(0, end);
+    }
+
     private static void addKeyword(LinkedHashSet<String> values, String candidate) {
         String normalized = normalizeWhitespace(candidate);
         if (normalized.length() >= 2 && normalized.length() <= 40 && normalized.chars().anyMatch(Character::isLetterOrDigit)) values.add(normalized);
@@ -392,9 +399,13 @@ public class FileParserService {
             int space = text.isEmpty() ? 0 : 1;
             int remaining = limit - text.length() - space;
             if (remaining <= 0) { truncated = true; return; }
-            if (space > 0) text.append('\n');
-            if (cleaned.length() <= remaining) text.append(cleaned);
-            else { text.append(cleaned, 0, remaining); truncated = true; }
+            int accepted = Math.min(cleaned.length(), remaining);
+            if (accepted > 0 && Character.isHighSurrogate(cleaned.charAt(accepted - 1))) accepted--;
+            if (accepted > 0) {
+                if (space > 0) text.append('\n');
+                text.append(cleaned, 0, accepted);
+            }
+            if (accepted < cleaned.length()) truncated = true;
         }
         private boolean full() { return text.length() >= limit; }
         private String text() { return text.toString(); }
@@ -411,6 +422,7 @@ public class FileParserService {
             int remaining = limit - text.length();
             if (remaining <= 0) { truncated = true; throw new TextLimitReachedException(); }
             int accepted = Math.min(remaining, length);
+            if (accepted > 0 && Character.isHighSurrogate(buffer[offset + accepted - 1])) accepted--;
             text.append(buffer, offset, accepted);
             if (accepted < length) { truncated = true; throw new TextLimitReachedException(); }
         }

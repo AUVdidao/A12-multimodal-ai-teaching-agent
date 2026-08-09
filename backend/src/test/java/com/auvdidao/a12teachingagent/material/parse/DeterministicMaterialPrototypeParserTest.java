@@ -250,6 +250,44 @@ class DeterministicMaterialPrototypeParserTest {
 
         assertThat(parsed.summary()).contains("提取内容已按字符或页数上限截断", "LimitVisibleMarker");
         assertThat(parsed.keywords()).doesNotContain("HiddenAfterLimitMarker");
+        assertThat(parsed.extractedText()).hasSizeLessThanOrEqualTo(MaterialTextExtractor.MAX_EXTRACTED_CHARACTERS);
+        assertThat(parsed.analysisText()).hasSizeLessThanOrEqualTo(32_000);
+    }
+
+    @Test
+    void preservesLargeTextAndKeepsAnalysisBounded() throws Exception {
+        String content = "HEAD_MARKER\n"
+                + "a".repeat(220_000)
+                + "\nCHAPTER_3_RAG_MARKER\n"
+                + "b".repeat(320_000)
+                + "\nTAIL_MARKER";
+
+        MaterialPrototypeParser.ParsedContent parsed = parse(
+                material("large.txt", MaterialFileType.TXT, content.getBytes(StandardCharsets.UTF_8)),
+                "Photosynthesis"
+        );
+
+        assertThat(parsed.extractedText()).hasSizeGreaterThan(500_000)
+                .contains("HEAD_MARKER", "CHAPTER_3_RAG_MARKER", "TAIL_MARKER");
+        assertThat(parsed.analysisText()).hasSizeLessThanOrEqualTo(32_000);
+    }
+
+    @Test
+    void boundsLargeTextWithoutSplittingASurrogatePair() throws Exception {
+        String content = "H".repeat(MaterialTextExtractor.MAX_EXTRACTED_CHARACTERS - 1)
+                + "\uD83D\uDE00"
+                + "TAIL_MARKER";
+
+        MaterialPrototypeParser.ParsedContent parsed = parse(
+                material("boundary.txt", MaterialFileType.TXT, content.getBytes(StandardCharsets.UTF_8)),
+                "Photosynthesis"
+        );
+
+        assertThat(parsed.extractedText()).hasSize(MaterialTextExtractor.MAX_EXTRACTED_CHARACTERS - 1)
+                .doesNotContain("TAIL_MARKER")
+                .doesNotContain("\uD83D")
+                .doesNotContain("\uDE00");
+        assertThat(parsed.analysisText()).hasSizeLessThanOrEqualTo(32_000);
     }
 
     private MaterialPrototypeParser.ParsedContent parse(UploadedMaterial material, String topic) {

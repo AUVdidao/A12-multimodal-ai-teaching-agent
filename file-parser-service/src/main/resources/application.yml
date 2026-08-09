@@ -13,4 +13,4 @@ spring:
 
 parser:
   max-input-bytes: 20971520
-  max-extracted-characters: 200000
+  max-extracted-characters: 1000000
