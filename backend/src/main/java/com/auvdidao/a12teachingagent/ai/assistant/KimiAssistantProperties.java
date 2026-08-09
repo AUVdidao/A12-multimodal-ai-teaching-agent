@@ -8,7 +8,7 @@ import org.springframework.util.StringUtils;
 @ConfigurationProperties(prefix = "a12.kimi")
 public class KimiAssistantProperties {
 
-    private String baseUrl = "https://api.moonshot.ai/v1";
+    private String baseUrl = "https://api.moonshot.cn/v1";
     private String apiKey;
     private int connectTimeoutSeconds = 15;
     private int requestAttempts = 2;
