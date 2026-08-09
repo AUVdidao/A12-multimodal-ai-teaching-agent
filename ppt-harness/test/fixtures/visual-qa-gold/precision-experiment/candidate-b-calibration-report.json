@@ -1,0 +1,1061 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-09T14:18:15.504Z",
+  "provider": "KimiVisualQaProvider:CandidateB",
+  "model": "kimi-k2.6",
+  "caseCount": 20,
+  "cleanCount": 7,
+  "brokenCount": 13,
+  "totalRequests": 21,
+  "repairRequests": 1,
+  "elapsedMs": 207661,
+  "metrics": {
+    "issuePrecision": 0.1875,
+    "issueRecall": 0.6923,
+    "falsePositiveRate": 0.2857,
+    "cleanSlidePassRate": 0.7143,
+    "errorDetectionRate": 1,
+    "tp": 9,
+    "fp": 39,
+    "fn": 4
+  },
+  "perCode": {
+    "TEXT_OVERFLOW": {
+      "tp": 1,
+      "fp": 5,
+      "fn": 0,
+      "precision": 0.1667,
+      "recall": 1,
+      "support": 1
+    },
+    "TEXT_TOO_SMALL": {
+      "tp": 1,
+      "fp": 5,
+      "fn": 0,
+      "precision": 0.1667,
+      "recall": 1,
+      "support": 1
+    },
+    "ELEMENT_OVERLAP": {
+      "tp": 1,
+      "fp": 6,
+      "fn": 0,
+      "precision": 0.1429,
+      "recall": 1,
+      "support": 1
+    },
+    "ELEMENT_CLIPPED": {
+      "tp": 1,
+      "fp": 5,
+      "fn": 0,
+      "precision": 0.1667,
+      "recall": 1,
+      "support": 1
+    },
+    "UNBALANCED_LAYOUT": {
+      "tp": 0,
+      "fp": 3,
+      "fn": 1,
+      "precision": 0,
+      "recall": 0,
+      "support": 1
+    },
+    "EXCESSIVE_EMPTY_SPACE": {
+      "tp": 1,
+      "fp": 4,
+      "fn": 0,
+      "precision": 0.2,
+      "recall": 1,
+      "support": 1
+    },
+    "LOW_CONTRAST": {
+      "tp": 1,
+      "fp": 7,
+      "fn": 0,
+      "precision": 0.125,
+      "recall": 1,
+      "support": 1
+    },
+    "VISUAL_HIERARCHY_WEAK": {
+      "tp": 0,
+      "fp": 2,
+      "fn": 1,
+      "precision": 0,
+      "recall": 0,
+      "support": 1
+    },
+    "TABLE_UNREADABLE": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1,
+      "support": 1
+    },
+    "CHART_UNREADABLE": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1,
+      "support": 1
+    },
+    "FLOW_UNREADABLE": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1,
+      "support": 1
+    },
+    "DENSE_CONTENT": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "precision": 0,
+      "recall": 0,
+      "support": 1
+    },
+    "BROKEN_RENDERING": {
+      "tp": 0,
+      "fp": 2,
+      "fn": 1,
+      "precision": 0,
+      "recall": 0,
+      "support": 1
+    }
+  },
+  "falsePositiveCases": [
+    {
+      "caseId": "clean-content",
+      "slideNumber": 2,
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE"
+      ]
+    },
+    {
+      "caseId": "clean-table",
+      "slideNumber": 8,
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE",
+        "UNBALANCED_LAYOUT"
+      ]
+    },
+    {
+      "caseId": "broken-text-overflow",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED",
+        "LOW_CONTRAST"
+      ]
+    },
+    {
+      "caseId": "broken-text-too-small",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE",
+        "UNBALANCED_LAYOUT"
+      ]
+    },
+    {
+      "caseId": "broken-element-overlap",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "TEXT_OVERFLOW",
+        "LOW_CONTRAST",
+        "ELEMENT_CLIPPED"
+      ]
+    },
+    {
+      "caseId": "broken-element-clipped",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "TEXT_OVERFLOW"
+      ]
+    },
+    {
+      "caseId": "broken-unbalanced-layout",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "LOW_CONTRAST",
+        "TEXT_OVERFLOW"
+      ]
+    },
+    {
+      "caseId": "broken-excessive-empty-space",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "TEXT_TOO_SMALL",
+        "LOW_CONTRAST"
+      ]
+    },
+    {
+      "caseId": "broken-low-contrast",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE",
+        "VISUAL_HIERARCHY_WEAK"
+      ]
+    },
+    {
+      "caseId": "broken-visual-hierarchy-weak",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "LOW_CONTRAST",
+        "TEXT_TOO_SMALL",
+        "ELEMENT_OVERLAP"
+      ]
+    },
+    {
+      "caseId": "broken-table-unreadable",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "BROKEN_RENDERING",
+        "TEXT_TOO_SMALL",
+        "ELEMENT_CLIPPED"
+      ]
+    },
+    {
+      "caseId": "broken-chart-unreadable",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "TEXT_TOO_SMALL",
+        "LOW_CONTRAST"
+      ]
+    },
+    {
+      "caseId": "broken-flow-unreadable",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "TEXT_OVERFLOW",
+        "ELEMENT_CLIPPED",
+        "TEXT_TOO_SMALL",
+        "UNBALANCED_LAYOUT"
+      ]
+    },
+    {
+      "caseId": "broken-dense-content",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "BROKEN_RENDERING",
+        "TEXT_OVERFLOW",
+        "ELEMENT_OVERLAP"
+      ]
+    },
+    {
+      "caseId": "broken-rendering",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED",
+        "LOW_CONTRAST",
+        "VISUAL_HIERARCHY_WEAK"
+      ]
+    }
+  ],
+  "falseNegativeCases": [
+    {
+      "caseId": "broken-unbalanced-layout",
+      "slideNumber": 1,
+      "missingCodes": [
+        "UNBALANCED_LAYOUT"
+      ]
+    },
+    {
+      "caseId": "broken-visual-hierarchy-weak",
+      "slideNumber": 1,
+      "missingCodes": [
+        "VISUAL_HIERARCHY_WEAK"
+      ]
+    },
+    {
+      "caseId": "broken-dense-content",
+      "slideNumber": 1,
+      "missingCodes": [
+        "DENSE_CONTENT"
+      ]
+    },
+    {
+      "caseId": "broken-rendering",
+      "slideNumber": 1,
+      "missingCodes": [
+        "BROKEN_RENDERING"
+      ]
+    }
+  ],
+  "severityMisclassifications": [
+    {
+      "caseId": "broken-low-contrast",
+      "code": "LOW_CONTRAST",
+      "expected": "WARNING",
+      "predicted": "ERROR"
+    },
+    {
+      "caseId": "broken-table-unreadable",
+      "code": "TABLE_UNREADABLE",
+      "expected": "WARNING",
+      "predicted": "ERROR"
+    },
+    {
+      "caseId": "broken-chart-unreadable",
+      "code": "CHART_UNREADABLE",
+      "expected": "WARNING",
+      "predicted": "ERROR"
+    },
+    {
+      "caseId": "broken-flow-unreadable",
+      "code": "FLOW_UNREADABLE",
+      "expected": "WARNING",
+      "predicted": "ERROR"
+    }
+  ],
+  "autoRepairPolicy": {
+    "precisionThreshold": 0.9,
+    "recallThreshold": 0.8,
+    "autoRepairEligible": [],
+    "humanReviewRecommended": [
+      "TEXT_OVERFLOW",
+      "TEXT_TOO_SMALL",
+      "ELEMENT_OVERLAP",
+      "ELEMENT_CLIPPED",
+      "UNBALANCED_LAYOUT",
+      "EXCESSIVE_EMPTY_SPACE",
+      "LOW_CONTRAST",
+      "VISUAL_HIERARCHY_WEAK",
+      "TABLE_UNREADABLE",
+      "CHART_UNREADABLE",
+      "FLOW_UNREADABLE",
+      "DENSE_CONTENT",
+      "BROKEN_RENDERING"
+    ],
+    "informationalOnly": []
+  },
+  "cases": [
+    {
+      "caseId": "clean-cover",
+      "slideNumber": 1,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-content",
+      "slideNumber": 2,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 2,
+          "code": "EXCESSIVE_EMPTY_SPACE",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "The right-side 'Key takeaways' card occupies only the upper portion of its allocated area, leaving approximately 60% of the card as blank white space below the text content. This causes the main content area to feel incomplete and creates harmful visual clustering of all text at the top of the card.",
+          "repairHint": "Expand the Key takeaways content to fill the card vertically, or reduce the card height to match its content and reallocate the freed space to the left column content."
+        }
+      ],
+      "expectedMaxSeverity": "INFO",
+      "predictedMaxSeverity": "WARNING",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-flow",
+      "slideNumber": 5,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-chart",
+      "slideNumber": 6,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-comparison",
+      "slideNumber": 7,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-table",
+      "slideNumber": 8,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE",
+        "UNBALANCED_LAYOUT"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 8,
+          "code": "EXCESSIVE_EMPTY_SPACE",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Large blank area between the table (ending around mid-height) and the READOUT box at bottom, leaving roughly 40% of slide height unused and causing content to cluster in upper and lower bands with disconnected visual flow.",
+          "repairHint": "Move the READOUT box upward to reduce the gap, or expand table row height/cell padding to fill vertical space and unify the layout."
+        },
+        {
+          "slideNumber": 8,
+          "code": "UNBALANCED_LAYOUT",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "Content is vertically split into three isolated bands—title/subtitle at top, compact table in upper-middle, and READOUT at bottom—with excessive dead space between them, disrupting natural top-to-bottom reading progression.",
+          "repairHint": "Redistribute elements vertically by either centering the table group or pulling the READOUT closer to eliminate the large central void and create contiguous visual flow."
+        }
+      ],
+      "expectedMaxSeverity": "INFO",
+      "predictedMaxSeverity": "WARNING",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-summary",
+      "slideNumber": 9,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-text-overflow",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_OVERFLOW"
+      ],
+      "predictedCodes": [
+        "TEXT_OVERFLOW",
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED",
+        "LOW_CONTRAST"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "ERROR",
+          "confidence": 1,
+          "description": "Large English text 'OVERFLOW: this deliberately extends beyon...' overflows horizontally across the upper-middle of the slide, completely obscuring the Chinese subtitle text beneath it and extending beyond the right edge of the slide canvas.",
+          "repairHint": "Remove or relocate the overflow English text element so it does not overlap with the Chinese subtitle; constrain text to slide bounds or reduce font size to fit within intended text box."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "ERROR",
+          "confidence": 1,
+          "description": "The English overflow text overlaps directly with the Chinese subtitle '一棵幼苗增加的质量主要来自哪里？土壤、水还是空气？' in the upper portion, and horizontal rule lines from the left content area intrude into and cross through the right-side 'Key takeaways' card, intersecting its text.",
+          "repairHint": "Separate the left bullet content from the right card by removing crossing horizontal rules or increasing spacing between columns; ensure no text elements share the same visual space."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "ERROR",
+          "confidence": 1,
+          "description": "The English overflow text is clipped at the right edge of the slide ('beyon' is cut off), and the right-side 'Key takeaways' card's right edge appears to extend beyond or sit flush against the slide boundary with text near the edge.",
+          "repairHint": "Keep all text and card elements within safe margins of the slide canvas; resize or reposition the card and overflow text to prevent clipping at boundaries."
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "The Chinese subtitle text beneath the overflow English text uses a dark color on light background, but is partially obscured by overlapping lighter/darker elements, reducing effective contrast for legibility in the upper-middle area.",
+          "repairHint": "Eliminate overlapping elements and ensure subtitle text has uniform high contrast against its background without interference from other layers."
+        }
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-text-too-small",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_TOO_SMALL"
+      ],
+      "predictedCodes": [
+        "TEXT_TOO_SMALL",
+        "EXCESSIVE_EMPTY_SPACE",
+        "UNBALANCED_LAYOUT"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.9,
+          "description": "The text 'tiny text' in the upper-right quadrant is extremely small, approximately 6-8pt, making it illegible at normal viewing distance.",
+          "repairHint": "Increase the font size of the 'tiny text' element to at least 12-14pt to match standard body text readability, or remove it if not essential."
+        },
+        {
+          "slideNumber": 1,
+          "code": "EXCESSIVE_EMPTY_SPACE",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Approximately 70% of the slide canvas below and to the right of the content area is completely unused, causing the actual instructional content to be compressed into a small region in the upper-left corner.",
+          "repairHint": "Expand the content area downward and rightward to utilize the available canvas, or scale up existing text and elements to fill the space proportionally."
+        },
+        {
+          "slideNumber": 1,
+          "code": "UNBALANCED_LAYOUT",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "All substantive content is clustered in the top-left ~25% of the slide, while the remaining ~75% is empty, creating a lopsided visual weight that disrupts natural reading flow.",
+          "repairHint": "Reposition or scale content to distribute visual weight more evenly across the slide, or left-align content with consistent margins that use more horizontal space."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "WARNING",
+      "outcome": "SUCCESS",
+      "repaired": true
+    },
+    {
+      "caseId": "broken-element-overlap",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "TEXT_OVERFLOW",
+        "LOW_CONTRAST",
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Two large opaque colored blocks labeled 'ELEMENT A' (dark green, left-center) and 'ELEMENT B' (orange-brown, right-center) overlap each other and obscure underlying bullet text. The left edge of ELEMENT B covers the right portion of ELEMENT A, and both blocks sit on top of the three bullet points about plant observation, verifiable questions, and evidence-based reasoning, making that content unreadable.",
+          "repairHint": "Remove or reposition the opaque ELEMENT A and ELEMENT B blocks so they do not cover the bullet text, or convert them to semi-transparent backgrounds that allow text to remain legible."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "ERROR",
+          "confidence": 0.9,
+          "description": "The 'Key takeaways' box text overflows its container. The third line '证据路径：现象 → 对照实验 → 结论' is truncated mid-character at '结' with the final character '论' cut off at the right edge of the white card.",
+          "repairHint": "Widen the 'Key takeaways' white card or reduce font size/line count so the full text '证据路径：现象 → 对照实验 → 结论' fits within the container boundaries."
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "The bullet point text behind ELEMENT A has insufficient contrast against the dark green block background. The dark gray/black text on the dark green background (e.g., '观察同一植株在光照和遮光条件下的差异') is difficult to read.",
+          "repairHint": "Either remove the dark green ELEMENT A block, change bullet text to white or light color, or lighten the green background to restore readable contrast."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "The 'Key takeaways' white card is clipped at its right edge by the slide boundary; the card's rounded corner and right padding are truncated, compressing the text against the edge.",
+          "repairHint": "Shift the 'Key takeaways' card leftward to ensure full card with proper padding fits within the slide safe area."
+        }
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-element-clipped",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedCodes": [
+        "ELEMENT_CLIPPED",
+        "ELEMENT_OVERLAP",
+        "TEXT_OVERFLOW"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "ERROR",
+          "confidence": 1,
+          "description": "The right-side orange-bordered card is severely clipped at its right edge, with the word 'CLIPPED' partially visible and cut off, indicating the entire card element extends beyond the slide canvas boundary.",
+          "repairHint": "Resize or reposition the orange-bordered card so it fits entirely within the slide canvas, or reduce its width to prevent the right-edge clipping."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "WARNING",
+          "confidence": 0.9,
+          "description": "The orange-bordered card on the right overlaps with the 'Key takeaways' white card beneath it, obscuring part of the text content including '证据路径：现象 → 对照实验 → 结论'.",
+          "repairHint": "Separate the overlapping cards by moving the orange-bordered card to a non-overlapping position or reducing its dimensions to avoid covering the 'Key takeaways' content."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Text within the right-side orange-bordered card is clipped and overflows the visible boundary, with 'CLIPPED' truncated and unreadable, and additional content likely hidden beyond the canvas edge.",
+          "repairHint": "Reduce text content in the orange card, increase card width within slide bounds, or wrap/resize text to ensure all content remains visible and readable within the slide canvas."
+        }
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-unbalanced-layout",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "UNBALANCED_LAYOUT"
+      ],
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "LOW_CONTRAST",
+        "TEXT_OVERFLOW"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Large green rounded rectangle with English text 'ONE DOMINANT REGION' and decorative lines completely obscures underlying Chinese content including bullet points about plant observation, verifiable questions, and evidence-based explanations in the middle-left area of the slide.",
+          "repairHint": "Remove or reposition the green overlay rectangle so the underlying lesson content about plant growth experiments is fully visible and readable."
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Partially visible Chinese text beneath the green overlay ('观察同一植株在光照和遮光条件下的差异', '提出可验证的问题：光照是否影响淀粉形成', '用证据解释植物质量增长的物质来源') shows poor contrast against both the dark green overlay and the light background, making it difficult to read.",
+          "repairHint": "Ensure all text has sufficient contrast against its background; either remove the overlay or increase text contrast to WCAG-compliant levels."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "WARNING",
+          "confidence": 0.75,
+          "description": "The title '从一片叶子的疑问出发' at top-left appears truncated with the last character partially cut off or cramped against the edge, and subtitle text below it is cut off entirely.",
+          "repairHint": "Adjust title text box width or reduce font size to prevent truncation; ensure subtitle text is fully visible within slide boundaries."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-excessive-empty-space",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "EXCESSIVE_EMPTY_SPACE"
+      ],
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE",
+        "TEXT_TOO_SMALL",
+        "LOW_CONTRAST"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "EXCESSIVE_EMPTY_SPACE",
+          "severity": "WARNING",
+          "confidence": 0.9,
+          "description": "The slide content occupies only the upper-left quadrant (approximately 25% of slide area), leaving the vast majority of the slide as unused beige background. The title, bullet points, and 'Key takeaways' box are clustered in a small region with no content extending below the top third of the slide.",
+          "repairHint": "Enlarge the content area to utilize more of the slide canvas—expand text size, increase bullet spacing, or reposition the Key takeaways box to fill the central region and reduce harmful clustering."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "The 'Key takeaways' box text ('驱动问题: 植物新增物质来自哪里? 证据路径: 现象→对照实验→结论') is rendered at a very small font size, approximately 8-10pt, making it difficult to read at normal presentation viewing distance. The bullet point text in the left column is also noticeably smaller than the title.",
+          "repairHint": "Increase the font size of the Key takeaways box content to at least 14-16pt to match readable presentation standards, and proportionally scale up the bullet point text."
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "The 'Key takeaways' box uses light gray text on a white background, creating insufficient contrast. The thin arrow symbols ('→') and smaller explanatory text within this box are particularly difficult to distinguish.",
+          "repairHint": "Change the text color in the Key takeaways box to a darker shade (e.g., near-black #333333) or adjust the background to a light gray to increase contrast ratio above 4.5:1."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "WARNING",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-low-contrast",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "LOW_CONTRAST"
+      ],
+      "predictedCodes": [
+        "LOW_CONTRAST",
+        "EXCESSIVE_EMPTY_SPACE",
+        "VISUAL_HIERARCHY_WEAK"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "All text on the slide uses light gray on off-white background. The title '从一片叶子的疑问出发', body text '一棵幼苗增加的质量主要来自哪里?', bullet points, and 'Key takeaways' box content all lack sufficient luminance contrast, making text difficult to read especially in bright ambient light or on lower-quality displays.",
+          "repairHint": "Darken all text to near-black (e.g., #333333 or darker) and ensure the background remains light, achieving WCAG AA contrast ratio of at least 4.5:1 for normal text."
+        },
+        {
+          "slideNumber": 1,
+          "code": "EXCESSIVE_EMPTY_SPACE",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "The lower-left and central-bottom regions of the slide contain large unused areas (approximately 40% of total slide area), while content is compressed into the upper portion. This creates harmful content clustering and an incomplete, unbalanced layout that wastes screen real estate and forces viewer attention upward unnaturally.",
+          "repairHint": "Redistribute content vertically by enlarging text size, increasing line spacing, or adding relevant visual elements (e.g., plant diagram, experiment illustration) to fill the lower empty space and create a more complete composition."
+        },
+        {
+          "slideNumber": 1,
+          "code": "VISUAL_HIERARCHY_WEAK",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "The title, subtitle '课堂导入', body question, bullet points, and 'Key takeaways' sidebar all use similar light gray tones with minimal size differentiation. The title lacks prominence, and the sidebar competes equally with main content rather than serving as secondary reference, disrupting intended reading order.",
+          "repairHint": "Establish clear hierarchy: make the title significantly larger and darker, reduce subtitle prominence, darken the main question, lighten or reduce sidebar text size, and add visual separation (e.g., background tint, border, or shadow) to the 'Key takeaways' box to indicate its supporting role."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-visual-hierarchy-weak",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "VISUAL_HIERARCHY_WEAK"
+      ],
+      "predictedCodes": [
+        "LOW_CONTRAST",
+        "TEXT_TOO_SMALL",
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Gray text on gray-green cards in the grid (rows 1-2, columns 1-5) has insufficient contrast; Chinese characters like '幼苗增加的', '主要来自哪里', '壤、水还是空' are barely visible against the card backgrounds",
+          "repairHint": "Change card background to a lighter shade or text to white/dark color to achieve readable contrast ratio"
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Chinese text within the gray-green cards is rendered at very small size, making multi-character phrases difficult to read even where contrast is slightly better",
+          "repairHint": "Increase font size of card text by at least 2-3 points or reduce card count to allow larger text"
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "WARNING",
+          "confidence": 0.9,
+          "description": "The '课堂导入' subtitle text at top-left is partially obscured by or overlapping with the main title area and left margin decoration, rendering it truncated and unreadable",
+          "repairHint": "Reposition '课堂导入' subtitle below the main title with clear separation, or increase top margin to prevent overlap"
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-table-unreadable",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "TABLE_UNREADABLE"
+      ],
+      "predictedCodes": [
+        "TABLE_UNREADABLE",
+        "BROKEN_RENDERING",
+        "TEXT_TOO_SMALL",
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "TABLE_UNREADABLE",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "The main table body is rendered as thick black horizontal bars instead of readable text, making all cell content illegible. The table spans most of the slide from upper-left to lower-right.",
+          "repairHint": "Fix the table rendering so that actual text characters display instead of black bars; verify font embedding and table cell formatting in the source file."
+        },
+        {
+          "slideNumber": 1,
+          "code": "BROKEN_RENDERING",
+          "severity": "ERROR",
+          "confidence": 0.9,
+          "description": "Multiple elements show corrupted rendering: the table interior displays as solid black bars, and the bottom-left corner shows garbled text 'RLA00501' with fragmented characters.",
+          "repairHint": "Re-export the slide with proper font subsetting and check for corrupted objects; replace the damaged table and text elements with fresh copies."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.7,
+          "description": "The subtitle '用核心概念解释真实情境' and table row labels like '温室', '正午', '合理' are rendered at very small size relative to slide dimensions, reducing legibility even where not completely corrupted.",
+          "repairHint": "Increase font size of subtitle and table row labels to at least 18-20pt for projected readability."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "WARNING",
+          "confidence": 0.75,
+          "description": "The bottom table caption text is partially cut off at the lower edge of the table frame, with only fragments like '温室夜间持续补光：需权衡 | 正午关闭通风：不合理' visible and truncated.",
+          "repairHint": "Expand the table bottom margin or reduce row height to fully display the caption text without clipping."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-chart-unreadable",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "CHART_UNREADABLE"
+      ],
+      "predictedCodes": [
+        "CHART_UNREADABLE",
+        "TEXT_TOO_SMALL",
+        "LOW_CONTRAST"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "CHART_UNREADABLE",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "The line chart lacks all axis labels, axis titles, and numerical scales. No X-axis values (light intensity levels), Y-axis values (oxygen release rate), or data point labels are visible. The grid lines have no scale reference, making the data impossible to interpret quantitatively.",
+          "repairHint": "Add labeled X-axis (e.g., '光照强度' with values 0-1000 μmol/m²/s), labeled Y-axis (e.g., '氧气释放速率' with units), and ensure tick marks with numerical values are visible on both axes."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "The footnote text '变量控制：温度、二氧化碳浓度和水量保持一致。' at the bottom center is rendered in very small font size, approximately 10-12px, making it difficult to read especially against the light gray background with low contrast.",
+          "repairHint": "Increase footnote font size to minimum 14-16px and darken the text color or place on a higher-contrast background to ensure legibility."
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "The chart's horizontal grid lines are extremely faint (light gray on off-white), nearly invisible in the upper portion of the chart, reducing ability to trace data point values against the grid.",
+          "repairHint": "Darken grid lines to medium gray (#999999 or darker) or use dashed lines with sufficient contrast against the white chart background."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-flow-unreadable",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "FLOW_UNREADABLE"
+      ],
+      "predictedCodes": [
+        "TEXT_OVERFLOW",
+        "ELEMENT_CLIPPED",
+        "FLOW_UNREADABLE",
+        "TEXT_TOO_SMALL",
+        "UNBALANCED_LAYOUT"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Text in second row boxes overflows/clips severely: '将天竺葵放在黑暗处一昼夜，消耗原有淀粉' in leftmost box is truncated mid-character; '用黑纸片遮住同一叶片的一部分，设置对照' in third box is cut off at '照'; '将植株置于阳光下数小时。' in fifth box is partially obscured; '脱色后滴加碘液，比较遮光与见光部位。' in seventh box is cut off. Text extends beyond box boundaries and is unreadable.",
+          "repairHint": "Increase box heights or widths in the second row, reduce font size, or enable text wrapping with expanded vertical space to contain full descriptions."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "ERROR",
+          "confidence": 0.9,
+          "description": "Multiple text elements in the second row of flowchart boxes are clipped by their container rectangles. The descenders and right-side characters of Chinese text are cut off, making the experimental procedure descriptions incomplete.",
+          "repairHint": "Resize all second-row containers to fit their text content, or refactor into larger cards with proper padding."
+        },
+        {
+          "slideNumber": 1,
+          "code": "FLOW_UNREADABLE",
+          "severity": "ERROR",
+          "confidence": 0.85,
+          "description": "The flowchart's second row, which contains the core experimental procedure descriptions, cannot be read due to text overflow and clipping. The flow's instructional purpose is defeated because critical step details are lost.",
+          "repairHint": "Redesign the flowchart with adequate container sizing for text, or split long descriptions into multiple shorter nodes with connecting flow lines."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "The small descriptive text in second-row boxes is rendered at a very small size relative to slide dimensions, compounding legibility problems when combined with overflow conditions.",
+          "repairHint": "Increase base font size for body text in flowchart nodes to minimum 14-16pt equivalent, and ensure containers scale proportionally."
+        },
+        {
+          "slideNumber": 1,
+          "code": "UNBALANCED_LAYOUT",
+          "severity": "WARNING",
+          "confidence": 0.75,
+          "description": "The third row contains seven empty placeholder boxes with no content, creating a visually incomplete structure below the populated second row. This empty band disrupts the expected flowchart symmetry and suggests missing content.",
+          "repairHint": "Either populate the third row with intended content, remove the empty row if unnecessary, or use consistent placeholder styling that indicates intentional blank state."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-dense-content",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "DENSE_CONTENT"
+      ],
+      "predictedCodes": [
+        "BROKEN_RENDERING",
+        "TEXT_OVERFLOW",
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "BROKEN_RENDERING",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "All body text in the main content area is rendered as horizontal colored bars instead of readable Chinese characters. Approximately 20 lines of text across the central white content box are completely illegible, showing only orange and dark green horizontal stripes.",
+          "repairHint": "Fix font embedding or rendering engine issue; ensure the presentation file uses standard embedded fonts or export to a format that preserves text glyphs correctly."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "ERROR",
+          "confidence": 0.9,
+          "description": "The subtitle text '课堂导入' below the main title is partially cut off at the bottom, with the lower portion of characters clipped by the content container boundary.",
+          "repairHint": "Increase line height or container padding for the subtitle area to prevent character descenders from being clipped."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "The subtitle '课堂导入' overlaps with the top edge of the main white content box, creating visual collision between the section header and the body content area.",
+          "repairHint": "Add vertical spacing between the subtitle and the content box, or adjust the content box top margin to create clear separation."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-rendering",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "BROKEN_RENDERING"
+      ],
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED",
+        "LOW_CONTRAST",
+        "VISUAL_HIERARCHY_WEAK"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "A black decorative banner with pink squares and green diagonal stripes overlaps and obscures the main bullet text in the left-center area of the slide. The text '观察同一植株在光照和遮光条件下的差异' and additional bullet points beneath it are partially covered by this graphic element, making them unreadable.",
+          "repairHint": "Remove or reposition the decorative banner so it does not intersect with the text content area, or place the bullet text above/below the banner with adequate spacing."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "ERROR",
+          "confidence": 0.9,
+          "description": "The black banner with pink squares extends beyond the left edge of the slide, with its leftmost portion visibly cut off. The green diagonal stripes and pink squares on the far left are truncated by the slide boundary.",
+          "repairHint": "Resize or reposition the banner so it fits entirely within the slide canvas boundaries without clipping."
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Text within the pink squares on the black banner uses dark/magenta coloring against pink backgrounds, resulting in insufficient contrast. The characters inside these squares are difficult or impossible to read.",
+          "repairHint": "Increase contrast by using lighter text (white or near-white) on the pink squares, or darken the pink background while lightening the text color."
+        },
+        {
+          "slideNumber": 1,
+          "code": "VISUAL_HIERARCHY_WEAK",
+          "severity": "WARNING",
+          "confidence": 0.75,
+          "description": "The large decorative black banner dominates the visual field and competes with the actual instructional content. The banner's bold colors and size draw attention away from the title, driving question, and key takeaways, disrupting the intended reading order from top to bottom.",
+          "repairHint": "Reduce the banner's vertical height, move it to the bottom as a subtle footer, or replace it with a less visually dominant decorative element that does not compete with content hierarchy."
+        }
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    }
+  ]
+}

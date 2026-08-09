@@ -1,0 +1,879 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-09T14:14:47.832Z",
+  "provider": "KimiVisualQaProvider:CandidateA",
+  "model": "kimi-k2.6",
+  "caseCount": 20,
+  "cleanCount": 7,
+  "brokenCount": 13,
+  "totalRequests": 20,
+  "repairRequests": 0,
+  "elapsedMs": 108888,
+  "metrics": {
+    "issuePrecision": 0.303,
+    "issueRecall": 0.7692,
+    "falsePositiveRate": 0,
+    "cleanSlidePassRate": 1,
+    "errorDetectionRate": 1,
+    "tp": 10,
+    "fp": 23,
+    "fn": 3
+  },
+  "perCode": {
+    "TEXT_OVERFLOW": {
+      "tp": 1,
+      "fp": 2,
+      "fn": 0,
+      "precision": 0.3333,
+      "recall": 1,
+      "support": 1
+    },
+    "TEXT_TOO_SMALL": {
+      "tp": 1,
+      "fp": 2,
+      "fn": 0,
+      "precision": 0.3333,
+      "recall": 1,
+      "support": 1
+    },
+    "ELEMENT_OVERLAP": {
+      "tp": 1,
+      "fp": 7,
+      "fn": 0,
+      "precision": 0.125,
+      "recall": 1,
+      "support": 1
+    },
+    "ELEMENT_CLIPPED": {
+      "tp": 1,
+      "fp": 3,
+      "fn": 0,
+      "precision": 0.25,
+      "recall": 1,
+      "support": 1
+    },
+    "UNBALANCED_LAYOUT": {
+      "tp": 0,
+      "fp": 1,
+      "fn": 1,
+      "precision": 0,
+      "recall": 0,
+      "support": 1
+    },
+    "EXCESSIVE_EMPTY_SPACE": {
+      "tp": 1,
+      "fp": 1,
+      "fn": 0,
+      "precision": 0.5,
+      "recall": 1,
+      "support": 1
+    },
+    "LOW_CONTRAST": {
+      "tp": 1,
+      "fp": 4,
+      "fn": 0,
+      "precision": 0.2,
+      "recall": 1,
+      "support": 1
+    },
+    "VISUAL_HIERARCHY_WEAK": {
+      "tp": 0,
+      "fp": 1,
+      "fn": 1,
+      "precision": 0,
+      "recall": 0,
+      "support": 1
+    },
+    "TABLE_UNREADABLE": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1,
+      "support": 1
+    },
+    "CHART_UNREADABLE": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1,
+      "support": 1
+    },
+    "FLOW_UNREADABLE": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1,
+      "support": 1
+    },
+    "DENSE_CONTENT": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "precision": 0,
+      "recall": 0,
+      "support": 1
+    },
+    "BROKEN_RENDERING": {
+      "tp": 1,
+      "fp": 2,
+      "fn": 0,
+      "precision": 0.3333,
+      "recall": 1,
+      "support": 1
+    }
+  },
+  "falsePositiveCases": [
+    {
+      "caseId": "broken-text-overflow",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED"
+      ]
+    },
+    {
+      "caseId": "broken-text-too-small",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE",
+        "UNBALANCED_LAYOUT"
+      ]
+    },
+    {
+      "caseId": "broken-element-overlap",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_CLIPPED",
+        "TEXT_OVERFLOW"
+      ]
+    },
+    {
+      "caseId": "broken-element-clipped",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_OVERLAP"
+      ]
+    },
+    {
+      "caseId": "broken-unbalanced-layout",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "LOW_CONTRAST"
+      ]
+    },
+    {
+      "caseId": "broken-low-contrast",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "VISUAL_HIERARCHY_WEAK"
+      ]
+    },
+    {
+      "caseId": "broken-visual-hierarchy-weak",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "LOW_CONTRAST",
+        "ELEMENT_OVERLAP",
+        "TEXT_TOO_SMALL"
+      ]
+    },
+    {
+      "caseId": "broken-table-unreadable",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "BROKEN_RENDERING",
+        "ELEMENT_OVERLAP"
+      ]
+    },
+    {
+      "caseId": "broken-chart-unreadable",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "LOW_CONTRAST",
+        "ELEMENT_CLIPPED"
+      ]
+    },
+    {
+      "caseId": "broken-flow-unreadable",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "TEXT_OVERFLOW",
+        "ELEMENT_OVERLAP"
+      ]
+    },
+    {
+      "caseId": "broken-dense-content",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "BROKEN_RENDERING",
+        "TEXT_TOO_SMALL"
+      ]
+    },
+    {
+      "caseId": "broken-rendering",
+      "slideNumber": 1,
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "LOW_CONTRAST"
+      ]
+    }
+  ],
+  "falseNegativeCases": [
+    {
+      "caseId": "broken-unbalanced-layout",
+      "slideNumber": 1,
+      "missingCodes": [
+        "UNBALANCED_LAYOUT"
+      ]
+    },
+    {
+      "caseId": "broken-visual-hierarchy-weak",
+      "slideNumber": 1,
+      "missingCodes": [
+        "VISUAL_HIERARCHY_WEAK"
+      ]
+    },
+    {
+      "caseId": "broken-dense-content",
+      "slideNumber": 1,
+      "missingCodes": [
+        "DENSE_CONTENT"
+      ]
+    }
+  ],
+  "severityMisclassifications": [
+    {
+      "caseId": "broken-low-contrast",
+      "code": "LOW_CONTRAST",
+      "expected": "WARNING",
+      "predicted": "ERROR"
+    },
+    {
+      "caseId": "broken-table-unreadable",
+      "code": "TABLE_UNREADABLE",
+      "expected": "WARNING",
+      "predicted": "ERROR"
+    },
+    {
+      "caseId": "broken-chart-unreadable",
+      "code": "CHART_UNREADABLE",
+      "expected": "WARNING",
+      "predicted": "ERROR"
+    },
+    {
+      "caseId": "broken-flow-unreadable",
+      "code": "FLOW_UNREADABLE",
+      "expected": "WARNING",
+      "predicted": "ERROR"
+    }
+  ],
+  "autoRepairPolicy": {
+    "precisionThreshold": 0.9,
+    "recallThreshold": 0.8,
+    "autoRepairEligible": [],
+    "humanReviewRecommended": [
+      "TEXT_OVERFLOW",
+      "TEXT_TOO_SMALL",
+      "ELEMENT_OVERLAP",
+      "ELEMENT_CLIPPED",
+      "UNBALANCED_LAYOUT",
+      "EXCESSIVE_EMPTY_SPACE",
+      "LOW_CONTRAST",
+      "VISUAL_HIERARCHY_WEAK",
+      "TABLE_UNREADABLE",
+      "CHART_UNREADABLE",
+      "FLOW_UNREADABLE",
+      "DENSE_CONTENT",
+      "BROKEN_RENDERING"
+    ],
+    "informationalOnly": []
+  },
+  "cases": [
+    {
+      "caseId": "clean-cover",
+      "slideNumber": 1,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-content",
+      "slideNumber": 2,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-flow",
+      "slideNumber": 5,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-chart",
+      "slideNumber": 6,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-comparison",
+      "slideNumber": 7,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-table",
+      "slideNumber": 8,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "clean-summary",
+      "slideNumber": 9,
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-text-overflow",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_OVERFLOW"
+      ],
+      "predictedCodes": [
+        "TEXT_OVERFLOW",
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Large English text 'OVERFLOW: this deliberately extends beyon' overflows horizontally beyond slide boundaries, overlapping with Chinese content and making both unreadable.",
+          "repairHint": "Truncate or wrap overflow text, or move to separate line within slide bounds."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "ERROR",
+          "confidence": 0.9,
+          "description": "Overflow English text overlaps with Chinese title text and bullet points, causing mutual obstruction of both text layers.",
+          "repairHint": "Remove or reposition overlapping text element to prevent intersection with main content."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Overflow text is clipped at right edge ('beyon' cut off), and horizontal lines extend beyond visible slide area.",
+          "repairHint": "Ensure all content fits within slide canvas; resize or reposition clipped elements."
+        }
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-text-too-small",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_TOO_SMALL"
+      ],
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE",
+        "TEXT_TOO_SMALL",
+        "UNBALANCED_LAYOUT"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "EXCESSIVE_EMPTY_SPACE",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Vast majority of slide is blank beige background with content clustered in small upper-left region, leaving page looking unfinished and content incomplete",
+          "repairHint": "Enlarge content area or reposition elements to fill slide canvas proportionally"
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "'tiny text' label in upper right and body text in 'Key takeaways' box are extremely small and would be illegible at normal presentation viewing distance",
+          "repairHint": "Increase font sizes to minimum readable presentation size (18-24pt for body, larger for labels)"
+        },
+        {
+          "slideNumber": 1,
+          "code": "UNBALANCED_LAYOUT",
+          "severity": "WARNING",
+          "confidence": 0.75,
+          "description": "Content concentrated in narrow upper-left band with extreme right and lower areas completely empty, disrupting natural reading path",
+          "repairHint": "Redistribute content across slide or use full-width layout to balance visual weight"
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "WARNING",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-element-overlap",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED",
+        "TEXT_OVERFLOW"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Two large opaque blocks labeled 'ELEMENT A' and 'ELEMENT B' severely overlap each other and obscure underlying bullet-point text about plant observation and starch formation.",
+          "repairHint": "Remove or reposition the overlapping placeholder blocks to reveal the lesson content beneath, or redesign as non-overlapping layers."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "The 'Key takeaways' panel on the right has text that appears truncated or crowded at its right edge, with '结论' partially cut off and lines breaking awkwardly.",
+          "repairHint": "Widen the panel or reduce font size to fit all text within bounds without clipping."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "Bullet-point text in the left content area is partially hidden behind the opaque 'ELEMENT A' and 'ELEMENT B' overlays, making it unreadable.",
+          "repairHint": "Ensure all text layers sit above opaque elements or remove blocking overlays."
+        }
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-element-clipped",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedCodes": [
+        "ELEMENT_CLIPPED",
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "ERROR",
+          "confidence": 1,
+          "description": "Large 'CLIPPED' watermark/overlay partially obscures right-side card content",
+          "repairHint": "Remove or reposition the overlay, or resize the card to fit within visible area"
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "WARNING",
+          "confidence": 0.95,
+          "description": "Orange border frame overlaps with right card edge and 'CLIPPED' text",
+          "repairHint": "Adjust layering or spacing so frame does not intersect card content"
+        }
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-unbalanced-layout",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "UNBALANCED_LAYOUT"
+      ],
+      "predictedCodes": [
+        "ELEMENT_OVERLAP",
+        "LOW_CONTRAST"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Large dark green rectangle with 'ONE DOMINANT REGION' text completely obscures underlying Chinese text content",
+          "repairHint": "Remove or reposition the overlay rectangle to reveal the slide content beneath"
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Underlying Chinese text has insufficient contrast against background, partially visible through overlay",
+          "repairHint": "Ensure all text meets minimum contrast ratio against its background"
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-excessive-empty-space",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "EXCESSIVE_EMPTY_SPACE"
+      ],
+      "predictedCodes": [
+        "EXCESSIVE_EMPTY_SPACE"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "EXCESSIVE_EMPTY_SPACE",
+          "severity": "WARNING",
+          "confidence": 0.9,
+          "description": "Vast empty area below and to the right of content cluster makes slide appear unfinished",
+          "repairHint": "Enlarge content or reposition to use slide canvas, or add supporting visuals"
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "WARNING",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-low-contrast",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "LOW_CONTRAST"
+      ],
+      "predictedCodes": [
+        "LOW_CONTRAST",
+        "VISUAL_HIERARCHY_WEAK"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "All text uses extremely light gray on off-white background, making content nearly illegible",
+          "repairHint": "Darken text color to at least #333333 or use black for body text and dark gray for secondary text"
+        },
+        {
+          "slideNumber": 1,
+          "code": "VISUAL_HIERARCHY_WEAK",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Title, subtitle, body text, and sidebar all share similar light gray tones; heading distinction is lost",
+          "repairHint": "Use significantly darker or bolder title, distinct color/weight for 'Key takeaways' header"
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-visual-hierarchy-weak",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "VISUAL_HIERARCHY_WEAK"
+      ],
+      "predictedCodes": [
+        "LOW_CONTRAST",
+        "ELEMENT_OVERLAP",
+        "TEXT_TOO_SMALL"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Text in gray boxes has extremely low contrast against dark gray backgrounds, making most content illegible",
+          "repairHint": "Use lighter background or darker text with higher contrast ratio for box contents"
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Text from second row boxes overlaps and bleeds into adjacent boxes, breaking visual separation",
+          "repairHint": "Increase spacing between boxes or reduce text length to prevent overflow into neighboring elements"
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "Body text within grid boxes appears too small relative to slide viewing distance",
+          "repairHint": "Increase font size within boxes or reduce number of boxes to allow larger text"
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-table-unreadable",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "TABLE_UNREADABLE"
+      ],
+      "predictedCodes": [
+        "BROKEN_RENDERING",
+        "TABLE_UNREADABLE",
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "BROKEN_RENDERING",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Table content rendered as solid black horizontal bars instead of readable text, making all cell content completely illegible",
+          "repairHint": "Fix rendering engine or font embedding issue causing text to appear as black bars"
+        },
+        {
+          "slideNumber": 1,
+          "code": "TABLE_UNREADABLE",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "All table rows display as black bars with no discernible text, structure, or data readable",
+          "repairHint": "Re-export slide with proper font embedding or check rendering pipeline for corruption"
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "WARNING",
+          "confidence": 0.7,
+          "description": "Bottom text '温室夜间持续补光：需权衡 | 正午关闭通风：不合理' overlaps with table border",
+          "repairHint": "Move bottom caption text below table or increase bottom margin"
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-chart-unreadable",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "CHART_UNREADABLE"
+      ],
+      "predictedCodes": [
+        "CHART_UNREADABLE",
+        "LOW_CONTRAST",
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "CHART_UNREADABLE",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Chart completely lacks axis labels, axis values, legend, and data point labels. No way to determine what values are represented.",
+          "repairHint": "Add labeled X and Y axes with numerical scales, and include a legend if multiple data series exist."
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.8,
+          "description": "Footnote text '变量控制：温度、二氧化碳浓度和水量保持一致。' appears in very light gray against off-white background, making it hard to read.",
+          "repairHint": "Darken footnote text color to improve contrast against background."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_CLIPPED",
+          "severity": "WARNING",
+          "confidence": 0.7,
+          "description": "Bottom decorative lines and possible content area appear truncated at bottom edge of slide.",
+          "repairHint": "Adjust slide layout to ensure all elements fit within visible boundaries."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-flow-unreadable",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "FLOW_UNREADABLE"
+      ],
+      "predictedCodes": [
+        "FLOW_UNREADABLE",
+        "TEXT_OVERFLOW",
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "FLOW_UNREADABLE",
+          "severity": "ERROR",
+          "confidence": 0.9,
+          "description": "Multiple text labels in flowchart boxes are truncated or overflow, making steps unreadable. '消耗原有淀' is cut off (should be '消耗原有淀粉'), '用黑纸片遮住同一叶片的一部分，设置对照' overflows its box with '照' dropped below, and '脱色后滴加碘液，比较遮光与见光部位' is partially obscured.",
+          "repairHint": "Widen flowchart boxes or reduce font size to fit full text; ensure all labels remain inside their containers."
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_OVERFLOW",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Subtitle '小组实验流程' and title area have adequate space, but body text in multiple flow nodes overflows or is clipped at box boundaries.",
+          "repairHint": "Resize flowchart nodes to contain their text, or enable text wrapping with smaller font."
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "WARNING",
+          "confidence": 0.75,
+          "description": "Text from flow nodes visually overlaps with adjacent box borders and connecting lines, particularly in the middle row where descriptive text extends beyond intended containers.",
+          "repairHint": "Increase padding inside nodes or expand node dimensions to prevent text-border overlap."
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-dense-content",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "DENSE_CONTENT"
+      ],
+      "predictedCodes": [
+        "BROKEN_RENDERING",
+        "TEXT_TOO_SMALL"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "BROKEN_RENDERING",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "All body text rendered as horizontal colored stripes/lines instead of readable characters",
+          "repairHint": "Fix font embedding or rendering pipeline to display actual Chinese text content"
+        },
+        {
+          "slideNumber": 1,
+          "code": "TEXT_TOO_SMALL",
+          "severity": "WARNING",
+          "confidence": 0.7,
+          "description": "Subtitle text '课堂导入' is extremely small and barely legible",
+          "repairHint": "Increase subtitle font size to match title hierarchy"
+        }
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    },
+    {
+      "caseId": "broken-rendering",
+      "slideNumber": 1,
+      "knownClean": false,
+      "expectedCodes": [
+        "BROKEN_RENDERING"
+      ],
+      "predictedCodes": [
+        "BROKEN_RENDERING",
+        "ELEMENT_OVERLAP",
+        "LOW_CONTRAST"
+      ],
+      "predictedIssues": [
+        {
+          "slideNumber": 1,
+          "code": "BROKEN_RENDERING",
+          "severity": "ERROR",
+          "confidence": 0.95,
+          "description": "Large black band with pink rectangles and green diagonal lines obscures main content area, making bullet points unreadable",
+          "repairHint": "Remove or fix the corrupted graphic overlay blocking text content"
+        },
+        {
+          "slideNumber": 1,
+          "code": "ELEMENT_OVERLAP",
+          "severity": "ERROR",
+          "confidence": 0.9,
+          "description": "Decorative black band with geometric shapes overlaps bullet point text about plant observation",
+          "repairHint": "Reposition or resize the decorative element to not cover text content"
+        },
+        {
+          "slideNumber": 1,
+          "code": "LOW_CONTRAST",
+          "severity": "WARNING",
+          "confidence": 0.85,
+          "description": "Pink text on pink rectangles within black band is illegible due to insufficient contrast",
+          "repairHint": "Use contrasting colors for text and background elements"
+        }
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "predictedMaxSeverity": "ERROR",
+      "outcome": "SUCCESS",
+      "repaired": false
+    }
+  ]
+}
