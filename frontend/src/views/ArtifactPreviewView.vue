@@ -27,6 +27,15 @@
           </div>
         </div>
         <div class="preview-hero__actions">
+          <el-button
+            v-if="pptExportOption"
+            type="primary"
+            :icon="Download"
+            :loading="pptDownloading"
+            @click="downloadPpt"
+          >
+            下载 PPTX
+          </el-button>
           <el-button :icon="Back" @click="router.push(`/projects/${projectId}/plan`)">返回内容生成</el-button>
         </div>
       </header>
@@ -165,6 +174,11 @@
 
 <script setup lang="ts">
 import {
+  downloadProjectExport,
+  getProjectExportCatalog,
+  type ExportOption,
+} from '@/api/exports';
+import {
   getArtifact,
   getArtifacts,
   getGenerationWorkspace,
@@ -183,7 +197,7 @@ import StatePanel from '@/components/StatePanel.vue';
 import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
 import { formatDateTime } from '@/utils/presentation';
 import { ElMessage } from 'element-plus';
-import { Back, ChatDotRound, DataBoard, Document, EditPen, Files, Refresh, View } from '@element-plus/icons-vue';
+import { Back, ChatDotRound, DataBoard, Document, Download, EditPen, Files, Refresh, View } from '@element-plus/icons-vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -205,6 +219,8 @@ const revisionInstruction = ref('');
 const revisionSubmitting = ref(false);
 const revisionError = ref('');
 const revisionSuccess = ref('');
+const pptExportOption = ref<ExportOption>();
+const pptDownloading = ref(false);
 const {
   presentation: gatewayPresentation,
   refresh: loadGatewayStatus,
@@ -292,6 +308,28 @@ async function loadArtifactList() {
   }
 }
 
+async function loadPptExportOption() {
+  try {
+    const catalog = await getProjectExportCatalog(projectId.value);
+    pptExportOption.value = catalog.formats?.find((option) => option.format === 'PPTX');
+  } catch {
+    pptExportOption.value = undefined;
+  }
+}
+
+async function downloadPpt() {
+  if (!pptExportOption.value || pptDownloading.value) return;
+  pptDownloading.value = true;
+  try {
+    await downloadProjectExport(projectId.value, pptExportOption.value);
+    ElMessage.success('PPTX 文件已开始下载');
+  } catch (error) {
+    ElMessage.error(resolveError(error, 'PPTX 下载失败，请稍后重试。'));
+  } finally {
+    pptDownloading.value = false;
+  }
+}
+
 async function submitRevision() {
   const source = activeSummary.value;
   const instruction = revisionInstruction.value.trim();
@@ -339,13 +377,15 @@ async function loadArtifactDetail(type: ArtifactType, force = false) {
 async function loadPreview() {
   loading.value = true;
   await Promise.all([loadWorkspace(), loadGatewayStatus()]);
-  await loadArtifactList();
+  await Promise.all([loadArtifactList(), loadPptExportOption()]);
   loading.value = false;
 }
 
 function resolveError(error: unknown, fallback: string) {
   const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
-  return message && !/(Exception|java\.|Axios)/i.test(message) ? message : fallback;
+  return message && !/(Exception|stack trace|node:|java\.|Axios|at\s+.+\(|[A-Za-z]:\\|Bearer\s+|token|api[_-]?key)/i.test(message)
+    ? message
+    : fallback;
 }
 
 watch(activeType, (type) => { void loadArtifactDetail(type); });

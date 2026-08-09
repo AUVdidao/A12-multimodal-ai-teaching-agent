@@ -1,7 +1,16 @@
 <template>
-  <StatePanel v-if="!slides.length" type="empty" title="PPT 成果没有可预览页面" description="当前成果内容为空。" />
-  <div v-else class="ppt-preview">
-    <nav class="ppt-preview__thumbs" aria-label="PPT 页面缩略图">
+  <div v-if="!slides.length" class="ppt-preview-empty-shell">
+    <div class="ppt-preview-boundary" role="note">
+      内容结构预览：当前没有可展示的结构化页面数据；真实 PNG 预览尚未启用。
+    </div>
+    <StatePanel type="empty" title="PPT 内容结构暂不可用" description="当前成果未包含可展示的页面结构。" />
+  </div>
+  <div v-else class="ppt-preview-shell">
+    <div class="ppt-preview-boundary" role="note">
+      内容结构预览：这里展示课件结构与文字内容，不代表真实 PPTX 页面渲染；真实 PNG 预览尚未启用。
+    </div>
+    <div class="ppt-preview">
+      <nav class="ppt-preview__thumbs" aria-label="PPT 页面缩略图">
       <button
         v-for="(slide, index) in slides"
         :key="`${slide.order}-${index}`"
@@ -17,9 +26,9 @@
           <i v-for="bullet in slide.bullets.slice(0, 3)" :key="bullet">{{ bullet }}</i>
         </span>
       </button>
-    </nav>
+      </nav>
 
-    <section class="ppt-stage" :aria-label="`第 ${selectedIndex + 1} 页 PPT 预览`">
+      <section class="ppt-stage" :aria-label="`第 ${selectedIndex + 1} 页 PPT 内容结构预览`">
       <div class="ppt-stage__content">
         <span class="ppt-stage__index">{{ String(selectedIndex + 1).padStart(2, '0') }}</span>
         <div>
@@ -31,7 +40,8 @@
         </div>
         <p v-if="selectedSlide.notes" class="ppt-stage__notes">备注：{{ selectedSlide.notes }}</p>
       </div>
-    </section>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -55,6 +65,26 @@ watch(() => props.artifact.id, () => { selectedIndex.value = 0; });
   grid-template-columns: 172px minmax(0, 1fr);
   min-width: 0;
   gap: 14px;
+}
+
+.ppt-preview-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.ppt-preview-empty-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.ppt-preview-boundary {
+  padding: 9px 12px;
+  border: 1px solid #dcd6ff;
+  border-radius: 6px;
+  background: #f7f5ff;
+  color: #5b45a8;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .ppt-preview__thumbs {

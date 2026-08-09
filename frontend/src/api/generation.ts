@@ -153,6 +153,10 @@ export async function confirmGenerationPlan(
   return response.data.data;
 }
 
+/**
+ * Legacy generic artifact generation for existing non-PPT callers.
+ * The PPT product flow must use the dedicated pptHarness client instead.
+ */
 export async function generateArtifacts(projectId: number | string, planId: number | string) {
   const response = await http.post<ApiResponse<Artifact[]>>(
     `/api/projects/${projectId}/artifacts/generate`,

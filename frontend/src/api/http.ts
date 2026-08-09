@@ -16,6 +16,10 @@ export const http = axios.create({
   timeout: 240000,
 });
 
+export function apiRequestUrl(path: string): string {
+  return requestBaseURL ? `${requestBaseURL}${path}` : path;
+}
+
 http.interceptors.request.use((config) => {
   const token = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
   if (token) {

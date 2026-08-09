@@ -105,6 +105,22 @@ class PptHarnessGenerationServiceTest {
     }
 
     @Test
+    void failedJobPreservesSafeHarnessErrorForTheFrontend() {
+        PptHarnessDtos.JobResponse failed = new PptHarnessDtos.JobResponse(
+                "task-failed", "request-1", 7L, "FAILED", "FAILED", 100,
+                null, "/status", "/events", null, null,
+                new PptHarnessDtos.ErrorRef("KIMI_TIMEOUT", "PPT generation timed out; please retry")
+        );
+        when(harnessClient.get("task-failed")).thenReturn(failed);
+
+        PptHarnessDtos.JobResponse result = service.status(7L, "task-failed");
+
+        assertEquals("KIMI_TIMEOUT", result.error().code());
+        assertEquals("PPT generation timed out; please retry", result.error().message());
+        verify(harnessClient, never()).download(any());
+    }
+
+    @Test
     void hashMismatchNeverCreatesArtifactVersion() {
         when(harnessClient.get("task-3")).thenReturn(job("task-3", "SUCCEEDED", 4, "incorrect"));
         when(harnessClient.qaReport("task-3")).thenReturn(new PptHarnessDtos.QaReport("task-3", "AUTOMATED_GEOMETRY_ONLY", true, new ObjectMapper().createObjectNode()));
@@ -133,7 +149,7 @@ class PptHarnessGenerationServiceTest {
     private static PptHarnessDtos.JobResponse job(String taskId, String status, long size, String hash) {
         return new PptHarnessDtos.JobResponse(
                 taskId, "request-1", 7L, status, status, 50, "message", "/status", "/events",
-                size == 0 ? null : new PptHarnessDtos.ArtifactRef("presentation.pptx", size, hash, null), null
+                size == 0 ? null : new PptHarnessDtos.ArtifactRef("presentation.pptx", size, hash, null), null, null
         );
     }
 }

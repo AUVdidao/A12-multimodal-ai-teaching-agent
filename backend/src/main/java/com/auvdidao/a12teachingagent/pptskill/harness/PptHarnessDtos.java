@@ -28,12 +28,16 @@ public final class PptHarnessDtos {
             String statusUrl,
             String eventsUrl,
             ArtifactRef artifact,
-            QaSummary qa
+            QaSummary qa,
+            ErrorRef error
     ) { }
 
     public record ArtifactRef(String fileName, long sizeBytes, String sha256, String downloadUrl) { }
 
     public record QaSummary(boolean passed, String qaLevel, List<String> warnings) { }
+
+    /** Safe, user-displayable failure details supplied by the Harness. */
+    public record ErrorRef(String code, String message) { }
 
     public record QaReport(String taskId, String qaLevel, boolean passed, JsonNode report) { }
 }
