@@ -204,7 +204,8 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/projects/:projectId/summary',
-    redirect: to => `/projects/${to.params.projectId}/requirements`,
+    name: 'project-summary',
+    component: () => import('@/views/RequirementSummaryView.vue'),
     meta: { title: '需求摘要确认', roles: ['TEACHER'] },
   },
   {
@@ -308,7 +309,7 @@ router.beforeEach(async (to) => {
   const leaderCourseRouteNames = new Set([
     'home',
     'projects', 'project-create', 'project-mode', 'project-overview', 'project-requirements',
-    'project-materials', 'project-outline', 'project-lesson-plan', 'project-ppt',
+    'project-summary', 'project-materials', 'project-outline', 'project-lesson-plan', 'project-ppt',
     'recent-projects', 'recycle-bin', 'resource-library',
     'knowledge-library', 'template-center', 'ai-assistant', 'ai-credentials',
   ]);
