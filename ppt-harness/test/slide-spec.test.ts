@@ -6,27 +6,29 @@ import { validateSlideSpec } from "../src/slide-spec.js";
 import { TemplateRegistry } from "../src/template-registry.js";
 import { toRunnerOutline } from "../src/runner-outline-adapter.js";
 import { toPublicQaReport } from "../src/qa-report.js";
+import { buildTeachingContractContext } from "../src/pedagogical-contract.js";
 
 const job: PresentationJob = {
   id: "6a9745b7-1d1d-4c29-83cf-a2d44a059237", requestId: "fixture-test-001", projectId: 113,
   status: "QUEUED", progressPercent: 0, attemptCount: 0, templateId: "a12-teaching-generic", templateVersion: "1.0.0", locale: "zh-CN", targetSlideCount: 9,
   jobSnapshot: {
     project: { projectId: 113, courseName: "八年级生物", chapterTopic: "光合作用" },
-    requirementSummary: { courseName: "八年级生物", topic: "光合作用" },
-    confirmedTeachingIntent: {},
-    confirmedGenerationPlan: { pptOutline: [] },
-    materialEvidence: [],
+    requirementSummary: { courseName: "八年级生物", topic: "光合作用", teachingGoals: ["解释光合作用的关键过程"] },
+    confirmedTeachingIntent: { generationGoals: ["将概念应用到真实情境"] },
+    confirmedGenerationPlan: { pptOutline: Array.from({ length: 9 }, (_, index) => ({ order: index + 1, title: `确认大纲 ${index + 1}`, points: [`教学要点 ${index + 1}`] })) },
+    materialEvidence: [{ materialId: 7, sourceName: "biology.pdf", chunkId: 8, text: "grounded evidence" }],
     templateSelection: { templateId: "a12-teaching-generic", templateVersion: "1.0.0" },
     generationPreferences: { language: "zh-CN", style: "clear", density: "standard", targetSlideCount: 9 },
   }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
 };
 
-test("fixture SlideSpec validates against the fixed teaching template", async () => {
+test("fixture SlideSpec validates the V2 teaching contract and renderer contract", async () => {
   const template = await new TemplateRegistry().get("a12-teaching-generic", "1.0.0");
   const spec = await new FixtureSlideSpecProvider().create(job, template);
-  validateSlideSpec(spec, template, job.targetSlideCount);
-  const outline = toRunnerOutline(spec);
-  assert.equal((outline.slides as unknown[]).length, 9);
+  validateSlideSpec(spec, template, job.targetSlideCount, buildTeachingContractContext(job));
+  assert.equal(spec.schemaVersion, 2);
+  assert.equal(spec.slides[0].pedagogicalRole, "HOOK");
+  assert.equal((toRunnerOutline(spec).slides as unknown[]).length, 9);
 });
 
 test("template registry exposes the generic and MIT editorial templates", async () => {
@@ -47,7 +49,6 @@ test("runner outline groups summary and assignment content within card limits", 
   assert.ok(assignmentSlide);
   summarySlide.slots.takeaways = summaryItems;
   assignmentSlide.slots.tasks = assignmentItems;
-
   const slides = toRunnerOutline(spec).slides as Array<{ cards?: Array<{ body: string }> }>;
   const summaryCards = slides[spec.slides.indexOf(summarySlide)].cards;
   const assignmentCards = slides[spec.slides.indexOf(assignmentSlide)].cards;
@@ -61,14 +62,14 @@ test("SlideSpec rejects unsupported layouts", async () => {
   const template = await new TemplateRegistry().get("a12-teaching-generic", "1.0.0");
   const spec = await new FixtureSlideSpecProvider().create(job, template);
   spec.slides[1].layoutId = "unsupported-layout";
-  assert.throws(() => validateSlideSpec(spec, template, job.targetSlideCount), HarnessError);
+  assert.throws(() => validateSlideSpec(spec, template, job.targetSlideCount, buildTeachingContractContext(job)), HarnessError);
 });
 
 test("SlideSpec rejects placeholder content", async () => {
   const template = await new TemplateRegistry().get("a12-teaching-generic", "1.0.0");
   const spec = await new FixtureSlideSpecProvider().create(job, template);
   spec.slides[1].title = "TODO";
-  assert.throws(() => validateSlideSpec(spec, template, job.targetSlideCount), HarnessError);
+  assert.throws(() => validateSlideSpec(spec, template, job.targetSlideCount, buildTeachingContractContext(job)), HarnessError);
 });
 
 test("public QA report excludes runner filesystem paths", () => {

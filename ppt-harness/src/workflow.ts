@@ -6,6 +6,7 @@ import { toRunnerOutline } from "./runner-outline-adapter.js";
 import { PptSkillRunnerClient } from "./runner-client.js";
 import { selectSlideSpecProvider, SlideSpecProvider } from "./slide-spec-provider.js";
 import { validateSlideSpec } from "./slide-spec.js";
+import { buildTeachingContractContext } from "./pedagogical-contract.js";
 import { TemplateRegistry } from "./template-registry.js";
 import { HarnessConfig } from "./config.js";
 
@@ -42,21 +43,24 @@ export class PresentationWorkflowService {
 
       const checkpointSpec = await this.repository.latestCheckpoint(job.id, "VALIDATED_SLIDE_SPEC");
       let spec: SlideSpec;
-      if (checkpointSpec) {
+      const contractContext = buildTeachingContractContext(job);
+      if (checkpointSpec?.schemaVersion === 2) {
         spec = checkpointSpec as unknown as SlideSpec;
         await this.transition(job.id, "VALIDATING_SLIDE_SPEC", "Reusing the most recent validated SlideSpec checkpoint", 35);
       } else {
+        if (checkpointSpec) await this.transition(job.id, "GENERATING_SLIDE_SPEC", "Regenerating a legacy SlideSpec checkpoint with schemaVersion 2", 24);
         await this.transition(job.id, "GENERATING_SLIDE_SPEC", "Generating structured SlideSpec", 25);
         spec = await this.provider.create(job, template);
         await this.repository.saveCheckpoint(job.id, "SLIDE_SPEC", spec as unknown as Record<string, unknown>);
         await this.transition(job.id, "VALIDATING_SLIDE_SPEC", "Validating template layout and content capacity", 35);
         try {
-          validateSlideSpec(spec, template, job.targetSlideCount);
+          validateSlideSpec(spec, template, job.targetSlideCount, contractContext);
         } catch (error) {
           if (this.config.maxRepairAttempts > 0 && this.config.generationSource === "KIMI" && this.provider.repair) {
             await this.transition(job.id, "REPAIRING_SLIDE_SPEC", "Requesting one schema-constrained SlideSpec repair", 31);
-            spec = await this.provider.repair(job, template, spec, error instanceof Error ? error.message : "SlideSpec validation failed");
-            validateSlideSpec(spec, template, job.targetSlideCount);
+            const reason = error instanceof HarnessError ? `${error.code}: ${error.message}` : "INVALID_SLIDE_SPEC: SlideSpec validation failed";
+            spec = await this.provider.repair(job, template, spec, reason);
+            validateSlideSpec(spec, template, job.targetSlideCount, contractContext);
           } else {
             throw error;
           }

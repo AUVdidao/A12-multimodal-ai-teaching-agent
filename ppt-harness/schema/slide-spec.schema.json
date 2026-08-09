@@ -1,29 +1,98 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://a12.local/schema/slide-spec.schema.json",
-  "title": "A12 SlideSpec",
+  "title": "A12 Teaching SlideSpec V2",
   "type": "object",
-  "required": ["templateId", "templateVersion", "locale", "slides"],
+  "required": ["schemaVersion", "deckTitle", "templateId", "templateVersion", "locale", "slides"],
   "properties": {
-    "templateId": { "type": "string" },
-    "templateVersion": { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "deckTitle": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "templateId": { "type": "string", "minLength": 1 },
+    "templateVersion": { "type": "string", "minLength": 1 },
     "locale": { "type": "string", "enum": ["zh-CN"] },
+    "learningObjectives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["objectiveId", "text"],
+        "properties": { "objectiveId": { "type": "string", "pattern": "^OBJ-[0-9]+$" }, "text": { "type": "string", "minLength": 1, "maxLength": 160 } },
+        "additionalProperties": false
+      }
+    },
     "slides": {
       "type": "array",
       "minItems": 1,
       "maxItems": 80,
       "items": {
-        "type": "object",
-        "required": ["id", "layoutId", "title", "visualStrategy", "slots"],
-        "properties": {
-          "id": { "type": "string", "pattern": "^slide-[0-9]+$" },
-          "layoutId": { "type": "string" },
-          "title": { "type": "string", "minLength": 1, "maxLength": 100 },
-          "visualStrategy": { "type": "string", "minLength": 1, "maxLength": 300 },
-          "slots": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 5000 } }
-        },
-        "additionalProperties": false
+        "$ref": "#/$defs/slide"
       }
+    }
+  },
+  "$defs": {
+    "slide": {
+      "type": "object",
+      "required": [
+        "slideId", "pedagogicalRole", "learningObjectiveIds", "teachingPurpose", "title", "content", "evidenceRefs", "sourceNotes",
+        "visualIntent", "assetRequests", "layoutIntent", "teacherNotes", "density", "importance", "outlineSectionIndex", "layoutId", "visualStrategy", "slots"
+      ],
+      "properties": {
+        "slideId": { "type": "string", "pattern": "^slide-[0-9]+$" },
+        "pedagogicalRole": { "enum": ["HOOK", "OBJECTIVE", "CONCEPT", "EXPLANATION", "EXAMPLE", "WORKED_EXAMPLE", "INQUIRY", "EXPERIMENT", "COMPARISON", "PRACTICE", "FORMATIVE_ASSESSMENT", "DISCUSSION", "SUMMARY", "ASSIGNMENT"] },
+        "learningObjectiveIds": { "type": "array", "items": { "type": "string", "pattern": "^OBJ-[0-9]+$" } },
+        "teachingPurpose": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "content": { "type": "object", "additionalProperties": true },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "object", "required": ["chunkId"], "properties": { "chunkId": { "type": ["string", "number"] } }, "additionalProperties": false },
+              { "type": "object", "required": ["materialId", "snapshotIndex"], "properties": { "materialId": { "type": ["string", "number"] }, "snapshotIndex": { "type": "integer", "minimum": 0 } }, "additionalProperties": false }
+            ]
+          }
+        },
+        "sourceNotes": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 240 } },
+        "visualIntent": {
+          "type": "object", "required": ["type", "description"], "properties": {
+            "type": { "enum": ["TEXT", "IMAGE", "DIAGRAM", "FLOW", "COMPARISON", "TABLE", "CHART", "TIMELINE", "STATS", "CONCEPT_MAP", "MIXED"] },
+            "description": { "type": "string", "minLength": 1, "maxLength": 240 }
+          },
+          "additionalProperties": false
+        },
+        "assetRequests": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["type", "purpose"],
+            "properties": {
+              "type": { "enum": ["IMAGE", "ICON", "DIAGRAM", "CHART_DATA", "TABLE"] },
+              "purpose": { "type": "string", "minLength": 1, "maxLength": 160 },
+              "query": { "type": "string", "maxLength": 240 },
+              "description": { "type": "string", "maxLength": 240 },
+              "sourcePreference": { "type": "string", "maxLength": 240 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "layoutIntent": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "interaction": {
+          "type": "object", "required": ["type"],
+          "properties": {
+            "type": { "enum": ["NONE", "QUESTION", "DISCUSSION", "POLL", "PRACTICE", "OBSERVATION", "GROUP_TASK"] },
+            "prompt": { "type": "string", "maxLength": 400 },
+            "expectedResponse": { "type": "string", "maxLength": 400 },
+            "durationMinutes": { "type": "integer", "minimum": 0, "maximum": 120 }
+          },
+          "additionalProperties": false
+        },
+        "teacherNotes": { "type": "string", "maxLength": 2000 },
+        "density": { "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "importance": { "enum": ["CORE", "SUPPORTING", "OPTIONAL"] },
+        "outlineSectionIndex": { "type": ["integer", "null"], "minimum": 0 },
+        "layoutId": { "type": "string", "minLength": 1 },
+        "visualStrategy": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "slots": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

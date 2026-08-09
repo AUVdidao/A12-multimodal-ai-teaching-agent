@@ -1,7 +1,10 @@
-import { HarnessError, SlideSpec, TemplateSpec } from "./domain.js";
+import { HarnessError, SLIDE_SPEC_SCHEMA_VERSION, SlideSpec, TemplateSpec } from "./domain.js";
+import { TeachingContractContext, validateTeachingContract } from "./pedagogical-contract.js";
 
 const BANNED = [/\bTODO\b/i, /\bTBD\b/i, /占位/, /lorem ipsum/i];
-export function validateSlideSpec(spec: SlideSpec, template: TemplateSpec, targetSlides: number): void {
+
+export function validateSlideSpec(spec: SlideSpec, template: TemplateSpec, targetSlides: number, context?: TeachingContractContext): void {
+  if (spec.schemaVersion !== SLIDE_SPEC_SCHEMA_VERSION) throw new HarnessError("SLIDE_SCHEMA_VERSION_UNSUPPORTED", "SlideSpec schemaVersion must be 2");
   if (spec.templateId !== template.templateId || spec.templateVersion !== template.version) throw new HarnessError("INVALID_SLIDE_SPEC", "SlideSpec template reference does not match the selected template");
   if (!Array.isArray(spec.slides) || spec.slides.length !== targetSlides) throw new HarnessError("INVALID_SLIDE_SPEC", "SlideSpec page count does not match requested target");
   const layouts = new Map(template.layouts.map(layout => [layout.layoutId, layout]));
@@ -9,6 +12,7 @@ export function validateSlideSpec(spec: SlideSpec, template: TemplateSpec, targe
     const layout = layouts.get(slide.layoutId);
     if (!layout) throw new HarnessError("INVALID_SLIDE_SPEC", `Unsupported layoutId: ${slide.layoutId}`);
     if (!slide.title?.trim() || !slide.visualStrategy?.trim()) throw new HarnessError("INVALID_SLIDE_SPEC", "Each slide requires title and visualStrategy");
+    if (!slide.slots || typeof slide.slots !== "object" || Array.isArray(slide.slots)) throw new HarnessError("INVALID_SLIDE_SPEC", `slideId=${slide.slideId || "<missing>"}; slots must be an object`);
     for (const slot of layout.slots) if (slide.slots[slot] === undefined && slot !== "title") throw new HarnessError("INVALID_SLIDE_SPEC", `Required slot missing: ${slot}`);
     const text = JSON.stringify(slide);
     if (BANNED.some(pattern => pattern.test(text))) throw new HarnessError("INVALID_SLIDE_SPEC", "SlideSpec contains placeholder content");
@@ -25,4 +29,5 @@ export function validateSlideSpec(spec: SlideSpec, template: TemplateSpec, targe
       if (Array.isArray(value) && value.length > capacity) throw new HarnessError("INVALID_SLIDE_SPEC", `Slot ${slot} exceeds template capacity`);
     }
   }
+  validateTeachingContract(spec, context ?? { objectiveCatalog: [], evidenceCatalog: [], outlineCatalog: [], outlineSectionCount: 0 }, targetSlides);
 }
