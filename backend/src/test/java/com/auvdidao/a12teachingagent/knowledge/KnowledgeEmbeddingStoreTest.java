@@ -32,7 +32,7 @@ class KnowledgeEmbeddingStoreTest {
     void upsertInsertsThenReplacesOneEmbeddingAndTracksContentHash() {
         KnowledgeChunk original = chunk(101L, 11L, 21L, 1, "first content", "first.pdf");
 
-        KnowledgeChunkEmbedding first = store.upsert(original, "manual", "fixed-v1", List.of(1.0, 0.0));
+        KnowledgeChunkEmbedding first = store.upsert(original, "provider-A", "model-1", List.of(1.0, 0.0));
 
         assertThat(first.getId()).isNotNull();
         assertThat(first.getDimensions()).isEqualTo(2);
@@ -44,16 +44,20 @@ class KnowledgeEmbeddingStoreTest {
         KnowledgeChunk changed = chunk(101L, 11L, 21L, 1, "changed content", "first.pdf");
         KnowledgeChunkEmbedding replacement = store.upsert(
                 changed,
-                "manual",
-                "fixed-v1",
+                "provider-B",
+                "model-2",
                 List.of(0.0, 1.0)
         );
 
         assertThat(replacement.getId()).isEqualTo(first.getId());
+        assertThat(replacement.getProvider()).isEqualTo("provider-B");
+        assertThat(replacement.getModel()).isEqualTo("model-2");
         assertThat(store.countByProjectId(11L)).isEqualTo(1);
         assertThat(store.findAllByProjectId(11L)).singleElement()
                 .satisfies(value -> {
                     assertThat(value.getKnowledgeChunkId()).isEqualTo(101L);
+                    assertThat(value.getProvider()).isEqualTo("provider-B");
+                    assertThat(value.getModel()).isEqualTo("model-2");
                     assertThat(value.getContentHash()).isEqualTo(KnowledgeEmbeddingStore.contentHash("changed content"));
                     assertThat(value.getVector()).isEqualTo("[0.0,1.0]");
                 });

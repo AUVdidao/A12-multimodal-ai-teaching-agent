@@ -17,6 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -50,7 +52,13 @@ class DenseKnowledgeSearchServiceTest {
                 embedding(12L, c, List.of(0.0, 1.0))
         ), List.of(a, b, c));
 
-        List<DenseKnowledgeHit> hits = service.search(1L, List.of(1.0, 0.0), 3);
+        List<DenseKnowledgeHit> hits = service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                "fixed-v1",
+                List.of(1.0, 0.0),
+                3
+        ));
 
         assertThat(hits).extracting(DenseKnowledgeHit::chunkId).containsExactly(10L, 11L, 12L);
         assertThat(hits.get(0).score()).isEqualTo(1.0);
@@ -71,7 +79,13 @@ class DenseKnowledgeSearchServiceTest {
                 embedding(1L, lowId, List.of(1.0, 0.0))
         ), List.of(highId, lowId));
 
-        List<DenseKnowledgeHit> hits = service.search(1L, List.of(1.0, 0.0), 1);
+        List<DenseKnowledgeHit> hits = service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                "fixed-v1",
+                List.of(1.0, 0.0),
+                1
+        ));
 
         assertThat(hits).extracting(DenseKnowledgeHit::chunkId).containsExactly(20L);
     }
@@ -85,11 +99,110 @@ class DenseKnowledgeSearchServiceTest {
                 embedding(41L, wrongDimension, List.of(1.0, 0.0, 0.0))
         ), List.of(valid, wrongDimension));
 
-        assertThatThrownBy(() -> service.search(1L, List.of(0.0, 0.0), 5))
+        assertThatThrownBy(() -> service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                "fixed-v1",
+                List.of(0.0, 0.0),
+                5
+        )))
                 .isInstanceOf(RuntimeException.class);
-        assertThat(service.search(1L, List.of(1.0, 0.0), 5))
+        assertThat(service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                "fixed-v1",
+                List.of(1.0, 0.0),
+                5
+        )))
                 .extracting(DenseKnowledgeHit::chunkId)
                 .containsExactly(40L);
+    }
+
+    @Test
+    void acceptsOnlySameProviderModelAndDimensions() {
+        KnowledgeChunk sameSpace = chunk(60L, 1L, 160L, 1, "Same", "same content", "same.pdf");
+        KnowledgeChunk differentModel = chunk(61L, 1L, 161L, 2, "Model", "model content", "model.pdf");
+        KnowledgeChunk differentProvider = chunk(62L, 1L, 162L, 3, "Provider", "provider content", "provider.pdf");
+        KnowledgeChunk sameSpaceOrthogonal = chunk(63L, 1L, 163L, 4, "Orthogonal", "orthogonal content", "orthogonal.pdf");
+
+        KnowledgeChunkEmbedding differentModelEmbedding = embedding(61L, differentModel, List.of(1.0, 0.0));
+        differentModelEmbedding.setModel("model-B");
+        KnowledgeChunkEmbedding differentProviderEmbedding = embedding(62L, differentProvider, List.of(1.0, 0.0));
+        differentProviderEmbedding.setProvider("provider-B");
+
+        stub(List.of(
+                embedding(60L, sameSpace, List.of(1.0, 0.0)),
+                differentModelEmbedding,
+                differentProviderEmbedding,
+                embedding(63L, sameSpaceOrthogonal, List.of(0.0, 1.0))
+        ), List.of(sameSpace, differentModel, differentProvider, sameSpaceOrthogonal));
+
+        List<DenseKnowledgeHit> hits = service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                "fixed-v1",
+                List.of(1.0, 0.0),
+                10
+        ));
+
+        assertThat(hits).extracting(DenseKnowledgeHit::chunkId).containsExactly(60L, 63L);
+    }
+
+    @Test
+    void allIncompatibleSpacesReturnEmptyWithoutDenseFallback() {
+        KnowledgeChunk otherModel = chunk(70L, 1L, 170L, 1, "Other model", "other model content", "other-model.pdf");
+        KnowledgeChunk otherProvider = chunk(71L, 1L, 171L, 2, "Other provider", "other provider content", "other-provider.pdf");
+        KnowledgeChunkEmbedding modelEmbedding = embedding(70L, otherModel, List.of(1.0, 0.0));
+        modelEmbedding.setModel("model-B");
+        KnowledgeChunkEmbedding providerEmbedding = embedding(71L, otherProvider, List.of(1.0, 0.0));
+        providerEmbedding.setProvider("provider-B");
+        stub(List.of(modelEmbedding, providerEmbedding), List.of(otherModel, otherProvider));
+
+        assertThat(service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                "fixed-v1",
+                List.of(1.0, 0.0),
+                10
+        ))).isEmpty();
+    }
+
+    @Test
+    void trimsProviderAndModelButKeepsModelExactMatchSemantics() {
+        KnowledgeChunk chunk = chunk(80L, 1L, 180L, 1, "Exact", "exact content", "exact.pdf");
+        stub(List.of(embedding(80L, chunk, List.of(1.0, 0.0))), List.of(chunk));
+
+        assertThat(service.search(new DenseSearchQuery(
+                1L,
+                " manual ",
+                " fixed-v1 ",
+                List.of(1.0, 0.0),
+                10
+        ))).extracting(DenseKnowledgeHit::chunkId).containsExactly(80L);
+        verify(embeddingRepository)
+                .findAllByProjectIdAndProviderAndModelOrderByKnowledgeChunkIdAsc(1L, "manual", "fixed-v1");
+
+        assertThat(service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                "FIXED-V1",
+                List.of(1.0, 0.0),
+                10
+        ))).isEmpty();
+        assertThatThrownBy(() -> service.search(new DenseSearchQuery(
+                1L,
+                " ",
+                "fixed-v1",
+                List.of(1.0, 0.0),
+                10
+        ))).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                " ",
+                List.of(1.0, 0.0),
+                10
+        ))).isInstanceOf(RuntimeException.class);
     }
 
     @Test
@@ -109,7 +222,13 @@ class DenseKnowledgeSearchServiceTest {
         stub(List.of(validEmbedding, wrongProjectEmbedding, staleEmbedding, missingEmbedding),
                 List.of(valid, wrongProject, stale));
 
-        assertThat(service.search(1L, List.of(1.0, 0.0), 10))
+        assertThat(service.search(new DenseSearchQuery(
+                1L,
+                "manual",
+                "fixed-v1",
+                List.of(1.0, 0.0),
+                10
+        )))
                 .extracting(DenseKnowledgeHit::chunkId)
                 .containsExactly(50L);
     }
@@ -135,14 +254,24 @@ class DenseKnowledgeSearchServiceTest {
         }
         stub(embeddings, chunks);
 
-        List<DenseKnowledgeHit> hits = service.search(99L, List.of(1.0, 0.0, 0.0, 1.0), 20);
+        List<DenseKnowledgeHit> hits = service.search(new DenseSearchQuery(
+                99L,
+                "manual",
+                "fixed-v1",
+                List.of(1.0, 0.0, 0.0, 1.0),
+                20
+        ));
 
         assertThat(hits).hasSize(20);
         assertThat(hits).allSatisfy(hit -> assertThat(hit.score()).isFinite());
     }
 
     private void stub(List<KnowledgeChunkEmbedding> embeddings, List<KnowledgeChunk> chunks) {
-        when(embeddingRepository.findAllByProjectIdOrderByKnowledgeChunkIdAsc(anyLong()))
+        when(embeddingRepository.findAllByProjectIdAndProviderAndModelOrderByKnowledgeChunkIdAsc(
+                anyLong(),
+                anyString(),
+                anyString()
+        ))
                 .thenReturn(embeddings);
         when(chunkRepository.findAllById(any())).thenReturn(chunks);
     }
