@@ -3,6 +3,7 @@ export interface HarnessConfig {
   generationSource: "FIXTURE" | "KIMI"; visualReviewEnabled: boolean; mcpBearerToken?: string;
   eventPollIntervalMs: number; artifactRetentionDays: number; maxRepairAttempts: number;
   kimiApiKey?: string; kimiBaseUrl: string; kimiModel: string; kimiTimeoutMs: number;
+  kimiVisionEnabled: boolean; kimiVisionModel?: string;
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): HarnessConfig {
   return {
@@ -19,7 +20,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HarnessConfig 
     kimiApiKey: env.MOONSHOT_API_KEY?.trim() || undefined,
     kimiBaseUrl: (env.KIMI_API_BASE_URL?.trim() || "https://api.moonshot.ai/v1").replace(/\/$/, ""),
     kimiModel: env.KIMI_MODEL?.trim() || "kimi-k2.6",
-    kimiTimeoutMs: positive(env.KIMI_TIMEOUT_MS, 120000)
+    kimiTimeoutMs: positive(env.KIMI_TIMEOUT_MS, 120000),
+    kimiVisionEnabled: env.KIMI_VISION_ENABLED === "true",
+    kimiVisionModel: env.KIMI_VISION_MODEL?.trim() || undefined
   };
 }
 function positive(value: string | undefined, fallback: number) { const parsed = Number.parseInt(value || "", 10); return parsed > 0 ? parsed : fallback; }
