@@ -1,3 +1,5 @@
+import { VisualQaIssue } from "./visual-qa.js";
+
 export type PublicQaReport = {
   qaLevel: string;
   passed: boolean;
@@ -14,8 +16,9 @@ export type PublicQaReport = {
     renderSkipped: boolean;
     manualReviewSkipped: boolean;
     previewRenderingImplemented: boolean;
-    visualReviewImplemented: false;
+    visualReviewImplemented: boolean;
   };
+  visualQa?: { jobId: string; passed: boolean; reviewedSlideCount: number; issues: VisualQaIssue[] };
 };
 
 /**
@@ -26,6 +29,7 @@ export function toPublicQaReport(qaLevel: string, passed: boolean, report: Recor
   const warnings = Array.isArray(report.geometry_violations)
     ? report.geometry_violations.map(toWarning).filter((warning): warning is PublicQaReport["summary"]["warnings"][number] => warning !== undefined)
     : [];
+  const visualQa = publicVisualQa(report.visualQa);
   return {
     qaLevel,
     passed,
@@ -42,9 +46,19 @@ export function toPublicQaReport(qaLevel: string, passed: boolean, report: Recor
       renderSkipped: report.renderSkipped === true,
       manualReviewSkipped: report.manualReviewSkipped === true,
       previewRenderingImplemented: report.previewRenderingImplemented === true,
-      visualReviewImplemented: false,
+      visualReviewImplemented: report.visualReviewImplemented === true,
     },
+    ...(visualQa ? { visualQa } : {}),
   };
+}
+
+function publicVisualQa(value: unknown): PublicQaReport["visualQa"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const visual = value as Record<string, unknown>;
+  const reviewedSlideCount = numberValue(visual.reviewedSlideCount);
+  if (typeof visual.jobId !== "string" || typeof visual.passed !== "boolean" || reviewedSlideCount === undefined || !Number.isSafeInteger(reviewedSlideCount) || !Array.isArray(visual.issues)) return undefined;
+  if (!visual.issues.every(issue => issue && typeof issue === "object" && !Array.isArray(issue))) return undefined;
+  return { jobId: visual.jobId, passed: visual.passed, reviewedSlideCount, issues: visual.issues as VisualQaIssue[] };
 }
 
 function toWarning(value: unknown): PublicQaReport["summary"]["warnings"][number] | undefined {

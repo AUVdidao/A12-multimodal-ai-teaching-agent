@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
 import { HarnessConfig } from "../src/config.js";
-import { JobArtifact, JobEvent, JobStatus, PresentationJob, SlideSpec, TemplateSpec } from "../src/domain.js";
+import { HarnessError, JobArtifact, JobEvent, JobStatus, PresentationJob, SlideSpec, TemplateSpec } from "../src/domain.js";
 import { ControlledArtifactStore } from "../src/artifact-store.js";
 import { PgJobRepository } from "../src/repository.js";
 import { PptSkillRunnerClient, RunnerGeneration } from "../src/runner-client.js";
@@ -192,7 +192,7 @@ test("Harness persists the real preview manifest and reuses it on resume", async
   assert.equal(repository.qa?.report.previewSlideCount, 3);
 });
 
-test("visual review remains explicitly unavailable even when previews exist", async () => {
+test("visual review provider unavailability fails explicitly even when previews exist", async () => {
   const repository = new MemoryRepository();
   const runner = {
     async generate(_outline: Record<string, unknown>, _stylePreset: string): Promise<RunnerGeneration> { throw new Error("not expected"); },
@@ -205,10 +205,44 @@ test("visual review remains explicitly unavailable even when previews exist", as
     templates as unknown as TemplateRegistry,
     runner as unknown as PptSkillRunnerClient,
     { async save() { return { sizeBytes: 4, sha256: "" }; } } as unknown as ControlledArtifactStore,
+    { async review() { throw new HarnessError("VISUAL_REVIEW_PROVIDER_UNAVAILABLE", "Vision provider unavailable", 503); } } as any,
   );
 
   await service.process(jobId);
 
   assert.equal(repository.current.status, "FAILED");
-  assert.equal(repository.current.errorCode, "VISUAL_REVIEW_UNAVAILABLE");
+  assert.equal(repository.current.errorCode, "VISUAL_REVIEW_PROVIDER_UNAVAILABLE");
+});
+
+test("geometry pass plus visual pass produces the combined QA level", async () => {
+  const repository = new MemoryRepository();
+  const templates = { async get(_templateId: string, _version: string): Promise<TemplateSpec> { return template; } };
+  const service = new PresentationWorkflowService(
+    { ...config, visualReviewEnabled: true }, repository as unknown as PgJobRepository, templates as unknown as TemplateRegistry,
+    { async generate() { throw new Error("not expected"); }, async download() { return new Uint8Array([1, 2, 3, 4]); } } as unknown as PptSkillRunnerClient,
+    { async save(_id: string, _fileName: string, content: Uint8Array) { return { sizeBytes: content.byteLength, sha256: crypto.createHash("sha256").update(content).digest("hex") }; } } as unknown as ControlledArtifactStore,
+    { async review() { return { jobId, passed: true, reviewedSlideCount: 3, issues: [] }; } } as any,
+  );
+  await service.process(jobId);
+  assert.equal(repository.current.status, "SUCCEEDED");
+  assert.equal(repository.artifact?.qaLevel, "AUTOMATED_GEOMETRY_AND_VISUAL");
+  assert.equal(repository.qa?.report.visualReviewImplemented, true);
+  assert.equal(repository.qa?.qaLevel, "AUTOMATED_GEOMETRY_AND_VISUAL");
+});
+
+test("geometry pass plus visual ERROR fails the overall job and leaves no artifact", async () => {
+  const repository = new MemoryRepository();
+  const templates = { async get(_templateId: string, _version: string): Promise<TemplateSpec> { return template; } };
+  const service = new PresentationWorkflowService(
+    { ...config, visualReviewEnabled: true }, repository as unknown as PgJobRepository, templates as unknown as TemplateRegistry,
+    { async generate() { throw new Error("not expected"); }, async download() { return new Uint8Array([1, 2, 3, 4]); } } as unknown as PptSkillRunnerClient,
+    { async save(_id: string, _fileName: string, content: Uint8Array) { return { sizeBytes: content.byteLength, sha256: crypto.createHash("sha256").update(content).digest("hex") }; } } as unknown as ControlledArtifactStore,
+    { async review() { return { jobId, passed: false, reviewedSlideCount: 3, issues: [{ slideNumber: 2, code: "ELEMENT_OVERLAP", severity: "ERROR", confidence: 0.9, description: "Overlap", repairHint: "Separate elements" }] }; } } as any,
+  );
+  await service.process(jobId);
+  assert.equal(repository.current.status, "FAILED");
+  assert.equal(repository.current.errorCode, "VISUAL_QA_FAILED");
+  assert.equal(repository.qa?.passed, false);
+  assert.equal(repository.qa?.report.visualReviewImplemented, true);
+  assert.equal(repository.artifact, undefined);
 });

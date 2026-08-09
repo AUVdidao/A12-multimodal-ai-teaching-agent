@@ -9,6 +9,7 @@ import { validateSlideSpec } from "./slide-spec.js";
 import { buildTeachingContractContext } from "./pedagogical-contract.js";
 import { TemplateRegistry } from "./template-registry.js";
 import { HarnessConfig } from "./config.js";
+import { KimiVisualQaProvider, VisualQaService } from "./visual-qa.js";
 
 export class PresentationWorkflowService {
   private readonly provider: SlideSpecProvider;
@@ -18,7 +19,9 @@ export class PresentationWorkflowService {
     private readonly templates: TemplateRegistry,
     private readonly runner: PptSkillRunnerClient,
     private readonly artifacts: ControlledArtifactStore,
-  ) { this.provider = selectSlideSpecProvider(config); }
+    visualQa?: VisualQaService,
+  ) { this.provider = selectSlideSpecProvider(config); this.visualQa = visualQa ?? new VisualQaService(runner, new KimiVisualQaProvider(config)); }
+  private readonly visualQa: VisualQaService;
 
   async submit(input: PresentationJobRequest): Promise<PresentationJob> {
     const existing = await this.repository.findByRequestId(input.requestId);
@@ -88,19 +91,25 @@ export class PresentationWorkflowService {
       await this.transition(job.id, "RUNNING_DETERMINISTIC_QA", "Verifying deterministic geometry QA", 75);
       if (!runnerResult.qa?.passed) throw new HarnessError("PPT_QA_FAILED", "PPT runner quality gate did not pass", 422);
       if (runnerResult.qa.qaLevel !== "AUTOMATED_GEOMETRY_ONLY") throw new HarnessError("UNSUPPORTED_QA_LEVEL", "Runner returned an unsupported QA level", 422);
-      await this.repository.saveQaReport(job.id, runnerResult.qa.qaLevel, true, {
+      let finalQaLevel = runnerResult.qa.qaLevel;
+      let finalQaPassed = true;
+      let qaReport: Record<string, unknown> = {
         ...runnerResult.qa.report,
         visualReviewImplemented: false,
         previewRenderingImplemented: true,
         previewSlideCount: runnerResult.preview.slideCount,
         retentionDays: this.config.artifactRetentionDays,
-      });
-      await this.ensureActive(job.id);
-
+      };
       if (this.config.visualReviewEnabled) {
-        await this.transition(job.id, "VISUAL_REVIEW", "Visual review is configured but no implementation is available", 82);
-        throw new HarnessError("VISUAL_REVIEW_UNAVAILABLE", "Visual review is enabled but not implemented in this harness version", 503);
+        await this.transition(job.id, "VISUAL_REVIEW", "Reviewing each Runner-generated PNG with the configured vision provider", 82);
+        const visualQa = await this.visualQa.review(job, spec, runnerResult);
+        finalQaLevel = "AUTOMATED_GEOMETRY_AND_VISUAL";
+        finalQaPassed = visualQa.passed;
+        qaReport = { ...qaReport, visualReviewImplemented: true, visualQa };
       }
+      await this.repository.saveQaReport(job.id, finalQaLevel, finalQaPassed, qaReport);
+      await this.ensureActive(job.id);
+      if (!finalQaPassed) throw new HarnessError("VISUAL_QA_FAILED", "Rendered slide visual QA reported one or more ERROR issues", 422);
 
       await this.transition(job.id, "FINALIZING", "Saving controlled presentation artifact", 88);
       const presentation = await this.runner.download(runnerResult.files.presentation);
@@ -109,7 +118,7 @@ export class PresentationWorkflowService {
       if (saved.sha256 !== runnerResult.sha256) throw new HarnessError("PPT_HASH_MISMATCH", "Runner file hash verification failed", 502);
       await this.repository.setArtifact(job.id, {
         fileName: "presentation.pptx", sizeBytes: saved.sizeBytes, sha256: saved.sha256,
-        qaLevel: runnerResult.qa.qaLevel, qaPassed: true, runnerJobId: runnerResult.jobId,
+        qaLevel: finalQaLevel, qaPassed: true, runnerJobId: runnerResult.jobId,
         preview: runnerResult.preview,
         downloadRef: `/api/v1/presentation-jobs/${job.id}/artifact`
       });
