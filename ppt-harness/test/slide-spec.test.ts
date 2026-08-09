@@ -10,7 +10,15 @@ import { toPublicQaReport } from "../src/qa-report.js";
 const job: PresentationJob = {
   id: "6a9745b7-1d1d-4c29-83cf-a2d44a059237", requestId: "fixture-test-001", projectId: 113,
   status: "QUEUED", progressPercent: 0, attemptCount: 0, templateId: "a12-teaching-generic", templateVersion: "1.0.0", locale: "zh-CN", targetSlideCount: 9,
-  requirementSnapshot: { courseName: "八年级生物", chapterTopic: "光合作用" }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  jobSnapshot: {
+    project: { projectId: 113, courseName: "八年级生物", chapterTopic: "光合作用" },
+    requirementSummary: { courseName: "八年级生物", topic: "光合作用" },
+    confirmedTeachingIntent: {},
+    confirmedGenerationPlan: { pptOutline: [] },
+    materialEvidence: [],
+    templateSelection: { templateId: "a12-teaching-generic", templateVersion: "1.0.0" },
+    generationPreferences: { language: "zh-CN", style: "clear", density: "standard", targetSlideCount: 9 },
+  }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
 };
 
 test("fixture SlideSpec validates against the fixed teaching template", async () => {

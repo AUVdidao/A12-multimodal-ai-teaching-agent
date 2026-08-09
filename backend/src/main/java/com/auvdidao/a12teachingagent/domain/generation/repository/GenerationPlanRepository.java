@@ -9,5 +9,7 @@ public interface GenerationPlanRepository extends JpaRepository<GenerationPlan, 
 
     Optional<GenerationPlan> findFirstByProjectIdOrderByCreatedAtDescIdDesc(Long projectId);
 
+    Optional<GenerationPlan> findFirstByProjectIdAndConfirmedTrueOrderByCreatedAtDescIdDesc(Long projectId);
+
     Optional<GenerationPlan> findByIdAndProjectId(Long id, Long projectId);
 }

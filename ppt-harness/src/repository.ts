@@ -4,7 +4,7 @@ import { JobArtifact, JobEvent, JobStatus, PresentationJob, PresentationJobReque
 type JobRow = {
   id: string; request_id: string; project_id: string; status: JobStatus; current_step: JobStatus | null;
   progress_percent: number; attempt_count: number; template_id: string; template_version: string;
-  locale: string; target_slide_count: number; requirement_snapshot: Record<string, unknown>; artifact_ref: JobArtifact | null;
+  locale: string; target_slide_count: number; requirement_snapshot: PresentationJobRequest["jobSnapshot"]; artifact_ref: JobArtifact | null;
   error_code: string | null; error_message: string | null; created_at: Date; updated_at: Date; completed_at: Date | null;
 };
 
@@ -23,7 +23,7 @@ export class PgJobRepository {
     const result = await this.pool.query<JobRow>(
       `INSERT INTO ppt_harness.job (id, request_id, project_id, status, current_step, progress_percent, template_id, template_version, locale, target_slide_count, requirement_snapshot)
        VALUES ($1, $2, $3, 'QUEUED', 'QUEUED', 0, $4, $5, $6, $7, $8::jsonb) RETURNING *`,
-      [id, input.requestId, input.projectId, input.templateId, input.templateVersion, input.locale, input.targetSlideCount, JSON.stringify(input.requirementSnapshot)]
+      [id, input.requestId, input.projectId, input.templateId, input.templateVersion, input.locale, input.targetSlideCount, JSON.stringify(input.jobSnapshot)]
     );
     await this.appendEvent(id, "QUEUED", "Task accepted and queued", 0);
     return mapJob(result.rows[0]);
@@ -110,7 +110,7 @@ function mapJob(row: JobRow): PresentationJob {
     id: row.id, requestId: row.request_id, projectId: Number(row.project_id), status: row.status,
     currentStep: row.current_step ?? undefined, progressPercent: row.progress_percent, attemptCount: row.attempt_count,
     templateId: row.template_id, templateVersion: row.template_version, locale: row.locale,
-    targetSlideCount: row.target_slide_count, requirementSnapshot: row.requirement_snapshot,
+    targetSlideCount: row.target_slide_count, jobSnapshot: row.requirement_snapshot,
     artifact: row.artifact_ref ?? undefined, errorCode: row.error_code ?? undefined, errorMessage: row.error_message ?? undefined,
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(), completedAt: row.completed_at?.toISOString()
   };

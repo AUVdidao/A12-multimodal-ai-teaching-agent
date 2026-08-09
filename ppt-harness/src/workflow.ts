@@ -33,7 +33,7 @@ export class PresentationWorkflowService {
     if (!job || ["CANCELLED", "SUCCEEDED", "FAILED"].includes(job.status)) return;
     try {
       await this.repository.incrementAttempt(job.id);
-      await this.transition(job.id, "LOADING_REQUIREMENT", "Loading immutable requirement snapshot", 5);
+      await this.transition(job.id, "LOADING_REQUIREMENT", "Loading immutable teaching context snapshot", 5);
       await this.transition(job.id, "LOADING_TEMPLATE", "Loading selected template version", 10);
       const template = await this.templates.get(job.templateId, job.templateVersion);
       await this.transition(job.id, "BUILDING_TEMPLATE_CONTEXT", "Building template context from the selected version", 16);

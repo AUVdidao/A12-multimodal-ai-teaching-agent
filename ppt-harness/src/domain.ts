@@ -9,11 +9,20 @@ export type JobStatus = typeof JOB_STATUSES[number];
 export interface PresentationJobRequest {
   requestId: string;
   projectId: number;
-  requirementSnapshot: Record<string, unknown>;
+  jobSnapshot: PresentationJobSnapshot;
   templateId: string;
   templateVersion: string;
   targetSlideCount: number;
   locale: string;
+}
+export interface PresentationJobSnapshot {
+  project: Record<string, unknown>;
+  requirementSummary: Record<string, unknown>;
+  confirmedTeachingIntent: Record<string, unknown>;
+  confirmedGenerationPlan: Record<string, unknown>;
+  materialEvidence: Array<Record<string, unknown>>;
+  templateSelection: Record<string, unknown>;
+  generationPreferences: Record<string, unknown>;
 }
 export interface JobArtifact {
   fileName: string;
@@ -36,7 +45,7 @@ export interface PresentationJob {
   currentStep?: JobStatus;
   progressPercent: number;
   attemptCount: number;
-  requirementSnapshot: Record<string, unknown>;
+  jobSnapshot: PresentationJobSnapshot;
   artifact?: JobArtifact;
   errorCode?: string;
   errorMessage?: string;
@@ -49,6 +58,10 @@ export interface TemplateSpec { templateId: string; version: string; name: strin
 export interface TemplateLayout { layoutId: string; slots: string[]; capacity: Record<string, number>; }
 export interface SlideSpec { deckTitle: string; locale: string; templateId: string; templateVersion: string; slides: Slide[]; }
 export interface Slide { slideId: string; layoutId: string; title: string; visualStrategy: string; slots: Record<string, unknown>; }
+
+export const MAX_EVIDENCE_ITEMS = 20;
+export const MAX_EVIDENCE_TEXT_CHARS = 4000;
+export const MAX_TOTAL_EVIDENCE_CHARS = 24000;
 
 export class HarnessError extends Error {
   constructor(readonly code: string, message: string, readonly statusCode = 422) { super(message); }

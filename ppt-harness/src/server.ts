@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { createHarnessApplication } from "./app.js";
-import { HarnessError, PresentationJob, PresentationJobRequest } from "./domain.js";
+import { HarnessError, MAX_EVIDENCE_ITEMS, MAX_EVIDENCE_TEXT_CHARS, MAX_TOTAL_EVIDENCE_CHARS, PresentationJob, PresentationJobRequest, PresentationJobSnapshot } from "./domain.js";
 import { toPublicQaReport } from "./qa-report.js";
 import { TemplateRegistry } from "./template-registry.js";
 
@@ -65,7 +65,7 @@ export async function buildServer() {
   return { app, harness };
 }
 
-function parseRequest(value: unknown): PresentationJobRequest {
+export function parseRequest(value: unknown): PresentationJobRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new HarnessError("INVALID_REQUEST", "Presentation task request must be an object", 400);
   const body = value as Record<string, unknown>;
   const requestId = requiredString(body.requestId, "requestId", 128);
@@ -74,10 +74,41 @@ function parseRequest(value: unknown): PresentationJobRequest {
   const locale = requiredString(body.locale, "locale", 32);
   const projectId = Number(body.projectId); const targetSlideCount = Number(body.targetSlideCount);
   if (!Number.isSafeInteger(projectId) || projectId <= 0 || !Number.isSafeInteger(targetSlideCount) || targetSlideCount < 3 || targetSlideCount > 30) throw new HarnessError("INVALID_REQUEST", "projectId or targetSlideCount is invalid", 400);
-  if (!body.requirementSnapshot || typeof body.requirementSnapshot !== "object" || Array.isArray(body.requirementSnapshot)) throw new HarnessError("INVALID_REQUEST", "requirementSnapshot is required", 400);
-  return { requestId, projectId, templateId, templateVersion, locale, targetSlideCount, requirementSnapshot: body.requirementSnapshot as Record<string, unknown> };
+  const jobSnapshot = parseJobSnapshot(body.jobSnapshot, projectId, templateId, templateVersion, targetSlideCount);
+  return { requestId, projectId, templateId, templateVersion, locale, targetSlideCount, jobSnapshot };
 }
 function requiredString(value: unknown, label: string, max: number): string { if (typeof value !== "string" || !value.trim() || value.length > max) throw new HarnessError("INVALID_REQUEST", `${label} is invalid`, 400); return value.trim(); }
+function parseJobSnapshot(value: unknown, projectId: number, templateId: string, templateVersion: string, targetSlideCount: number): PresentationJobSnapshot {
+  const snapshot = requiredRecord(value, "jobSnapshot");
+  requiredRecord(snapshot.project, "jobSnapshot.project");
+  requiredRecord(snapshot.requirementSummary, "jobSnapshot.requirementSummary");
+  requiredRecord(snapshot.confirmedTeachingIntent, "jobSnapshot.confirmedTeachingIntent");
+  requiredRecord(snapshot.confirmedGenerationPlan, "jobSnapshot.confirmedGenerationPlan");
+  const materialEvidence = requiredArray(snapshot.materialEvidence, "jobSnapshot.materialEvidence");
+  const templateSelection = requiredRecord(snapshot.templateSelection, "jobSnapshot.templateSelection");
+  const generationPreferences = requiredRecord(snapshot.generationPreferences, "jobSnapshot.generationPreferences");
+  const project = snapshot.project as Record<string, unknown>;
+  if (Number(project.projectId) !== projectId) throw new HarnessError("INVALID_REQUEST", "jobSnapshot.project.projectId must match projectId", 400);
+  if (templateSelection.templateId !== templateId || templateSelection.templateVersion !== templateVersion) throw new HarnessError("INVALID_REQUEST", "jobSnapshot.templateSelection must match the selected template", 400);
+  if (Number(generationPreferences.targetSlideCount) !== targetSlideCount) throw new HarnessError("INVALID_REQUEST", "jobSnapshot.generationPreferences.targetSlideCount must match targetSlideCount", 400);
+  if (materialEvidence.length > MAX_EVIDENCE_ITEMS) throw new HarnessError("INVALID_REQUEST", "jobSnapshot.materialEvidence exceeds the bounded evidence limit", 400);
+  let totalChars = 0;
+  for (const item of materialEvidence) {
+    const evidence = requiredRecord(item, "jobSnapshot.materialEvidence[]");
+    if (typeof evidence.text !== "string" || evidence.text.length > MAX_EVIDENCE_TEXT_CHARS) throw new HarnessError("INVALID_REQUEST", "material evidence text exceeds the bounded evidence limit", 400);
+    totalChars += evidence.text.length;
+  }
+  if (totalChars > MAX_TOTAL_EVIDENCE_CHARS) throw new HarnessError("INVALID_REQUEST", "jobSnapshot.materialEvidence exceeds the total evidence limit", 400);
+  return snapshot as unknown as PresentationJobSnapshot;
+}
+function requiredRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new HarnessError("INVALID_REQUEST", `${label} is required`, 400);
+  return value as Record<string, unknown>;
+}
+function requiredArray(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) throw new HarnessError("INVALID_REQUEST", `${label} is required`, 400);
+  return value;
+}
 function publicJob(job: PresentationJob | undefined) {
   if (!job) return undefined;
   const statusUrl = `/api/v1/presentation-jobs/${job.id}`;

@@ -14,7 +14,28 @@ public final class PptHarnessDtos {
             String templateVersion,
             String locale,
             int targetSlideCount,
-            JsonNode requirementSnapshot
+            PptHarnessJobSnapshot jobSnapshot
+    ) { }
+
+    public record TemplateSelection(String templateId, String templateVersion) { }
+
+    public record GenerationPreferences(
+            String language,
+            String style,
+            String density,
+            int targetSlideCount
+    ) { }
+
+    public record MaterialEvidence(
+            Long materialId,
+            String sourceName,
+            Long chunkId,
+            Integer chunkNo,
+            String text,
+            Double score,
+            String hitReason,
+            String section,
+            String title
     ) { }
 
     public record JobResponse(
