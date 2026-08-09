@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "method": "Human opened every PNG referenced by the main calibration false-positive and false-negative lists; labels classify the model finding, not the deterministic Gold label.",
+  "classificationLegend": {
+    "MODEL_WRONG": "The visible image does not support the predicted code.",
+    "GOLD_AMBIGUOUS": "The observation is debatable or the clean/broken boundary is underspecified.",
+    "MODEL_REASONABLE": "The observation is visibly defensible, but it is secondary, informational, or outside the primary Gold label."
+  },
+  "mainCalibration": [
+    {"caseId":"clean-cover","slideNumber":1,"codes":{"EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE"}},
+    {"caseId":"clean-content","slideNumber":2,"codes":{"EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE","UNBALANCED_LAYOUT":"MODEL_REASONABLE"}},
+    {"caseId":"clean-flow","slideNumber":5,"codes":{"TEXT_TOO_SMALL":"MODEL_REASONABLE","EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE","LOW_CONTRAST":"GOLD_AMBIGUOUS"}},
+    {"caseId":"clean-comparison","slideNumber":7,"codes":{"EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE","UNBALANCED_LAYOUT":"GOLD_AMBIGUOUS"}},
+    {"caseId":"clean-table","slideNumber":8,"codes":{"EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE","VISUAL_HIERARCHY_WEAK":"GOLD_AMBIGUOUS"}},
+    {"caseId":"clean-summary","slideNumber":9,"codes":{"EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE","UNBALANCED_LAYOUT":"GOLD_AMBIGUOUS","VISUAL_HIERARCHY_WEAK":"GOLD_AMBIGUOUS"}},
+    {"caseId":"broken-text-overflow","slideNumber":1,"codes":{"ELEMENT_OVERLAP":"MODEL_REASONABLE","ELEMENT_CLIPPED":"MODEL_REASONABLE","LOW_CONTRAST":"MODEL_REASONABLE","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE"}},
+    {"caseId":"broken-text-too-small","slideNumber":1,"codes":{"EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE","UNBALANCED_LAYOUT":"MODEL_REASONABLE","LOW_CONTRAST":"MODEL_REASONABLE"}},
+    {"caseId":"broken-element-overlap","slideNumber":1,"codes":{"ELEMENT_CLIPPED":"MODEL_WRONG","LOW_CONTRAST":"MODEL_REASONABLE","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE","UNBALANCED_LAYOUT":"MODEL_REASONABLE"}},
+    {"caseId":"broken-element-clipped","slideNumber":1,"codes":{"ELEMENT_OVERLAP":"MODEL_REASONABLE","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE","EXCESSIVE_EMPTY_SPACE":"GOLD_AMBIGUOUS"}},
+    {"caseId":"broken-unbalanced-layout","slideNumber":1,"codes":{"ELEMENT_OVERLAP":"MODEL_REASONABLE","TEXT_OVERFLOW":"MODEL_WRONG","ELEMENT_CLIPPED":"MODEL_WRONG","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE","LOW_CONTRAST":"GOLD_AMBIGUOUS"}},
+    {"caseId":"broken-excessive-empty-space","slideNumber":1,"codes":{"TEXT_TOO_SMALL":"MODEL_REASONABLE","UNBALANCED_LAYOUT":"MODEL_REASONABLE","VISUAL_HIERARCHY_WEAK":"GOLD_AMBIGUOUS"}},
+    {"caseId":"broken-low-contrast","slideNumber":1,"codes":{"EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE"}},
+    {"caseId":"broken-visual-hierarchy-weak","slideNumber":1,"codes":{"LOW_CONTRAST":"MODEL_REASONABLE","TEXT_TOO_SMALL":"MODEL_REASONABLE","DENSE_CONTENT":"MODEL_REASONABLE","ELEMENT_CLIPPED":"MODEL_WRONG"}},
+    {"caseId":"broken-table-unreadable","slideNumber":1,"codes":{"BROKEN_RENDERING":"MODEL_REASONABLE","TEXT_TOO_SMALL":"MODEL_WRONG","LOW_CONTRAST":"GOLD_AMBIGUOUS"}},
+    {"caseId":"broken-chart-unreadable","slideNumber":1,"codes":{"TEXT_TOO_SMALL":"MODEL_REASONABLE","LOW_CONTRAST":"MODEL_REASONABLE","EXCESSIVE_EMPTY_SPACE":"GOLD_AMBIGUOUS","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE"}},
+    {"caseId":"broken-flow-unreadable","slideNumber":1,"codes":{"TEXT_OVERFLOW":"MODEL_REASONABLE","ELEMENT_OVERLAP":"MODEL_REASONABLE","ELEMENT_CLIPPED":"MODEL_REASONABLE","EXCESSIVE_EMPTY_SPACE":"MODEL_REASONABLE","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE"}},
+    {"caseId":"broken-dense-content","slideNumber":1,"codes":{"BROKEN_RENDERING":"MODEL_REASONABLE","TEXT_OVERFLOW":"MODEL_WRONG","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE"}},
+    {"caseId":"broken-rendering","slideNumber":1,"codes":{"ELEMENT_OVERLAP":"MODEL_REASONABLE","ELEMENT_CLIPPED":"MODEL_WRONG","LOW_CONTRAST":"MODEL_REASONABLE","TEXT_TOO_SMALL":"MODEL_WRONG","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE","EXCESSIVE_EMPTY_SPACE":"GOLD_AMBIGUOUS"}},
+    {"caseId":"broken-rendering","slideNumber":1,"codes":{"BROKEN_RENDERING":"MODEL_WRONG"},"kind":"false-negative"}
+  ],
+  "varianceProbe": [
+    {"caseId":"clean-chart","slideNumber":6,"codes":{"CHART_UNREADABLE":"MODEL_WRONG","EXCESSIVE_EMPTY_SPACE":"GOLD_AMBIGUOUS","VISUAL_HIERARCHY_WEAK":"GOLD_AMBIGUOUS"},"note":"The chart is visibly readable; code-set order/content varied across repeats."},
+    {"caseId":"broken-chart-unreadable","slideNumber":1,"codes":{"CHART_UNREADABLE":"MODEL_REASONABLE","LOW_CONTRAST":"MODEL_REASONABLE","ELEMENT_CLIPPED":"GOLD_AMBIGUOUS","ELEMENT_OVERLAP":"GOLD_AMBIGUOUS","EXCESSIVE_EMPTY_SPACE":"GOLD_AMBIGUOUS","VISUAL_HIERARCHY_WEAK":"MODEL_REASONABLE"},"note":"Primary code was stable; secondary findings varied across repeats."}
+  ]
+}

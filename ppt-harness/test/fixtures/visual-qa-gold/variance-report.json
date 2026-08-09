@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-09T13:45:32.568Z",
+  "provider": "KimiVisualQaProvider",
+  "model": "kimi-k2.6",
+  "repeatsPerCase": 3,
+  "totalRequests": 6,
+  "elapsedMs": 39935,
+  "cases": [
+    {
+      "caseId": "clean-chart",
+      "knownClean": true,
+      "expectedCodes": [],
+      "observations": [
+        {
+          "repeat": 1,
+          "predictedCodes": [
+            "CHART_UNREADABLE",
+            "EXCESSIVE_EMPTY_SPACE",
+            "VISUAL_HIERARCHY_WEAK"
+          ],
+          "predictedMaxSeverity": "WARNING",
+          "outcome": "SUCCESS",
+          "repaired": false
+        },
+        {
+          "repeat": 2,
+          "predictedCodes": [
+            "CHART_UNREADABLE",
+            "VISUAL_HIERARCHY_WEAK",
+            "EXCESSIVE_EMPTY_SPACE"
+          ],
+          "predictedMaxSeverity": "WARNING",
+          "outcome": "SUCCESS",
+          "repaired": false
+        },
+        {
+          "repeat": 3,
+          "predictedCodes": [
+            "CHART_UNREADABLE",
+            "EXCESSIVE_EMPTY_SPACE",
+            "VISUAL_HIERARCHY_WEAK"
+          ],
+          "predictedMaxSeverity": "WARNING",
+          "outcome": "SUCCESS",
+          "repaired": false
+        }
+      ],
+      "codeSetStable": false,
+      "severityStable": true
+    },
+    {
+      "caseId": "broken-chart-unreadable",
+      "knownClean": false,
+      "expectedCodes": [
+        "CHART_UNREADABLE"
+      ],
+      "observations": [
+        {
+          "repeat": 1,
+          "predictedCodes": [
+            "CHART_UNREADABLE",
+            "LOW_CONTRAST",
+            "VISUAL_HIERARCHY_WEAK",
+            "EXCESSIVE_EMPTY_SPACE"
+          ],
+          "predictedMaxSeverity": "ERROR",
+          "outcome": "SUCCESS",
+          "repaired": false
+        },
+        {
+          "repeat": 2,
+          "predictedCodes": [
+            "CHART_UNREADABLE",
+            "LOW_CONTRAST",
+            "ELEMENT_CLIPPED",
+            "EXCESSIVE_EMPTY_SPACE"
+          ],
+          "predictedMaxSeverity": "ERROR",
+          "outcome": "SUCCESS",
+          "repaired": false
+        },
+        {
+          "repeat": 3,
+          "predictedCodes": [
+            "CHART_UNREADABLE",
+            "LOW_CONTRAST",
+            "ELEMENT_OVERLAP",
+            "EXCESSIVE_EMPTY_SPACE",
+            "VISUAL_HIERARCHY_WEAK"
+          ],
+          "predictedMaxSeverity": "ERROR",
+          "outcome": "SUCCESS",
+          "repaired": false
+        }
+      ],
+      "codeSetStable": false,
+      "severityStable": true
+    }
+  ]
+}

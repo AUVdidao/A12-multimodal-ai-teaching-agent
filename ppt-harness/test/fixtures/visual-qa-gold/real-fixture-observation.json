@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "source": "PPT-011 real 9-slide Kimi K2.6 fixture observation; history preserved without relabeling.",
+  "provider": "KimiVisualQaProvider",
+  "model": "kimi-k2.6",
+  "thinking": "disabled",
+  "responseFormat": "json_schema",
+  "reviewedSlides": 9,
+  "issueCounts": {"INFO": 18, "WARNING": 3, "ERROR": 0},
+  "manualNotes": {
+    "slide1": "plausible",
+    "slide4": "warning possibly reasonable",
+    "slide5": "warning possibly reasonable",
+    "slide6": "CHART_UNREADABLE likely false positive; chart visibly readable"
+  }
+}
