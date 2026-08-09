@@ -108,8 +108,10 @@ class KnowledgeEmbeddingIndexServiceTest {
 
         DenseRefreshResult result = service().refreshProject(PROJECT_ID);
 
+        assertThat(result.chunkCount()).isEqualTo(2);
         assertThat(result.reusedCount()).isEqualTo(1);
         assertThat(result.embeddedCount()).isEqualTo(1);
+        assertThat(result.refreshedCount()).isEqualTo(1);
         ArgumentCaptor<List<KnowledgeChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(embeddingService).embedChunks(captor.capture());
         assertThat(captor.getValue()).extracting(KnowledgeChunk::getId).containsExactly(1L);
@@ -128,6 +130,26 @@ class KnowledgeEmbeddingIndexServiceTest {
         assertThatThrownBy(() -> service().refreshProject(PROJECT_ID))
                 .isInstanceOf(EmbeddingException.class)
                 .hasMessageContaining("fake failure");
+        verify(persistenceService, never()).persist(anyList(), anyList(), any(), any());
+    }
+
+    @Test
+    void sixHundredOneChunkProviderFailureDoesNotStartPersistence() {
+        List<KnowledgeChunk> chunks = java.util.stream.LongStream.rangeClosed(1, 601)
+                .mapToObj(id -> chunk(id, MATERIAL_ID, "content-" + id))
+                .toList();
+        stubProject(chunks);
+        when(embeddingRepository.findAllByProjectIdAndProviderAndModelOrderByKnowledgeChunkIdAsc(
+                PROJECT_ID, PROVIDER, MODEL)).thenReturn(List.of());
+        when(provider.describe()).thenReturn(descriptor());
+        EmbeddingException failure = new EmbeddingException(
+                EmbeddingFailureKind.UPSTREAM_FAILURE, "601 chunk provider failure"
+        );
+        when(embeddingService.embedChunks(anyList())).thenThrow(failure);
+
+        assertThatThrownBy(() -> service().refreshProject(PROJECT_ID))
+                .isSameAs(failure);
+        verify(embeddingService).embedChunks(org.mockito.ArgumentMatchers.argThat(value -> value.size() == 601));
         verify(persistenceService, never()).persist(anyList(), anyList(), any(), any());
     }
 
@@ -192,7 +214,12 @@ class KnowledgeEmbeddingIndexServiceTest {
 
         DenseRefreshResult result = service().refreshProject(PROJECT_ID);
 
+        assertThat(result.chunkCount()).isEqualTo(3);
         assertThat(result.embeddedCount()).isEqualTo(3);
+        assertThat(result.reusedCount()).isZero();
+        assertThat(result.refreshedCount()).isEqualTo(3);
+        assertThat(result.dimensions()).isEqualTo(6);
+        assertThat(result.denseReady()).isTrue();
         verify(embeddingService, times(2)).embedChunks(anyList());
         ArgumentCaptor<List<KnowledgeChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(embeddingService, times(2)).embedChunks(captor.capture());
@@ -223,6 +250,79 @@ class KnowledgeEmbeddingIndexServiceTest {
         assertThat(captor.getValue()).extracting(KnowledgeChunk::getMaterialId).containsExactly(MATERIAL_ID);
     }
 
+    @Test
+    void materialDimensionDriftRefreshesTheWholeProjectButReportsRequestedScope() {
+        KnowledgeChunk materialAFirst = chunk(1L, MATERIAL_ID, "a-one-new");
+        KnowledgeChunk materialASecond = chunk(2L, MATERIAL_ID, "a-two");
+        KnowledgeChunk materialB = chunk(3L, 11L, "b-one");
+        List<KnowledgeChunk> chunks = List.of(materialAFirst, materialASecond, materialB);
+        stubProject(chunks);
+        when(materialRepository.findByIdAndProjectId(MATERIAL_ID, PROJECT_ID)).thenReturn(Optional.of(new UploadedMaterial()));
+        KnowledgeChunkEmbedding stale = row(materialAFirst, List.of(1.0, 0.0, 0.0, 0.0));
+        stale.setContentHash(KnowledgeEmbeddingStore.contentHash("a-one-old"));
+        when(embeddingRepository.findAllByProjectIdAndProviderAndModelOrderByKnowledgeChunkIdAsc(
+                PROJECT_ID, PROVIDER, MODEL)).thenReturn(List.of(
+                stale,
+                row(materialASecond, List.of(0.0, 1.0, 0.0, 0.0)),
+                row(materialB, List.of(0.0, 0.0, 1.0, 0.0))
+        ));
+        when(provider.describe()).thenReturn(descriptor());
+        when(embeddingService.embedChunks(anyList())).thenReturn(
+                embedded(List.of(materialAFirst), 6), embedded(chunks, 6));
+        when(integrityService.inspectMaterial(PROJECT_ID, MATERIAL_ID, PROVIDER, MODEL))
+                .thenReturn(inspection(MATERIAL_ID, 2, 2, 2, true, 6));
+
+        DenseRefreshResult result = service().refreshMaterial(PROJECT_ID, MATERIAL_ID);
+
+        assertThat(result.chunkCount()).isEqualTo(2);
+        assertThat(result.embeddedCount()).isEqualTo(3);
+        assertThat(result.reusedCount()).isZero();
+        assertThat(result.refreshedCount()).isEqualTo(2);
+        assertThat(result.dimensions()).isEqualTo(6);
+        assertThat(result.denseReady()).isTrue();
+        ArgumentCaptor<List<KnowledgeChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(embeddingService, times(2)).embedChunks(captor.capture());
+        assertThat(captor.getAllValues().get(1)).extracting(KnowledgeChunk::getId).containsExactly(1L, 2L, 3L);
+    }
+
+    @Test
+    void zeroChunkProjectRefreshFailsClosedWithoutProviderOrPersistence() {
+        stubProject(List.of());
+        when(provider.describe()).thenReturn(descriptor());
+
+        assertThatThrownBy(() -> service().refreshProject(PROJECT_ID))
+                .isInstanceOf(com.auvdidao.a12teachingagent.common.exception.ConflictException.class)
+                .hasMessageContaining("project has no knowledge chunks");
+        verify(embeddingService, never()).embedChunks(anyList());
+        verify(persistenceService, never()).persist(anyList(), anyList(), any(), any());
+    }
+
+    @Test
+    void zeroChunkMaterialRefreshFailsClosedWithoutProviderOrPersistence() {
+        stubProject(List.of());
+        when(materialRepository.findByIdAndProjectId(MATERIAL_ID, PROJECT_ID)).thenReturn(Optional.of(new UploadedMaterial()));
+        when(provider.describe()).thenReturn(descriptor());
+
+        assertThatThrownBy(() -> service().refreshMaterial(PROJECT_ID, MATERIAL_ID))
+                .isInstanceOf(com.auvdidao.a12teachingagent.common.exception.ConflictException.class)
+                .hasMessageContaining("material has no knowledge chunks");
+        verify(embeddingService, never()).embedChunks(anyList());
+        verify(persistenceService, never()).persist(anyList(), anyList(), any(), any());
+    }
+
+    @Test
+    void zeroChunkProjectStatusRemainsNotReady() {
+        when(projectRepository.existsById(PROJECT_ID)).thenReturn(true);
+        when(provider.describe()).thenReturn(descriptor());
+        when(integrityService.inspectProject(PROJECT_ID, PROVIDER, MODEL))
+                .thenReturn(inspection(null, 0, 0, 0, false, null));
+
+        DenseIndexInspection result = service().inspectProject(PROJECT_ID);
+
+        assertThat(result.chunkCount()).isZero();
+        assertThat(result.denseReady()).isFalse();
+    }
+
     private KnowledgeEmbeddingIndexService service() {
         return new KnowledgeEmbeddingIndexService(
                 chunkRepository, embeddingRepository, projectRepository, materialRepository,
@@ -240,7 +340,7 @@ class KnowledgeEmbeddingIndexServiceTest {
         return new EmbeddingProviderDescriptor(PROVIDER, MODEL, true, true);
     }
 
-    private DenseIndexInspection inspection(Long materialId, long chunks, long rows, long ready, boolean denseReady, int dimensions) {
+    private DenseIndexInspection inspection(Long materialId, long chunks, long rows, long ready, boolean denseReady, Integer dimensions) {
         return new DenseIndexInspection(
                 PROJECT_ID, materialId, PROVIDER, MODEL, chunks, rows, ready,
                 0, 0, 0, 0, 0, 0, 0, dimensions, denseReady

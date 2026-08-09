@@ -66,7 +66,7 @@ public class KnowledgeEmbeddingIndexService {
     public DenseRefreshResult refreshProject(Long projectId) {
         EmbeddingProviderDescriptor descriptor = requireConfiguredProvider();
         requireProject(projectId);
-        return refresh(projectId, null, descriptor, true);
+        return refresh(projectId, null, descriptor);
     }
 
     public DenseRefreshResult refreshMaterial(Long projectId, Long materialId) {
@@ -77,7 +77,7 @@ public class KnowledgeEmbeddingIndexService {
         }
         materialRepository.findByIdAndProjectId(materialId, projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Material not found in project: " + materialId));
-        return refresh(projectId, materialId, descriptor, false);
+        return refresh(projectId, materialId, descriptor);
     }
 
     public DenseIndexInspection inspectProject(Long projectId) {
@@ -93,8 +93,7 @@ public class KnowledgeEmbeddingIndexService {
     private DenseRefreshResult refresh(
             Long projectId,
             Long materialId,
-            EmbeddingProviderDescriptor descriptor,
-            boolean projectScope
+            EmbeddingProviderDescriptor descriptor
     ) {
         List<KnowledgeChunk> projectChunks = orderedProjectChunks(projectId);
         List<DenseChunkSnapshot> projectSnapshot = snapshot(projectChunks);
@@ -103,6 +102,13 @@ public class KnowledgeEmbeddingIndexService {
                 : projectSnapshot.stream()
                 .filter(value -> Objects.equals(materialId, value.chunk().getMaterialId()))
                 .toList();
+
+        if (scopeSnapshot.isEmpty()) {
+            String scope = materialId == null ? "project" : "material";
+            throw new ConflictException(
+                    "Dense index cannot be refreshed because the " + scope + " has no knowledge chunks"
+            );
+        }
 
         Map<Long, KnowledgeChunkEmbedding> currentRows = currentRows(projectId, descriptor);
         Set<Integer> reusableDimensions = new HashSet<>();
@@ -117,20 +123,12 @@ public class KnowledgeEmbeddingIndexService {
         }
 
         boolean dimensionDrift = reusableDimensions.size() > 1;
-        List<DenseChunkSnapshot> pendingSnapshot = dimensionDrift || projectScope
-                ? (dimensionDrift ? projectSnapshot : scopeSnapshot.stream()
-                .filter(value -> !Boolean.TRUE.equals(reusable.get(value.chunk().getId()))).toList())
+        boolean fullProjectRefresh = dimensionDrift;
+        List<DenseChunkSnapshot> pendingSnapshot = dimensionDrift
+                ? projectSnapshot
                 : scopeSnapshot.stream()
                 .filter(value -> !Boolean.TRUE.equals(reusable.get(value.chunk().getId())))
                 .toList();
-        boolean usedFullProjectRefresh = projectScope || dimensionDrift;
-
-        if (scopeSnapshot.isEmpty()) {
-            DenseIndexInspection inspection = materialId == null
-                    ? integrityService.inspectProject(projectId, descriptor.provider(), descriptor.model())
-                    : integrityService.inspectMaterial(projectId, materialId, descriptor.provider(), descriptor.model());
-            return result(projectId, materialId, descriptor, inspection, 0, 0, false);
-        }
 
         if (pendingSnapshot.isEmpty()) {
             cleanup(projectId, materialId, descriptor, false);
@@ -145,7 +143,7 @@ public class KnowledgeEmbeddingIndexService {
                     inspection,
                     0,
                     scopeSnapshot.size(),
-                    false
+                    0
             );
         }
 
@@ -155,22 +153,25 @@ public class KnowledgeEmbeddingIndexService {
                 ? reusableDimensions.iterator().next()
                 : null;
         if (expectedDimension != null && embedded.stream().anyMatch(value -> value.dimensions() != expectedDimension)) {
-            usedFullProjectRefresh = true;
+            fullProjectRefresh = true;
             pendingSnapshot = projectSnapshot;
             embedded = embed(pendingSnapshot);
             validateProviderResult(embedded, descriptor, pendingSnapshot);
         }
 
         persistenceService.persist(projectSnapshot, embedded, descriptor.provider(), descriptor.model());
-        cleanup(projectId, materialId, descriptor, usedFullProjectRefresh);
+        cleanup(projectId, materialId, descriptor, fullProjectRefresh);
         DenseIndexInspection inspection = inspect(projectId, materialId, descriptor);
         if (!inspection.denseReady()) {
             throw notReady(inspection);
         }
-        long reusedCount = scopeSnapshot.stream()
+        long reusedCount = fullProjectRefresh
+                ? 0
+                : scopeSnapshot.stream()
                 .filter(value -> Boolean.TRUE.equals(reusable.get(value.chunk().getId())))
                 .count();
-        return result(projectId, materialId, descriptor, inspection, embedded.size(), reusedCount, true);
+        long refreshedCount = fullProjectRefresh ? scopeSnapshot.size() : embedded.size();
+        return result(projectId, materialId, descriptor, inspection, embedded.size(), reusedCount, refreshedCount);
     }
 
     private List<KnowledgeChunk> orderedProjectChunks(Long projectId) {
@@ -279,9 +280,9 @@ public class KnowledgeEmbeddingIndexService {
             Long projectId,
             Long materialId,
             EmbeddingProviderDescriptor descriptor,
-            boolean projectScope
+            boolean fullProjectRefresh
     ) {
-        if (projectScope || materialId == null) {
+        if (fullProjectRefresh || materialId == null) {
             integrityService.cleanupOrphansForProject(projectId, descriptor.provider(), descriptor.model());
         } else {
             integrityService.cleanupOrphansForMaterial(
@@ -297,7 +298,7 @@ public class KnowledgeEmbeddingIndexService {
             DenseIndexInspection inspection,
             long embeddedCount,
             long reusedCount,
-            boolean refreshed
+            long refreshedCount
     ) {
         return new DenseRefreshResult(
                 projectId,
@@ -307,7 +308,7 @@ public class KnowledgeEmbeddingIndexService {
                 inspection.chunkCount(),
                 embeddedCount,
                 reusedCount,
-                refreshed ? embeddedCount : 0,
+                refreshedCount,
                 inspection.dimensions(),
                 inspection.denseReady()
         );
