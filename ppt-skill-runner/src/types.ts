@@ -49,6 +49,7 @@ export interface GenerationResult {
   sizeBytes: number;
   sha256: string;
   qa: QaSummary;
+  preview: import("./preview").PreviewManifest;
   buildDurationMs: number;
   qaDurationMs: number;
   totalDurationMs: number;

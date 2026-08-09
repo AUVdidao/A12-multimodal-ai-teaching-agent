@@ -21,12 +21,109 @@ test("legal fixture generates isolated valid PPTX with correct digest", async ()
     const expectedPptx = minimalPptx();
     assert.equal(result.sizeBytes, expectedPptx.byteLength);
     assert.equal(result.sha256, crypto.createHash("sha256").update(expectedPptx).digest("hex"));
+    assert.equal(result.preview.rendered, true);
+    assert.equal(result.preview.slideCount, 9);
+    assert.deepEqual(result.preview.files.map(file => file.fileName), Array.from({ length: 9 }, (_, index) => `slide-${String(index + 1).padStart(2, "0")}.png`));
+    assert.ok(result.preview.files.every(file => file.width === 1 && file.height === 1 && /^[0-9a-f]{64}$/.test(file.sha256)));
     assert.equal((await fs.readdir(tempRoot)).length, 0, "temporary task directory must be cleaned");
     const build = calls.find((call) => call.args[0].endsWith("build_deck_pptxgenjs.js"));
     assert.ok(build);
     const assetRootIndex = build.args.indexOf("--asset-root");
     assert.ok(assetRootIndex > 0);
     assert.equal(build.args[assetRootIndex + 1], build.cwd, "asset-root must be the isolated task directory");
+    const render = calls.find((call) => call.args[0].endsWith("render_slides.py"));
+    assert.ok(render);
+    assert.deepEqual(render.args.slice(-4), ["--dpi", "150", "--format", "png"]);
+  });
+});
+
+test("valid three-slide previews are rendered and numerically ordered", async () => {
+  await withRunner(async ({ config }) => {
+    const outline = await readFixture();
+    outline.slides = (outline.slides as unknown[]).slice(0, 3);
+    const runner = new PresentationRunner(config, mockExecutor({ renderSlideCount: 3 }).executor);
+    const result = await runner.generate({ outline });
+    assert.equal(result.preview.slideCount, 3);
+    assert.deepEqual(result.preview.files.map(file => file.slideNumber), [1, 2, 3]);
+  });
+});
+
+test("preview count mismatch fails closed", async () => {
+  await withRunner(async ({ config }) => {
+    const runner = new PresentationRunner(config, mockExecutor({ renderSlideCount: 8 }).executor);
+    const outline = await readFixture();
+    await assert.rejects(() => runner.generate({ outline }), hasCode("PREVIEW_COUNT_MISMATCH"));
+  });
+});
+
+test("missing, zero-byte, and invalid-signature previews fail closed", async () => {
+  for (const options of [{ renderNoFiles: true }, { renderZeroBytePng: true }, { renderInvalidPng: true }]) {
+    await withRunner(async ({ config }) => {
+      const runner = new PresentationRunner(config, mockExecutor(options).executor);
+      const outline = await readFixture();
+      await assert.rejects(() => runner.generate({ outline }), hasCode(options.renderNoFiles ? "PREVIEW_COUNT_MISMATCH" : "PREVIEW_INVALID_FILE"));
+    });
+  }
+});
+
+test("preview symlinks fail closed", async (t) => {
+  await withRunner(async ({ config }) => {
+    const runner = new PresentationRunner(config, mockExecutor({ renderSymlink: true }).executor);
+    const outline = await readFixture();
+    try {
+      await assert.rejects(() => runner.generate({ outline }), hasCode("SYMLINK_FORBIDDEN"));
+    } catch (error) {
+      const details = error instanceof RunnerError ? String(error.details) : "";
+      if (details.includes("EPERM") || details.includes("operation not permitted")) {
+        t.skip("platform does not permit creating symlinks for the renderer fixture");
+        return;
+      }
+      throw error;
+    }
+  });
+});
+
+test("preview file size cap is enforced", async () => {
+  await withRunner(async ({ config }) => {
+    config.previewMaxFileBytes = 1;
+    const runner = new PresentationRunner(config, mockExecutor().executor);
+    const outline = await readFixture();
+    await assert.rejects(() => runner.generate({ outline }), hasCode("PREVIEW_TOO_LARGE"));
+  });
+});
+
+test("preview metadata includes sha256 and slide ten sorts after slide two", async () => {
+  await withRunner(async ({ config }) => {
+    const outline = await readFixture();
+    const original = outline.slides as unknown[];
+    outline.slides = Array.from({ length: 10 }, (_, index) => original[index % original.length]);
+    const runner = new PresentationRunner(config, mockExecutor({ renderSlideCount: 10 }).executor);
+    const result = await runner.generate({ outline });
+    assert.equal(result.preview.files[1].fileName, "slide-02.png");
+    assert.equal(result.preview.files[9].fileName, "slide-10.png");
+    const expectedTotal = result.preview.files.reduce((sum, file) => sum + file.sizeBytes, 0);
+    assert.equal(result.preview.totalSizeBytes, expectedTotal);
+  });
+});
+
+test("preview renderer failures are classified separately from PPTX build failures", async () => {
+  await withRunner(async ({ config }) => {
+    const outline = await readFixture();
+    await assert.rejects(() => new PresentationRunner(config, mockExecutor({ renderExitCode: 4 }).executor).generate({ outline }), hasCode("PREVIEW_RENDER_FAILED"));
+    await assert.rejects(() => new PresentationRunner(config, mockExecutor({ renderTimeout: true }).executor).generate({ outline }), hasCode("PREVIEW_RENDER_TIMEOUT"));
+  });
+});
+
+test("preview download resolves only server-owned slide numbers", async () => {
+  await withRunner(async ({ runner, calls }) => {
+    const result = await runner.generate({ outline: await readFixture() });
+    const renderCalls = calls.filter(call => call.args[0].endsWith("render_slides.py")).length;
+    const filePath = await runner.resolvePreviewFile(result.jobId, "1");
+    assert.equal(path.basename(filePath), "slide-01.png");
+    await runner.resolvePreviewFile(result.jobId, "1");
+    assert.equal(calls.filter(call => call.args[0].endsWith("render_slides.py")).length, renderCalls, "preview lookup must not rerender the job");
+    await assert.rejects(() => runner.resolvePreviewFile(result.jobId, "../1"), hasCode("PREVIEW_NOT_FOUND"));
+    await assert.rejects(() => runner.resolvePreviewFile(result.jobId, "999"), hasCode("PREVIEW_NOT_FOUND"));
   });
 });
 
@@ -128,7 +225,18 @@ test("generated-image field is forbidden in Phase 1", async () => {
   assert.throws(() => validateOutlineSecurity(outline), hasCode("GENERATED_IMAGE_FORBIDDEN"));
 });
 
-interface MockOptions { buildExitCode?: number; qaExitCode?: number; invalidPptx?: boolean }
+interface MockOptions {
+  buildExitCode?: number;
+  qaExitCode?: number;
+  invalidPptx?: boolean;
+  renderExitCode?: number;
+  renderTimeout?: boolean;
+  renderSlideCount?: number;
+  renderNoFiles?: boolean;
+  renderZeroBytePng?: boolean;
+  renderInvalidPng?: boolean;
+  renderSymlink?: boolean;
+}
 
 function mockExecutor(options: MockOptions = {}): { executor: CommandExecutor; calls: CommandSpec[] } {
   const calls: CommandSpec[] = [];
@@ -146,6 +254,26 @@ function mockExecutor(options: MockOptions = {}): { executor: CommandExecutor; c
       await fs.mkdir(path.dirname(report), { recursive: true });
       await fs.writeFile(report, JSON.stringify({ ok: true, geometry_error_count: 0 }), "utf8");
       return { exitCode: 0, stdout: "qa passed", stderr: "" };
+    }
+    if (spec.args[0].endsWith("render_slides.py")) {
+      if (options.renderTimeout) throw new Error("Command timed out after 180000ms");
+      if (options.renderExitCode) return { exitCode: options.renderExitCode, stdout: "", stderr: "fixture preview failure" };
+      const output = spec.args[spec.args.indexOf("--outdir") + 1];
+      const count = options.renderSlideCount ?? 9;
+      await fs.mkdir(output, { recursive: true });
+      if (!options.renderNoFiles) {
+        for (let index = 1; index <= count; index += 1) {
+          const file = path.join(output, `slide-${String(index).padStart(2, "0")}.png`);
+          if (options.renderSymlink && index === 1) {
+            const target = path.join(output, "target-slide.png");
+            await fs.writeFile(target, minimalPng());
+            await fs.symlink(target, file, "file");
+            continue;
+          }
+          await fs.writeFile(file, options.renderZeroBytePng ? Buffer.alloc(0) : options.renderInvalidPng ? Buffer.from("not-a-png") : minimalPng());
+        }
+      }
+      return { exitCode: 0, stdout: "rendered", stderr: "" };
     }
     return { exitCode: 99, stdout: "", stderr: "unexpected command" };
   };
@@ -185,6 +313,10 @@ function minimalPptx(): Buffer {
   return Buffer.concat([...locals, ...centrals, footer]);
 }
 
+function minimalPng(): Buffer {
+  return Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+}
+
 async function withRunner(run: (context: {
   runner: PresentationRunner;
   config: RunnerConfig;
@@ -204,6 +336,10 @@ async function withRunner(run: (context: {
     pythonCommand: "python3",
     nodeCommand: process.execPath,
     timeoutMs: 10_000,
+    previewTimeoutMs: 180_000,
+    previewDpi: 150,
+    previewMaxFileBytes: 20 * 1024 * 1024,
+    previewMaxTotalBytes: 200 * 1024 * 1024,
     defaultPreset: "forest-research"
   };
   const mocked = mockExecutor();

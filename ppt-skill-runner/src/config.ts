@@ -10,6 +10,10 @@ export interface RunnerConfig {
   pythonCommand: string;
   nodeCommand: string;
   timeoutMs: number;
+  previewTimeoutMs: number;
+  previewDpi: number;
+  previewMaxFileBytes: number;
+  previewMaxTotalBytes: number;
   defaultPreset: string;
 }
 
@@ -24,6 +28,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
     pythonCommand: env.PYTHON_COMMAND?.trim() || "python3",
     nodeCommand: env.NODE_COMMAND?.trim() || process.execPath,
     timeoutMs: parsePositiveInt(env.PPT_SKILL_TIMEOUT_MS, 600_000),
+    previewTimeoutMs: parsePositiveInt(env.PPT_SKILL_PREVIEW_TIMEOUT_MS, 180_000),
+    previewDpi: parsePositiveInt(env.PPT_SKILL_PREVIEW_DPI, 150),
+    previewMaxFileBytes: parsePositiveInt(env.PPT_SKILL_PREVIEW_MAX_FILE_BYTES, 20 * 1024 * 1024),
+    previewMaxTotalBytes: parsePositiveInt(env.PPT_SKILL_PREVIEW_MAX_TOTAL_BYTES, 200 * 1024 * 1024),
     defaultPreset: env.PPT_SKILL_STYLE_PRESET?.trim() || "forest-research"
   };
 }

@@ -4,6 +4,7 @@ import path from "node:path";
 import { executeCommand } from "./command";
 import { RunnerConfig } from "./config";
 import { RunnerError } from "./errors";
+import { validatePreviewDirectory } from "./preview";
 import { validateOutline } from "./schema";
 import { assertNoSymlinks, assertPathInside, ensureDirectory, validateOutlineSecurity, validatePreset } from "./security";
 import { CommandExecutor, GenerationRequest, GenerationResult } from "./types";
@@ -20,6 +21,7 @@ export class PresentationRunner {
     validateOutlineSecurity(request.outline);
     const preset = request.stylePreset?.trim() || this.config.defaultPreset;
     validatePreset(preset);
+    const outlineSlideCount = outlineSlideCountOf(request.outline);
 
     const tempRoot = await ensureDirectory(this.config.tempRoot);
     const resultRoot = await ensureDirectory(this.config.resultRoot);
@@ -57,7 +59,14 @@ export class PresentationRunner {
         throw commandFailure("BUILD_FAILED", "presentation-skill build failed", buildResult);
       }
       await assertRegularNonEmptyFile(presentationPath, taskReal, "PPTX_MISSING");
-      await assertPptxPackage(presentationPath, taskReal);
+      const pptxSlideCount = await assertPptxPackage(presentationPath, taskReal);
+      if (pptxSlideCount !== undefined && pptxSlideCount !== outlineSlideCount) {
+        throw new RunnerError(
+          "PPTX_SLIDE_COUNT_MISMATCH",
+          `PPTX slide count does not match Runner outline (${pptxSlideCount}/${outlineSlideCount})`,
+          502,
+        );
+      }
 
       const qaStartedAt = Date.now();
       const qaDirectory = path.join(taskReal, "qa");
@@ -91,17 +100,34 @@ export class PresentationRunner {
         renderSkipped: true,
         manualReviewSkipped: true
       };
-      await fs.writeFile(qaReportPath, `${JSON.stringify(qaReport, null, 2)}\n`, "utf8");
+
+      const previewsDirectory = path.join(taskReal, "previews");
+      await fs.mkdir(previewsDirectory, { recursive: false });
+      await this.renderPreviews(presentationPath, previewsDirectory, taskReal);
+      const preview = await validatePreviewDirectory(previewsDirectory, taskReal, {
+        expectedSlideCount: pptxSlideCount ?? outlineSlideCount,
+        jobId,
+        dpi: this.config.previewDpi,
+        maxFileBytes: this.config.previewMaxFileBytes,
+        maxTotalBytes: this.config.previewMaxTotalBytes,
+      });
+      const finalQaReport = {
+        ...qaReport,
+        previewRenderingImplemented: true,
+        previewSlideCount: preview.slideCount,
+      };
+      await fs.writeFile(qaReportPath, `${JSON.stringify(finalQaReport, null, 2)}\n`, "utf8");
 
       await fs.mkdir(resultDirectory, { recursive: false });
       const finalOutline = path.join(resultDirectory, "outline.json");
       const finalPresentation = path.join(resultDirectory, "presentation.pptx");
-      const finalQaReport = path.join(resultDirectory, "qa-report.json");
+      const finalQaReportPath = path.join(resultDirectory, "qa-report.json");
       await Promise.all([
         fs.copyFile(outlinePath, finalOutline),
         fs.copyFile(presentationPath, finalPresentation),
-        fs.copyFile(qaReportPath, finalQaReport)
+        fs.copyFile(qaReportPath, finalQaReportPath)
       ]);
+      await copyPreviewDirectory(previewsDirectory, path.join(resultDirectory, "previews"));
       await assertNoSymlinks(resultDirectory);
       const file = await fs.readFile(finalPresentation);
 
@@ -111,7 +137,8 @@ export class PresentationRunner {
         fileName: "presentation.pptx",
         sizeBytes: file.byteLength,
         sha256: crypto.createHash("sha256").update(file).digest("hex"),
-        qa: { passed: true, qaLevel: "AUTOMATED_GEOMETRY_ONLY", report: qaReport },
+        qa: { passed: true, qaLevel: "AUTOMATED_GEOMETRY_ONLY", report: finalQaReport },
+        preview,
         buildDurationMs,
         qaDurationMs,
         totalDurationMs: Date.now() - startedAt,
@@ -129,6 +156,41 @@ export class PresentationRunner {
     }
   }
 
+  private async renderPreviews(presentationPath: string, previewsDirectory: string, taskRoot: string): Promise<void> {
+    assertPathInside(taskRoot, previewsDirectory);
+    let result;
+    try {
+      result = await this.executor({
+        command: this.config.pythonCommand,
+        args: [
+          path.join(this.config.skillHome, "scripts", "render_slides.py"),
+          "--input", presentationPath,
+          "--outdir", previewsDirectory,
+          "--dpi", String(this.config.previewDpi),
+          "--format", "png",
+        ],
+        cwd: taskRoot,
+        timeoutMs: this.config.previewTimeoutMs,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Preview renderer did not complete";
+      const timedOut = /timed out/i.test(message);
+      throw new RunnerError(
+        timedOut ? "PREVIEW_RENDER_TIMEOUT" : "PREVIEW_RENDER_FAILED",
+        timedOut ? "Preview rendering timed out" : "Preview renderer could not be executed",
+        502,
+        { message: message.slice(-1000) },
+      );
+    }
+    if (result.exitCode !== 0) {
+      throw new RunnerError("PREVIEW_RENDER_FAILED", "render_slides.py failed", 502, {
+        exitCode: result.exitCode,
+        stdout: result.stdout.slice(-2000),
+        stderr: result.stderr.slice(-2000),
+      });
+    }
+  }
+
   async resolveResultFile(jobId: string, fileName: string): Promise<string> {
     if (!/^[0-9a-f-]{36}$/i.test(jobId) || !["presentation.pptx", "outline.json", "qa-report.json"].includes(fileName)) {
       throw new RunnerError("RESULT_NOT_FOUND", "Result file not found", 404);
@@ -138,6 +200,22 @@ export class PresentationRunner {
     assertPathInside(resultRoot, candidate);
     await assertRegularNonEmptyFile(candidate, resultRoot, "RESULT_NOT_FOUND");
     return candidate;
+  }
+
+  async resolvePreviewFile(jobId: string, slideNumber: string): Promise<string> {
+    if (!/^[0-9a-f-]{36}$/i.test(jobId) || !/^[1-9]\d{0,2}$/.test(slideNumber)) {
+      throw new RunnerError("PREVIEW_NOT_FOUND", "Preview file not found", 404);
+    }
+    const numericSlideNumber = Number(slideNumber);
+    const resultRoot = await ensureDirectory(this.config.resultRoot);
+    const previewsRoot = path.join(resultRoot, jobId, "previews");
+    const fileName = `slide-${String(numericSlideNumber).padStart(2, "0")}.png`;
+    const candidate = path.join(previewsRoot, fileName);
+    assertPathInside(resultRoot, candidate);
+    await assertRegularNonEmptyFile(candidate, resultRoot, "PREVIEW_NOT_FOUND");
+    const real = await fs.realpath(candidate);
+    assertPathInside(previewsRoot, real);
+    return real;
   }
 }
 
@@ -155,7 +233,7 @@ async function assertRegularNonEmptyFile(filePath: string, controlledRoot: strin
  * an editable PPTX. Phase 1 keeps this deterministic and dependency-free by
  * checking the OOXML ZIP directory for the required presentation root part.
  */
-async function assertPptxPackage(filePath: string, controlledRoot: string): Promise<void> {
+async function assertPptxPackage(filePath: string, controlledRoot: string): Promise<number | undefined> {
   await assertRegularNonEmptyFile(filePath, controlledRoot, "PPTX_MISSING");
   const content = await fs.readFile(filePath);
   if (content.length < 22 || content.readUInt32LE(0) !== 0x04034b50) {
@@ -165,6 +243,12 @@ async function assertPptxPackage(filePath: string, controlledRoot: string): Prom
   if (!entries.has("[Content_Types].xml") || !entries.has("ppt/presentation.xml")) {
     throw new RunnerError("PPTX_INVALID", "Generated file is missing required PPTX parts", 502);
   }
+  const slideNumbers = [...entries]
+    .map(entry => /^ppt\/slides\/slide(\d+)\.xml$/.exec(entry))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map(match => Number(match[1]))
+    .filter(number => Number.isSafeInteger(number) && number > 0);
+  return slideNumbers.length > 0 ? new Set(slideNumbers).size : undefined;
 }
 
 function zipEntryNames(content: Buffer): Set<string> {
@@ -188,4 +272,19 @@ function commandFailure(code: string, message: string, result: { exitCode: numbe
     stdout: result.stdout.slice(-4000),
     stderr: result.stderr.slice(-4000)
   });
+}
+
+function outlineSlideCountOf(outline: Record<string, unknown>): number {
+  const slides = outline.slides;
+  if (!Array.isArray(slides) || slides.length < 1) throw new RunnerError("INVALID_OUTLINE", "Runner outline must contain slides", 400);
+  return slides.length;
+}
+
+async function copyPreviewDirectory(source: string, destination: string): Promise<void> {
+  await fs.mkdir(destination, { recursive: false });
+  const entries = await fs.readdir(source, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) throw new RunnerError("PREVIEW_INVALID_FILE", `Cannot copy preview entry: ${entry.name}`, 502);
+    await fs.copyFile(path.join(source, entry.name), path.join(destination, entry.name));
+  }
 }

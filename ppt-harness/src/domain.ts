@@ -32,6 +32,24 @@ export interface JobArtifact {
   qaPassed: boolean;
   runnerJobId: string;
   downloadRef: string;
+  preview?: PreviewManifest;
+}
+export interface PreviewFile {
+  slideNumber: number;
+  fileName: string;
+  sizeBytes: number;
+  sha256: string;
+  width: number;
+  height: number;
+  downloadRef: string;
+}
+export interface PreviewManifest {
+  rendered: true;
+  format: "png";
+  dpi: number;
+  slideCount: number;
+  totalSizeBytes: number;
+  files: PreviewFile[];
 }
 export interface PresentationJob {
   id: string;

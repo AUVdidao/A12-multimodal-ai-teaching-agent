@@ -34,9 +34,12 @@ traversal, symbolic links, and non-whitelisted presets are rejected.
 ```
 
 A successful response is returned only after the PPTX build and automated
-geometry QA both pass. It includes the job ID, SHA-256, byte size, timings,
-QA summary, and download paths for `presentation.pptx`, `outline.json`, and
-`qa-report.json`.
+geometry QA and real PNG preview rendering both pass. It includes the job ID,
+SHA-256, byte size, timings, QA summary, and download paths for
+`presentation.pptx`, `outline.json`, `qa-report.json`, and each rendered
+preview PNG. Preview files are validated as regular in-task PNGs with
+contiguous slide numbers, matching dimensions, SHA-256 metadata, a 20 MB
+per-file cap, and a 200 MB total cap.
 
 The QA result is explicitly labeled:
 
@@ -113,9 +116,28 @@ python3 <skill-home>/scripts/qa_gate.py
   --report <task-dir>/qa-report.json
 ```
 
-## Manual preview rendering
+## Preview rendering
 
-After generation, render slides for human inspection with:
+Every successful generation renders real PPTX pages through the pinned
+`render_slides.py` script into the controlled task directory before the result
+is committed. The response returns server-owned preview references such as:
+
+```text
+GET /internal/ppt-skill/v1/jobs/<job-id>/previews/1
+```
+
+The renderer command is constructed by Runner with argument arrays:
+
+```text
+python3 render_slides.py \
+  --input <task-dir>/presentation.pptx \
+  --outdir <task-dir>/previews \
+  --dpi 150 \
+  --format png
+```
+
+The old manual command remains available for debugging or re-rendering a
+retained result:
 
 ```powershell
 docker run --rm `
@@ -127,4 +149,11 @@ docker run --rm `
   --format png
 ```
 
-Manual visual review remains required before Phase 2 integration.
+Preview rendering is not visual review. The Runner still reports
+`qaLevel=AUTOMATED_GEOMETRY_ONLY`; no AI vision, OCR, human review, or visual
+repair is performed by this task.
+
+Preview limits can be configured with `PPT_SKILL_PREVIEW_TIMEOUT_MS`
+(default 180000), `PPT_SKILL_PREVIEW_DPI` (default 150),
+`PPT_SKILL_PREVIEW_MAX_FILE_BYTES` (default 20 MB), and
+`PPT_SKILL_PREVIEW_MAX_TOTAL_BYTES` (default 200 MB).

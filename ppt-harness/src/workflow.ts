@@ -3,7 +3,7 @@ import { ControlledArtifactStore } from "./artifact-store.js";
 import { HarnessError, PresentationJob, PresentationJobRequest, SlideSpec } from "./domain.js";
 import { PgJobRepository } from "./repository.js";
 import { toRunnerOutline } from "./runner-outline-adapter.js";
-import { PptSkillRunnerClient } from "./runner-client.js";
+import { parseRunnerGeneration, PptSkillRunnerClient, RunnerGeneration } from "./runner-client.js";
 import { selectSlideSpecProvider, SlideSpecProvider } from "./slide-spec-provider.js";
 import { validateSlideSpec } from "./slide-spec.js";
 import { buildTeachingContractContext } from "./pedagogical-contract.js";
@@ -70,21 +70,29 @@ export class PresentationWorkflowService {
       await this.ensureActive(job.id);
 
       await this.transition(job.id, "RENDERING_PPTX", "Rendering native editable PPTX through the controlled runner", 50);
-      const runnerResult = await this.runner.generate(toRunnerOutline(spec, job.jobSnapshot.materialEvidence), template.stylePreset);
+      const runnerCheckpoint = await this.repository.latestCheckpoint(job.id, "RUNNER");
+      let runnerResult = runnerResultFromCheckpoint(runnerCheckpoint);
+      if (runnerResult) {
+        await this.transition(job.id, "RENDERING_PPTX", "Reusing the completed Runner PPTX and preview manifest from checkpoint", 58);
+      } else {
+        runnerResult = await this.runner.generate(toRunnerOutline(spec, job.jobSnapshot.materialEvidence), template.stylePreset);
+        await this.repository.saveCheckpoint(job.id, "RUNNER", { runnerResult });
+      }
       if (runnerResult.status !== "SUCCEEDED") throw new HarnessError("PPT_BUILD_FAILED", "PPT runner did not complete the task", 502);
-      await this.repository.saveCheckpoint(job.id, "RUNNER", { runnerJobId: runnerResult.jobId, totalDurationMs: runnerResult.totalDurationMs });
       await this.ensureActive(job.id);
 
-      // The current runner profile returns deterministic QA only. This state preserves the explicit preview boundary
-      // without claiming visual review has occurred.
-      await this.transition(job.id, "RENDERING_PREVIEW", "Preparing preview handoff metadata; page preview rendering is not enabled in this runner profile", 66);
+      await this.transition(job.id, "RENDERING_PREVIEW", "Validating the Runner-generated real slide preview manifest", 66);
+      if (!runnerResult.preview.rendered || runnerResult.preview.slideCount !== spec.slides.length) {
+        throw new HarnessError("PREVIEW_COUNT_MISMATCH", "Runner preview manifest does not match the SlideSpec slide count", 502);
+      }
       await this.transition(job.id, "RUNNING_DETERMINISTIC_QA", "Verifying deterministic geometry QA", 75);
       if (!runnerResult.qa?.passed) throw new HarnessError("PPT_QA_FAILED", "PPT runner quality gate did not pass", 422);
       if (runnerResult.qa.qaLevel !== "AUTOMATED_GEOMETRY_ONLY") throw new HarnessError("UNSUPPORTED_QA_LEVEL", "Runner returned an unsupported QA level", 422);
       await this.repository.saveQaReport(job.id, runnerResult.qa.qaLevel, true, {
         ...runnerResult.qa.report,
         visualReviewImplemented: false,
-        previewRenderingImplemented: false,
+        previewRenderingImplemented: true,
+        previewSlideCount: runnerResult.preview.slideCount,
         retentionDays: this.config.artifactRetentionDays,
       });
       await this.ensureActive(job.id);
@@ -102,6 +110,7 @@ export class PresentationWorkflowService {
       await this.repository.setArtifact(job.id, {
         fileName: "presentation.pptx", sizeBytes: saved.sizeBytes, sha256: saved.sha256,
         qaLevel: runnerResult.qa.qaLevel, qaPassed: true, runnerJobId: runnerResult.jobId,
+        preview: runnerResult.preview,
         downloadRef: `/api/v1/presentation-jobs/${job.id}/artifact`
       });
       await this.transition(job.id, "SUCCEEDED", "Presentation is ready for Spring Boot artifact handoff", 100);
@@ -137,5 +146,14 @@ export class PresentationWorkflowService {
   }
   private async ensureActive(id: string): Promise<void> {
     if ((await this.repository.get(id))?.status === "CANCELLED") throw new HarnessError("TASK_CANCELLED", "Presentation task was cancelled", 409);
+  }
+}
+
+export function runnerResultFromCheckpoint(payload: Record<string, unknown> | undefined): RunnerGeneration | undefined {
+  if (!payload || !payload.runnerResult) return undefined;
+  try {
+    return parseRunnerGeneration(payload.runnerResult);
+  } catch {
+    return undefined;
   }
 }

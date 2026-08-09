@@ -17,6 +17,11 @@ export function buildServer() {
     return reply.code(201).send(result);
   });
 
+  app.get<{ Params: { jobId: string; slideNumber: string } }>("/internal/ppt-skill/v1/jobs/:jobId/previews/:slideNumber", async (request, reply) => {
+    const filePath = await runner.resolvePreviewFile(request.params.jobId, request.params.slideNumber);
+    return reply.type("image/png").header("Content-Disposition", `attachment; filename=\"${path.basename(filePath)}\"`).send(fs.createReadStream(filePath));
+  });
+
   app.get<{ Params: { jobId: string; fileName: string } }>("/internal/ppt-skill/v1/jobs/:jobId/:fileName", async (request, reply) => {
     const filePath = await runner.resolveResultFile(request.params.jobId, request.params.fileName);
     const contentType = path.extname(filePath) === ".pptx"

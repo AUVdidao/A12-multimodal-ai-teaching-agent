@@ -13,6 +13,7 @@ export type PublicQaReport = {
   limitations: {
     renderSkipped: boolean;
     manualReviewSkipped: boolean;
+    previewRenderingImplemented: boolean;
     visualReviewImplemented: false;
   };
 };
@@ -40,6 +41,7 @@ export function toPublicQaReport(qaLevel: string, passed: boolean, report: Recor
     limitations: {
       renderSkipped: report.renderSkipped === true,
       manualReviewSkipped: report.manualReviewSkipped === true,
+      previewRenderingImplemented: report.previewRenderingImplemented === true,
       visualReviewImplemented: false,
     },
   };
