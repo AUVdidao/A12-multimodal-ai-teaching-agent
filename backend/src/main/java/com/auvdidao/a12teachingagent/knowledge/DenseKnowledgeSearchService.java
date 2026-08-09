@@ -36,17 +36,26 @@ public class DenseKnowledgeSearchService {
     }
 
     @Transactional(readOnly = true)
-    public List<DenseKnowledgeHit> search(Long projectId, List<Double> queryVector, Integer requestedLimit) {
-        long validProjectId = requireId(projectId, "projectId");
-        int limit = requestedLimit == null ? 10 : requestedLimit;
+    public List<DenseKnowledgeHit> search(DenseSearchQuery query) {
+        if (query == null) {
+            throw new BadRequestException("dense search query is required");
+        }
+        long validProjectId = requireId(query.projectId(), "projectId");
+        String validProvider = requireIdentity(query.provider(), "provider");
+        String validModel = requireIdentity(query.model(), "model");
+        int limit = query.limit() == null ? 10 : query.limit();
         if (limit < 1 || limit > 20) {
             throw new BadRequestException("limit must be between 1 and 20");
         }
-        List<Double> validQuery = validateQueryVector(queryVector);
+        List<Double> validQuery = validateQueryVector(query.queryVector());
         double queryNorm = norm(validQuery);
 
         List<KnowledgeChunkEmbedding> embeddings = embeddingRepository
-                .findAllByProjectIdOrderByKnowledgeChunkIdAsc(validProjectId);
+                .findAllByProjectIdAndProviderAndModelOrderByKnowledgeChunkIdAsc(
+                        validProjectId,
+                        validProvider,
+                        validModel
+                );
         if (embeddings.isEmpty()) {
             return List.of();
         }
@@ -64,6 +73,15 @@ public class DenseKnowledgeSearchService {
 
         List<ScoredHit> scored = new java.util.ArrayList<>();
         for (KnowledgeChunkEmbedding embedding : embeddings) {
+            if (embedding == null || !compatibleMetadata(
+                    embedding,
+                    validProjectId,
+                    validProvider,
+                    validModel,
+                    validQuery.size()
+            )) {
+                continue;
+            }
             KnowledgeChunk chunk = validChunk(embedding, validProjectId, chunksById);
             if (chunk == null) {
                 continue;
@@ -109,6 +127,38 @@ public class DenseKnowledgeSearchService {
                 .limit(limit)
                 .map(value -> toHit(value.chunk(), value.score()))
                 .toList();
+    }
+
+    public List<DenseKnowledgeHit> search(
+            Long projectId,
+            String provider,
+            String model,
+            List<Double> queryVector,
+            Integer limit
+    ) {
+        return search(new DenseSearchQuery(projectId, provider, model, queryVector, limit));
+    }
+
+    private static boolean compatibleMetadata(
+            KnowledgeChunkEmbedding embedding,
+            long projectId,
+            String provider,
+            String model,
+            int queryDimensions
+    ) {
+        if (!Long.valueOf(projectId).equals(embedding.getProjectId())) {
+            skip(embedding, "project mismatch");
+            return false;
+        }
+        if (!provider.equals(embedding.getProvider()) || !model.equals(embedding.getModel())) {
+            skip(embedding, "provider/model mismatch");
+            return false;
+        }
+        if (embedding.getDimensions() == null || embedding.getDimensions() != queryDimensions) {
+            skip(embedding, "incompatible vector dimensions");
+            return false;
+        }
+        return true;
     }
 
     private KnowledgeChunk validChunk(
@@ -194,6 +244,13 @@ public class DenseKnowledgeSearchService {
             dot += query.get(index) * vector.get(index);
         }
         return dot / (queryNorm * vectorNorm);
+    }
+
+    private static String requireIdentity(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new BadRequestException(field + " is required");
+        }
+        return value.strip();
     }
 
     private static long requireId(Long value, String field) {

@@ -12,6 +12,12 @@ public interface KnowledgeChunkEmbeddingRepository extends JpaRepository<Knowled
 
     List<KnowledgeChunkEmbedding> findAllByProjectIdOrderByKnowledgeChunkIdAsc(Long projectId);
 
+    List<KnowledgeChunkEmbedding> findAllByProjectIdAndProviderAndModelOrderByKnowledgeChunkIdAsc(
+            Long projectId,
+            String provider,
+            String model
+    );
+
     long countByProjectId(Long projectId);
 
     long deleteByKnowledgeChunkId(Long knowledgeChunkId);

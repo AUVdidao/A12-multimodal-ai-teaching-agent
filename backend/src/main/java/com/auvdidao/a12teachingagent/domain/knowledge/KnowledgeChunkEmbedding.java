@@ -44,6 +44,9 @@ public class KnowledgeChunkEmbedding extends BaseAuditableEntity {
     @Column(name = "vector_json", columnDefinition = "TEXT", nullable = false)
     private String vector;
 
+    /**
+     * SHA-256 of the source chunk content for freshness checks; provider/model/dimensions identify the embedding space.
+     */
     @Column(nullable = false, length = 64)
     private String contentHash;
 
