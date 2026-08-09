@@ -10,5 +10,7 @@ import java.util.List;
  */
 public interface EmbeddingProvider {
 
+    EmbeddingProviderDescriptor describe();
+
     EmbeddingBatchResult embed(List<String> inputs);
 }
