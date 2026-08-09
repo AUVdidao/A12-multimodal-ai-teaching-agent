@@ -4,6 +4,7 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentRequest
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.TeachingIntentResponse;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
+import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.common.exception.ForbiddenException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
@@ -21,9 +22,9 @@ import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummary;
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummaryStatus;
 import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementSummaryRepository;
+import com.auvdidao.a12teachingagent.knowledge.DenseKnowledgeHit;
+import com.auvdidao.a12teachingagent.knowledge.DenseKnowledgeRetrievalService;
 import com.auvdidao.a12teachingagent.knowledge.KnowledgeSearchService;
-import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeHitResponse;
-import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeSearchResponse;
 import com.auvdidao.a12teachingagent.intent.dto.TeachingIntentDtos.TeachingIntentUpdateRequest;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +64,7 @@ class TeachingIntentServiceGatewayTest {
     @Mock
     private TeachingIntentRepository intentRepository;
     @Mock
-    private KnowledgeSearchService searchService;
+    private DenseKnowledgeRetrievalService denseRetrievalService;
     @Mock
     private ProjectAccessService projectAccessService;
     @Mock
@@ -80,7 +81,7 @@ class TeachingIntentServiceGatewayTest {
                 purposeRepository,
                 chunkRepository,
                 intentRepository,
-                searchService,
+                denseRetrievalService,
                 projectAccessService,
                 aiWorkflowGateway
         );
@@ -91,7 +92,7 @@ class TeachingIntentServiceGatewayTest {
         Project project = project();
         RequirementSummary summary = confirmedSummary();
         UploadedMaterial material = parsedMaterial();
-        KnowledgeHitResponse hit = knowledgeHit();
+        DenseKnowledgeHit hit = denseKnowledgeHit();
         stubPipeline(project, summary, material, hit);
         when(aiWorkflowGateway.buildTeachingIntent(any())).thenReturn(validAiResponse());
         when(intentRepository.save(any(TeachingIntent.class))).thenAnswer(invocation -> {
@@ -125,7 +126,7 @@ class TeachingIntentServiceGatewayTest {
             assertThat(evidence.getMaterialId()).isEqualTo(301L);
             assertThat(evidence.getKnowledgeChunkId()).isEqualTo(401L);
             assertThat(evidence.getSourceFilename()).isEqualTo("生物教材.pdf");
-            assertThat(evidence.getHitReason()).isEqualTo("命中主题与关键词");
+            assertThat(evidence.getHitReason()).startsWith("DENSE_COSINE score=");
         });
         assertThat(response.id()).isEqualTo(801L);
         verify(projectAccessService).requireAccess(project);
@@ -145,13 +146,13 @@ class TeachingIntentServiceGatewayTest {
         var response = service.generate(PROJECT_ID);
 
         assertThat(response.id()).isEqualTo(existing.getId());
-        verifyNoInteractions(materialRepository, purposeRepository, chunkRepository, searchService, aiWorkflowGateway);
+        verifyNoInteractions(materialRepository, purposeRepository, chunkRepository, denseRetrievalService, aiWorkflowGateway);
         verify(intentRepository, never()).save(any());
     }
 
     @Test
     void rejectsIncompleteWf04OutputWithoutPersisting() {
-        stubPipeline(project(), confirmedSummary(), parsedMaterial(), knowledgeHit());
+        stubPipeline(project(), confirmedSummary(), parsedMaterial(), denseKnowledgeHit());
         when(aiWorkflowGateway.buildTeachingIntent(any())).thenReturn(new TeachingIntentResponse(
                 "wf-04",
                 "intent-71",
@@ -183,9 +184,56 @@ class TeachingIntentServiceGatewayTest {
                 purposeRepository,
                 chunkRepository,
                 intentRepository,
-                searchService,
+                denseRetrievalService,
                 aiWorkflowGateway
         );
+    }
+
+    @Test
+    void teachingIntentUsesDenseRetrievalInsteadOfLexicalRetrieval() {
+        assertThat(TeachingIntentService.class.getDeclaredFields())
+                .noneMatch(field -> field.getType().equals(KnowledgeSearchService.class));
+    }
+
+    @Test
+    void denseIndexNotReadyFailsClosedBeforeGateway() {
+        stubPrerequisites(project(), confirmedSummary(), parsedMaterial());
+        when(denseRetrievalService.search(PROJECT_ID, "光合作用", 5))
+                .thenThrow(new ConflictException("Dense index not ready"));
+
+        assertThatThrownBy(() -> service.generate(PROJECT_ID))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Dense index not ready");
+        verifyNoInteractions(aiWorkflowGateway);
+        verify(intentRepository, never()).save(any());
+    }
+
+    @Test
+    void emptyDenseHitsFailClosedBeforeGateway() {
+        stubPrerequisites(project(), confirmedSummary(), parsedMaterial());
+        when(denseRetrievalService.search(PROJECT_ID, "光合作用", 5)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.generate(PROJECT_ID))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("grounded dense knowledge hit");
+        verifyNoInteractions(aiWorkflowGateway);
+        verify(intentRepository, never()).save(any());
+    }
+
+    @Test
+    void wrongProjectDenseEvidenceIsRejectedBeforeGateway() {
+        DenseKnowledgeHit wrongProjectHit = new DenseKnowledgeHit(
+                401L, PROJECT_ID + 1, 301L, 1, "光合作用核心概念",
+                "叶绿体吸收光能并完成能量转化。", "生物教材.pdf", 0.96
+        );
+        stubPrerequisites(project(), confirmedSummary(), parsedMaterial());
+        when(denseRetrievalService.search(PROJECT_ID, "光合作用", 5)).thenReturn(List.of(wrongProjectHit));
+
+        assertThatThrownBy(() -> service.generate(PROJECT_ID))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("grounded dense knowledge hit");
+        verifyNoInteractions(aiWorkflowGateway);
+        verify(intentRepository, never()).save(any());
     }
 
     @Test
@@ -216,7 +264,27 @@ class TeachingIntentServiceGatewayTest {
             Project project,
             RequirementSummary summary,
             UploadedMaterial material,
-            KnowledgeHitResponse hit
+            DenseKnowledgeHit hit
+    ) {
+        stubPipeline(project, summary, material, List.of(hit));
+    }
+
+    private void stubPipeline(
+            Project project,
+            RequirementSummary summary,
+            UploadedMaterial material,
+            List<DenseKnowledgeHit> hits
+    ) {
+        stubPrerequisites(project, summary, material);
+        when(denseRetrievalService.search(PROJECT_ID, "光合作用", 5)).thenReturn(hits);
+        when(purposeRepository.findByMaterialIdOrderByIdAsc(material.getId()))
+                .thenReturn(List.of(materialPurpose(material.getId())));
+    }
+
+    private void stubPrerequisites(
+            Project project,
+            RequirementSummary summary,
+            UploadedMaterial material
     ) {
         when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
         when(summaryRepository.findFirstByProjectIdOrderByCreatedAtDescIdDesc(PROJECT_ID))
@@ -225,14 +293,6 @@ class TeachingIntentServiceGatewayTest {
                 .thenReturn(Optional.empty());
         when(materialRepository.findByProjectIdOrderByCreatedAtAsc(PROJECT_ID)).thenReturn(List.of(material));
         when(chunkRepository.countByProjectId(PROJECT_ID)).thenReturn(1L);
-        when(searchService.search(PROJECT_ID, "光合作用", 5)).thenReturn(new KnowledgeSearchResponse(
-                "光合作用",
-                List.of(hit),
-                false,
-                "test"
-        ));
-        when(purposeRepository.findByMaterialIdOrderByIdAsc(material.getId()))
-                .thenReturn(List.of(materialPurpose(material.getId())));
     }
 
     private static Project project() {
@@ -281,17 +341,16 @@ class TeachingIntentServiceGatewayTest {
         return purpose;
     }
 
-    private static KnowledgeHitResponse knowledgeHit() {
-        return new KnowledgeHitResponse(
+    private static DenseKnowledgeHit denseKnowledgeHit() {
+        return new DenseKnowledgeHit(
                 401L,
+                PROJECT_ID,
                 301L,
-                "生物教材.pdf",
+                1,
                 "光合作用核心概念",
                 "叶绿体吸收光能并完成能量转化。",
-                0.96,
-                "命中主题与关键词",
-                List.of(PurposeType.TEXTBOOK_BASIS),
-                List.of("光合作用", "叶绿体")
+                "生物教材.pdf",
+                0.96
         );
     }
 

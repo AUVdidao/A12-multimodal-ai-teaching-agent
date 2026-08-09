@@ -28,8 +28,8 @@ import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementSu
 import com.auvdidao.a12teachingagent.intent.dto.TeachingIntentDtos.TeachingIntentEvidenceResponse;
 import com.auvdidao.a12teachingagent.intent.dto.TeachingIntentDtos.TeachingIntentResponse;
 import com.auvdidao.a12teachingagent.intent.dto.TeachingIntentDtos.TeachingIntentUpdateRequest;
-import com.auvdidao.a12teachingagent.knowledge.KnowledgeSearchService;
-import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeHitResponse;
+import com.auvdidao.a12teachingagent.knowledge.DenseKnowledgeHit;
+import com.auvdidao.a12teachingagent.knowledge.DenseKnowledgeRetrievalService;
 import com.auvdidao.a12teachingagent.material.MaterialLabels;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
@@ -38,8 +38,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,7 +53,7 @@ public class TeachingIntentService {
     private final MaterialPurposeRepository purposeRepository;
     private final KnowledgeChunkRepository chunkRepository;
     private final TeachingIntentRepository intentRepository;
-    private final KnowledgeSearchService searchService;
+    private final DenseKnowledgeRetrievalService denseRetrievalService;
     private final ProjectAccessService projectAccessService;
     private final AIWorkflowGateway aiWorkflowGateway;
 
@@ -62,7 +64,7 @@ public class TeachingIntentService {
             MaterialPurposeRepository purposeRepository,
             KnowledgeChunkRepository chunkRepository,
             TeachingIntentRepository intentRepository,
-            KnowledgeSearchService searchService,
+            DenseKnowledgeRetrievalService denseRetrievalService,
             ProjectAccessService projectAccessService,
             AIWorkflowGateway aiWorkflowGateway
     ) {
@@ -72,7 +74,7 @@ public class TeachingIntentService {
         this.purposeRepository = purposeRepository;
         this.chunkRepository = chunkRepository;
         this.intentRepository = intentRepository;
-        this.searchService = searchService;
+        this.denseRetrievalService = denseRetrievalService;
         this.projectAccessService = projectAccessService;
         this.aiWorkflowGateway = aiWorkflowGateway;
     }
@@ -102,17 +104,27 @@ public class TeachingIntentService {
             throw new ConflictException("Knowledge chunks are required before teaching intent generation");
         }
 
-        List<KnowledgeHitResponse> hits = searchService.search(projectId, summary.getTopic(), 5).hits();
-        List<KnowledgeHitResponse> groundedHits = hits.stream()
-                .filter(TeachingIntentService::isGroundedHit)
+        Map<Long, UploadedMaterial> parsedMaterialsById = parsedMaterials.stream()
+                .filter(material -> material.getId() != null)
+                .collect(Collectors.toMap(UploadedMaterial::getId, material -> material, (first, ignored) -> first,
+                        HashMap::new));
+        List<DenseKnowledgeHit> groundedHits = denseRetrievalService.search(projectId, summary.getTopic(), 5).stream()
+                .filter(hit -> isGroundedHit(projectId, hit, parsedMaterialsById))
                 .toList();
         if (groundedHits.isEmpty()) {
-            throw new ConflictException("At least one knowledge search hit is required before teaching intent generation");
+            throw new ConflictException("At least one grounded dense knowledge hit is required before teaching intent generation");
         }
 
-        List<PurposeType> usages = parsedMaterials.stream()
-                .flatMap(material -> purposeRepository.findByMaterialIdOrderByIdAsc(material.getId()).stream())
-                .map(MaterialPurpose::getPurposeType)
+        Map<Long, List<PurposeType>> usagesByMaterial = new HashMap<>();
+        parsedMaterials.forEach(material -> usagesByMaterial.put(
+                material.getId(),
+                purposeRepository.findByMaterialIdOrderByIdAsc(material.getId()).stream()
+                        .map(MaterialPurpose::getPurposeType)
+                        .distinct()
+                        .toList()
+        ));
+        List<PurposeType> usages = usagesByMaterial.values().stream()
+                .flatMap(List::stream)
                 .distinct()
                 .toList();
         String sources = parsedMaterials.stream()
@@ -146,7 +158,9 @@ public class TeachingIntentService {
         intent.setOutputTypes(outputTypes);
         intent.setStylePreference(summary.getStylePreference());
         intent.setNotes(aiResponse.confirmationPrompt().trim());
-        intent.setEvidenceItems(groundedHits.stream().map(TeachingIntentService::toEvidence).toList());
+        intent.setEvidenceItems(groundedHits.stream()
+                .map(hit -> toEvidence(hit, usagesByMaterial.getOrDefault(hit.materialId(), List.of())))
+                .toList());
         intent.setStatus(TeachingIntentStatus.DRAFT);
 
         return toResponse(intentRepository.save(intent));
@@ -278,26 +292,34 @@ public class TeachingIntentService {
         return evidence;
     }
 
-    private static TeachingIntentEvidence toEvidence(KnowledgeHitResponse hit) {
+    private static TeachingIntentEvidence toEvidence(DenseKnowledgeHit hit, List<PurposeType> usages) {
         TeachingIntentEvidence evidence = new TeachingIntentEvidence();
         evidence.setMaterialId(hit.materialId());
         evidence.setKnowledgeChunkId(hit.chunkId());
         evidence.setSourceFilename(hit.sourceFilename());
-        evidence.setUsageTypes(hit.usageTypes().stream().map(Enum::name).collect(Collectors.joining(",")));
-        evidence.setHitReason(hit.hitReason());
+        evidence.setUsageTypes(usages.stream().map(Enum::name).collect(Collectors.joining(",")));
+        evidence.setHitReason(String.format(java.util.Locale.ROOT, "DENSE_COSINE score=%.6f", hit.score()));
         evidence.setContentExcerpt(abbreviate(hit.content(), 260));
         return evidence;
     }
 
-    private static boolean isGroundedHit(KnowledgeHitResponse hit) {
+    private static boolean isGroundedHit(
+            Long projectId,
+            DenseKnowledgeHit hit,
+            Map<Long, UploadedMaterial> parsedMaterialsById
+    ) {
         return hit != null
+                && projectId.equals(hit.projectId())
                 && hit.materialId() != null
                 && hit.chunkId() != null
+                && parsedMaterialsById.containsKey(hit.materialId())
                 && hasText(hit.sourceFilename())
-                && hasText(hit.content());
+                && hasText(hit.content())
+                && Double.isFinite(hit.score())
+                && hit.sourceFilename().trim().equals(parsedMaterialsById.get(hit.materialId()).getOriginalFileName());
     }
 
-    private static KnowledgeSnippet toKnowledgeSnippet(KnowledgeHitResponse hit) {
+    private static KnowledgeSnippet toKnowledgeSnippet(DenseKnowledgeHit hit) {
         return new KnowledgeSnippet(
                 firstNonBlank(hit.title(), hit.sourceFilename()),
                 hit.sourceFilename().trim(),

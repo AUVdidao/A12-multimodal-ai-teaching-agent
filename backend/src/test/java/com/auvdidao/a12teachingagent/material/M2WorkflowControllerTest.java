@@ -8,6 +8,8 @@ import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummary;
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummaryStatus;
 import com.auvdidao.a12teachingagent.domain.requirement.repository.RequirementSummaryRepository;
+import com.auvdidao.a12teachingagent.knowledge.DenseKnowledgeHit;
+import com.auvdidao.a12teachingagent.knowledge.DenseKnowledgeRetrievalService;
 import com.auvdidao.a12teachingagent.material.storage.StorageProperties;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.annotation.Rollback;
@@ -40,6 +43,10 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -69,9 +76,14 @@ class M2WorkflowControllerTest {
     @Autowired
     private StorageProperties storageProperties;
 
+    @MockBean
+    private DenseKnowledgeRetrievalService denseRetrievalService;
+
     @BeforeEach
     void prepareStorage() throws IOException {
         deleteStorage();
+        when(denseRetrievalService.search(anyLong(), anyString(), eq(5)))
+                .thenAnswer(invocation -> denseHitForProject(invocation.getArgument(0)));
     }
 
     @AfterEach
@@ -268,10 +280,12 @@ class M2WorkflowControllerTest {
         RequirementSummary summary = summaryRepository.findFirstByProjectIdOrderByCreatedAtDescIdDesc(pipeline.projectId()).orElseThrow();
         summary.setTopic("量子宇宙飞船完全无关词");
         summaryRepository.saveAndFlush(summary);
+        when(denseRetrievalService.search(eq(pipeline.projectId()), eq("量子宇宙飞船完全无关词"), eq(5)))
+                .thenReturn(List.of());
 
         mockMvc.perform(post("/api/projects/{projectId}/teaching-intents/generate", pipeline.projectId()))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", containsString("search hit")));
+                .andExpect(jsonPath("$.message", containsString("grounded dense knowledge hit")));
     }
 
     @Test
@@ -399,6 +413,23 @@ class M2WorkflowControllerTest {
 
     private org.springframework.test.web.servlet.ResultActions generateIntent(Long projectId) throws Exception {
         return mockMvc.perform(post("/api/projects/{projectId}/teaching-intents/generate", projectId));
+    }
+
+    private List<DenseKnowledgeHit> denseHitForProject(Long projectId) {
+        return chunkRepository.findByProjectIdOrderByMaterialIdAscChunkNoAsc(projectId).stream()
+                .findFirst()
+                .map(chunk -> new DenseKnowledgeHit(
+                        chunk.getId(),
+                        chunk.getProjectId(),
+                        chunk.getMaterialId(),
+                        chunk.getChunkNo(),
+                        chunk.getTitle(),
+                        chunk.getContent(),
+                        chunk.getSourceFilename(),
+                        0.96
+                ))
+                .map(List::of)
+                .orElseGet(List::of);
     }
 
     private org.springframework.test.web.servlet.ResultActions updateIntent(Long projectId, long intentId, String goal) throws Exception {
