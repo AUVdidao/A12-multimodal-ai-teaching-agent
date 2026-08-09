@@ -71,14 +71,18 @@ test("preview symlinks fail closed", async (t) => {
     const runner = new PresentationRunner(config, mockExecutor({ renderSymlink: true }).executor);
     const outline = await readFixture();
     try {
-      await assert.rejects(() => runner.generate({ outline }), hasCode("SYMLINK_FORBIDDEN"));
+      await runner.generate({ outline });
+      assert.fail("Expected symlink preview to be rejected");
     } catch (error) {
-      const details = error instanceof RunnerError ? String(error.details) : "";
-      if (details.includes("EPERM") || details.includes("operation not permitted")) {
+      const details = error instanceof RunnerError
+        ? JSON.stringify(error.details)
+        : error instanceof Error ? error.message : String(error);
+      if (/EPERM|operation not permitted/i.test(details)) {
         t.skip("platform does not permit creating symlinks for the renderer fixture");
         return;
       }
-      throw error;
+      assert.ok(error instanceof RunnerError);
+      assert.equal(error.code, "SYMLINK_FORBIDDEN");
     }
   });
 });
@@ -179,6 +183,22 @@ test("QA failure never returns success and removes partial result", async () => 
   });
 });
 
+test("QA reports do not expose internal absolute paths", async () => {
+  await withRunner(async ({ config, resultRoot }) => {
+    const runner = new PresentationRunner(config, mockExecutor({ qaReportWithPaths: true }).executor);
+    const result = await runner.generate({ outline: await readFixture() });
+    const report = result.qa.report as Record<string, unknown>;
+    assert.equal(report.output_path, "[internal-path]");
+    assert.deepEqual(report.nested, { windows_path: "[internal-path]", relative: "qa/report.json" });
+
+    const persisted = JSON.parse(
+      await fs.readFile(path.join(resultRoot, result.jobId, "qa-report.json"), "utf8"),
+    ) as Record<string, unknown>;
+    assert.equal(persisted.output_path, "[internal-path]");
+    assert.deepEqual(persisted.nested, { windows_path: "[internal-path]", relative: "qa/report.json" });
+  });
+});
+
 test("path traversal and external asset URIs are rejected", async () => {
   const outline = await readFixture();
   (outline.slides as Array<Record<string, unknown>>)[1].image = "../secret.png";
@@ -236,6 +256,7 @@ interface MockOptions {
   renderZeroBytePng?: boolean;
   renderInvalidPng?: boolean;
   renderSymlink?: boolean;
+  qaReportWithPaths?: boolean;
 }
 
 function mockExecutor(options: MockOptions = {}): { executor: CommandExecutor; calls: CommandSpec[] } {
@@ -252,7 +273,15 @@ function mockExecutor(options: MockOptions = {}): { executor: CommandExecutor; c
       if (options.qaExitCode) return { exitCode: options.qaExitCode, stdout: "", stderr: "fixture QA failure" };
       const report = spec.args[spec.args.indexOf("--report") + 1];
       await fs.mkdir(path.dirname(report), { recursive: true });
-      await fs.writeFile(report, JSON.stringify({ ok: true, geometry_error_count: 0 }), "utf8");
+      const reportBody = options.qaReportWithPaths
+        ? {
+            ok: true,
+            geometry_error_count: 0,
+            output_path: path.join(path.dirname(report), "presentation.pptx"),
+            nested: { windows_path: "C:\\a12\\internal\\qa-report.json", relative: "qa/report.json" },
+          }
+        : { ok: true, geometry_error_count: 0 };
+      await fs.writeFile(report, JSON.stringify(reportBody), "utf8");
       return { exitCode: 0, stdout: "qa passed", stderr: "" };
     }
     if (spec.args[0].endsWith("render_slides.py")) {

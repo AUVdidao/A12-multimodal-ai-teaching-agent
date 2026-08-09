@@ -102,7 +102,7 @@ export class PresentationRunner {
         throw commandFailure("QA_FAILED", "presentation-skill QA gate rejected the deck", qaResult);
       }
       await assertRegularNonEmptyFile(qaReportPath, taskReal, "QA_REPORT_MISSING");
-      const upstreamQa = JSON.parse(await fs.readFile(qaReportPath, "utf8")) as Record<string, unknown>;
+      const upstreamQa = sanitizeQaReport(JSON.parse(await fs.readFile(qaReportPath, "utf8"))) as Record<string, unknown>;
       const qaReport = {
         ...upstreamQa,
         passed: true,
@@ -298,6 +298,20 @@ function zipEntryNames(content: Buffer): Set<string> {
     offset = end - 1;
   }
   return entries;
+}
+
+function sanitizeQaReport(value: unknown): unknown {
+  if (typeof value === "string") {
+    if (path.isAbsolute(value) || /^[A-Za-z]:[\\/]/.test(value) || /^\\\\/.test(value)) {
+      return "[internal-path]";
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(sanitizeQaReport);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, sanitizeQaReport(nested)]));
+  }
+  return value;
 }
 
 function commandFailure(code: string, message: string, result: { exitCode: number; stdout: string; stderr: string }): RunnerError {
