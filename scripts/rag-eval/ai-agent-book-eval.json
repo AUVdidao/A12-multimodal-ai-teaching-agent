@@ -1,0 +1,236 @@
+[
+  {
+    "id": "agent-001",
+    "category": "Agent 基础",
+    "question": "什么是 AI Agent？",
+    "expectedAnchors": ["AI Agent", "智能体", "自主决策"],
+    "expectedConcepts": ["目标", "环境", "感知", "行动"],
+    "expectedChapter": "AI Agent 基础",
+    "notes": "Agent 定义与基本组成"
+  },
+  {
+    "id": "agent-002",
+    "category": "Agent 基础",
+    "question": "Agent 与普通聊天机器人的核心区别是什么？",
+    "expectedAnchors": ["聊天机器人", "Agent", "工具调用"],
+    "expectedConcepts": ["对话", "任务", "规划", "执行"],
+    "expectedChapter": "AI Agent 基础",
+    "notes": "区分问答式对话与可执行任务系统"
+  },
+  {
+    "id": "agent-003",
+    "category": "Agent 基础",
+    "question": "Agent 的 Harness 有什么作用？",
+    "expectedAnchors": ["Harness", "Agent Harness", "运行时"],
+    "expectedConcepts": ["工具", "状态", "控制", "执行环境"],
+    "expectedChapter": "Agent 架构",
+    "notes": "Harness / Runtime 作为模型与外部世界之间的工程外壳"
+  },
+  {
+    "id": "agent-004",
+    "category": "Agent 基础",
+    "question": "为什么 Agent 通常需要感知、决策、行动和观察的循环？",
+    "expectedAnchors": ["感知", "决策", "行动", "观察"],
+    "expectedConcepts": ["反馈", "循环", "环境", "目标"],
+    "expectedChapter": "Agent 架构",
+    "notes": "Agent loop / observe-act pattern"
+  },
+  {
+    "id": "context-001",
+    "category": "Context Engineering",
+    "question": "什么是上下文工程？",
+    "expectedAnchors": ["上下文工程", "Context Engineering"],
+    "expectedConcepts": ["上下文", "信息组织", "提示词", "记忆"],
+    "expectedChapter": "上下文工程",
+    "notes": "Context Engineering 基本概念"
+  },
+  {
+    "id": "context-002",
+    "category": "Context Engineering",
+    "question": "为什么不能把所有信息都无限塞进上下文窗口？",
+    "expectedAnchors": ["上下文窗口", "Context Window"],
+    "expectedConcepts": ["噪声", "成本", "注意力", "检索"],
+    "expectedChapter": "上下文工程",
+    "notes": "上下文长度、成本和注意力稀释问题"
+  },
+  {
+    "id": "context-003",
+    "category": "Context Engineering",
+    "question": "Prompt Injection 对 Agent 有什么风险？",
+    "expectedAnchors": ["Prompt Injection", "提示词注入"],
+    "expectedConcepts": ["安全", "工具调用", "越权", "外部内容"],
+    "expectedChapter": "Agent 安全",
+    "notes": "Agent 读取外部内容并使用工具时的风险"
+  },
+  {
+    "id": "context-004",
+    "category": "Context Engineering",
+    "question": "短期记忆和长期记忆在 Agent 系统中分别解决什么问题？",
+    "expectedAnchors": ["短期记忆", "长期记忆", "Memory"],
+    "expectedConcepts": ["会话", "历史", "检索", "持久化"],
+    "expectedChapter": "上下文工程",
+    "notes": "Memory 与上下文管理"
+  },
+  {
+    "id": "context-005",
+    "category": "Context Engineering",
+    "question": "工具调用结果应该如何进入 Agent 的上下文？",
+    "expectedAnchors": ["工具调用", "Tool Call", "上下文"],
+    "expectedConcepts": ["观察", "结果", "压缩", "引用"],
+    "expectedChapter": "工具与上下文",
+    "notes": "工具返回内容的选择、压缩与引用"
+  },
+  {
+    "id": "rag-001",
+    "category": "RAG",
+    "question": "为什么长文档需要进行 Chunking？",
+    "expectedAnchors": ["Chunking", "文档分块", "分块"],
+    "expectedConcepts": ["长文档", "检索", "上下文", "片段"],
+    "expectedChapter": "RAG",
+    "notes": "RAG 基础：长文档不能整体直接进入上下文"
+  },
+  {
+    "id": "rag-002",
+    "category": "RAG",
+    "question": "Chunk 太大会带来什么问题？",
+    "expectedAnchors": ["Chunk 太大", "大块", "chunk size"],
+    "expectedConcepts": ["噪声", "召回", "上下文", "成本"],
+    "expectedChapter": "RAG",
+    "notes": "Chunk size 对检索质量的影响"
+  },
+  {
+    "id": "rag-003",
+    "category": "RAG",
+    "question": "Chunk 太小会带来什么问题？",
+    "expectedAnchors": ["Chunk 太小", "小块", "chunk size"],
+    "expectedConcepts": ["语义", "上下文丢失", "碎片", "召回"],
+    "expectedChapter": "RAG",
+    "notes": "过小分块破坏语义完整性"
+  },
+  {
+    "id": "rag-004",
+    "category": "RAG",
+    "question": "什么是稠密嵌入？",
+    "expectedAnchors": ["稠密嵌入", "Dense Embedding", "向量"],
+    "expectedConcepts": ["语义", "向量空间", "相似度", "Embedding"],
+    "expectedChapter": "Embedding 与检索",
+    "notes": "只评估概念覆盖，不实现 Embedding"
+  },
+  {
+    "id": "rag-005",
+    "category": "RAG",
+    "question": "什么是稀疏嵌入或稀疏检索？",
+    "expectedAnchors": ["稀疏检索", "Sparse Retrieval", "BM25"],
+    "expectedConcepts": ["关键词", "倒排索引", "词项", "匹配"],
+    "expectedChapter": "Embedding 与检索",
+    "notes": "Sparse retrieval / lexical retrieval"
+  },
+  {
+    "id": "rag-006",
+    "category": "RAG",
+    "question": "Dense Retrieval 的优势是什么？",
+    "expectedAnchors": ["Dense Retrieval", "稠密检索"],
+    "expectedConcepts": ["语义相似", "同义词", "泛化", "向量"],
+    "expectedChapter": "Embedding 与检索",
+    "notes": "Dense retrieval 优势"
+  },
+  {
+    "id": "rag-007",
+    "category": "RAG",
+    "question": "Sparse Retrieval 的优势是什么？",
+    "expectedAnchors": ["Sparse Retrieval", "稀疏检索", "关键词检索"],
+    "expectedConcepts": ["精确匹配", "可解释", "关键词", "低成本"],
+    "expectedChapter": "Embedding 与检索",
+    "notes": "Sparse retrieval 优势"
+  },
+  {
+    "id": "rag-008",
+    "category": "RAG",
+    "question": "为什么需要 Hybrid Retrieval？",
+    "expectedAnchors": ["Hybrid Retrieval", "混合检索"],
+    "expectedConcepts": ["稠密", "稀疏", "召回", "排序"],
+    "expectedChapter": "混合检索",
+    "notes": "Dense + Sparse 互补"
+  },
+  {
+    "id": "rag-009",
+    "category": "RAG",
+    "question": "什么是 RRF？",
+    "expectedAnchors": ["RRF", "Reciprocal Rank Fusion", "倒数排名融合"],
+    "expectedConcepts": ["融合", "排序", "rank", "检索结果"],
+    "expectedChapter": "混合检索",
+    "notes": "排序融合方法"
+  },
+  {
+    "id": "rag-010",
+    "category": "RAG",
+    "question": "什么是 Agentic RAG？",
+    "expectedAnchors": ["Agentic RAG", "Agent RAG"],
+    "expectedConcepts": ["Agent", "检索", "规划", "多步"],
+    "expectedChapter": "Agentic RAG",
+    "notes": "Agent 主动规划检索流程"
+  },
+  {
+    "id": "rag-011",
+    "category": "RAG",
+    "question": "Agentic RAG 与传统 RAG 有什么区别？",
+    "expectedAnchors": ["Agentic RAG", "传统 RAG"],
+    "expectedConcepts": ["单次检索", "多步检索", "工具", "反思"],
+    "expectedChapter": "Agentic RAG",
+    "notes": "传统 pipeline 与 Agentic workflow 的差别"
+  },
+  {
+    "id": "rag-012",
+    "category": "RAG",
+    "question": "为什么 RAG 系统需要检索质量评估？",
+    "expectedAnchors": ["检索评估", "Retrieval Evaluation", "Hit@K", "MRR"],
+    "expectedConcepts": ["召回", "排序", "基线", "指标"],
+    "expectedChapter": "RAG 评估",
+    "notes": "本任务本身的评估动机"
+  },
+  {
+    "id": "workflow-001",
+    "category": "Tool / Workflow / Multi-Agent",
+    "question": "Workflow 和 Agent 有什么区别？",
+    "expectedAnchors": ["Workflow", "Agent", "工作流"],
+    "expectedConcepts": ["确定性", "自主性", "流程", "控制"],
+    "expectedChapter": "Workflow 与 Agent",
+    "notes": "工作流和智能体的工程边界"
+  },
+  {
+    "id": "workflow-002",
+    "category": "Tool / Workflow / Multi-Agent",
+    "question": "多 Agent 协作适用于什么场景？",
+    "expectedAnchors": ["多 Agent", "Multi-Agent", "协作"],
+    "expectedConcepts": ["分工", "角色", "复杂任务", "协调"],
+    "expectedChapter": "Multi-Agent",
+    "notes": "多智能体适用条件"
+  },
+  {
+    "id": "workflow-003",
+    "category": "Tool / Workflow / Multi-Agent",
+    "question": "为什么不是所有任务都应该设计成自主 Agent？",
+    "expectedAnchors": ["自主 Agent", "Agent", "工作流"],
+    "expectedConcepts": ["成本", "风险", "确定性", "可控"],
+    "expectedChapter": "Workflow 与 Agent",
+    "notes": "避免过度 Agent 化"
+  },
+  {
+    "id": "workflow-004",
+    "category": "Tool / Workflow / Multi-Agent",
+    "question": "Agent 使用工具时为什么需要权限和安全边界？",
+    "expectedAnchors": ["工具", "权限", "安全边界"],
+    "expectedConcepts": ["越权", "沙箱", "确认", "风险"],
+    "expectedChapter": "工具调用安全",
+    "notes": "Tool use safety"
+  },
+  {
+    "id": "workflow-005",
+    "category": "Tool / Workflow / Multi-Agent",
+    "question": "Human-in-the-loop 在 Agent 系统中有什么价值？",
+    "expectedAnchors": ["Human-in-the-loop", "人在回路", "人工确认"],
+    "expectedConcepts": ["审核", "风险控制", "决策", "监督"],
+    "expectedChapter": "Agent 工程实践",
+    "notes": "人在回路与高风险动作确认"
+  }
+]
