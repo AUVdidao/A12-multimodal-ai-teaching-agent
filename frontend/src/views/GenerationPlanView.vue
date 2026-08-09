@@ -153,7 +153,7 @@
                   type="primary"
                   :icon="MagicStick"
                   :loading="generating"
-                  :disabled="!canGenerateContent || generating || pptJobActive"
+                  :disabled="!canGenerateContent || generating || pptJobActive || nonPptGenerating"
                   @click="generateContent"
                 >
                   生成内容
@@ -191,9 +191,20 @@
                 type="primary"
                 :icon="Refresh"
                 :disabled="generating"
-                @click="generateContent"
+                @click="retryPptGeneration"
               >
                 重新生成
+              </el-button>
+            </section>
+            <section v-if="nonPptGenerating || nonPptCompleted || nonPptError" class="non-ppt-job-panel" aria-live="polite">
+              <div>
+                <span class="ppt-job-panel__eyebrow">DOCX / INTERACTION</span>
+                <h3>{{ nonPptGenerating ? '教案/互动生成中' : nonPptError ? '教案/互动生成失败' : '教案/互动已完成' }}</h3>
+                <p>{{ nonPptGenerating ? '正在生成教案和课堂互动内容。' : nonPptError || '教案和课堂互动已保存。' }}</p>
+              </div>
+              <el-alert v-if="nonPptError" :title="nonPptError" type="error" show-icon :closable="false" />
+              <el-button v-if="nonPptError" type="primary" :icon="Refresh" :disabled="nonPptGenerating" @click="retryNonPptGeneration">
+                重试教案/互动
               </el-button>
             </section>
           </template>
@@ -258,7 +269,9 @@ import {
   createGenerationPlan,
   getArtifacts,
   getGenerationWorkspace,
+  generateNonPptArtifacts,
   updateGenerationPlan,
+  type Artifact,
   type GenerationPlan,
   type GenerationPlanPayload,
   type GenerationWorkspace,
@@ -323,6 +336,9 @@ const creating = ref(false);
 const saving = ref(false);
 const confirming = ref(false);
 const generating = ref(false);
+const nonPptGenerating = ref(false);
+const nonPptCompleted = ref(false);
+const nonPptError = ref('');
 const pptJob = ref<PptHarnessJob | null>(null);
 const pptJobError = ref('');
 const pptSseConnected = ref(false);
@@ -334,6 +350,8 @@ let pptEventSubscription: PptHarnessEventSubscription | undefined;
 let pptPollingTimer: number | undefined;
 let pptPollingAttempts = 0;
 let terminalTaskHandled = '';
+let initialNonPptGeneration: Promise<boolean> | null = null;
+let resultRefreshInProgress = false;
 
 const PPT_STATUS_POLL_INTERVAL_MS = 2500;
 const MAX_PPT_STATUS_POLLS = 24;
@@ -407,6 +425,10 @@ const canConfirmPlan = computed(() => Boolean(plan.value && !plan.value.confirme
   ['CONFIRM_PLAN'],
   true,
 )));
+const hasArtifactType = (type: Artifact['type']) => Boolean(
+  workspace.value?.artifacts?.some((artifact) => artifact.type === type),
+);
+const missingNonPptArtifacts = computed(() => ['DOCX', 'INTERACTION'].some((type) => !hasArtifactType(type as Artifact['type'])));
 const canGenerateContent = computed(() => Boolean(!gatewayPresentation.value.unavailable && plan.value?.confirmed && capability(
   ['canGenerate', 'canGenerateArtifacts', 'canGenerateContent', 'generateArtifacts', 'generateContent'],
   ['GENERATE_ARTIFACTS', 'GENERATE_CONTENT'],
@@ -560,20 +582,87 @@ async function confirmPlan() {
 }
 
 async function generateContent() {
-  if (!plan.value?.confirmed || gatewayPresentation.value.unavailable || generating.value || pptJobActive.value) {
+  if (!plan.value?.confirmed || gatewayPresentation.value.unavailable || generating.value || pptJobActive.value || nonPptGenerating.value) {
     if (gatewayPresentation.value.unavailable) setActionError('generate', undefined, 'AI 工作流当前不可用，请先检查 Kimi 或 Mock 配置。');
     return;
   }
-  generating.value = true;
   clearActionError();
   pptJobError.value = '';
+  nonPptError.value = '';
+  nonPptCompleted.value = false;
+
+  const shouldGeneratePpt = !hasArtifactType('PPT');
+  const shouldGenerateNonPpt = missingNonPptArtifacts.value;
+  const nonPptPromise = shouldGenerateNonPpt
+    ? runNonPptGeneration()
+    : Promise.resolve(true);
+  initialNonPptGeneration = nonPptPromise;
+
+  if (shouldGeneratePpt) {
+    void startPptGeneration();
+  } else {
+    const nonPptSucceeded = await nonPptPromise;
+    initialNonPptGeneration = null;
+    if (nonPptSucceeded && (pptJob.value?.status === 'SUCCEEDED' || hasArtifactType('PPT'))) {
+      await finalizeSuccessfulGeneration();
+    }
+  }
+}
+
+async function startPptGeneration() {
+  generating.value = true;
   try {
     const job = await createPptHarnessJob(projectId.value);
     startPptJobTracking(job);
   } catch (error) {
-    setActionError('generate', error, '内容生成失败，请稍后重试。');
-  } finally {
+    pptJobError.value = safePptHarnessError(
+      error instanceof Error ? error.message : undefined,
+      'PPT 生成失败，请稍后重试。',
+    );
+    setActionError('generate', error, 'PPT 生成失败，请稍后重试。');
     generating.value = false;
+  }
+}
+
+async function runNonPptGeneration(): Promise<boolean> {
+  nonPptGenerating.value = true;
+  nonPptError.value = '';
+  nonPptCompleted.value = false;
+  try {
+    const artifacts = await generateNonPptArtifacts(projectId.value, plan.value!.id);
+    if (workspace.value) workspace.value.artifacts = mergeArtifacts(workspace.value.artifacts || [], artifacts || []);
+    nonPptCompleted.value = true;
+    return true;
+  } catch (error) {
+    nonPptError.value = resolveError(error, '教案/互动生成失败，请稍后重试。');
+    return false;
+  } finally {
+    nonPptGenerating.value = false;
+  }
+}
+
+function mergeArtifacts(existing: Artifact[], incoming: Artifact[]) {
+  const byId = new Map<number, Artifact>();
+  [...existing, ...incoming].forEach((artifact) => byId.set(artifact.id, artifact));
+  return [...byId.values()];
+}
+
+function retryPptGeneration() {
+  if (generating.value || pptJobActive.value || !plan.value?.confirmed) return;
+  clearActionError();
+  pptJobError.value = '';
+  void startPptGeneration();
+}
+
+async function retryNonPptGeneration() {
+  if (nonPptGenerating.value || !plan.value?.confirmed) return;
+  clearActionError();
+  const retry = runNonPptGeneration();
+  initialNonPptGeneration = retry;
+  const succeeded = await retry;
+  initialNonPptGeneration = null;
+  if (succeeded && (pptJob.value?.status === 'SUCCEEDED' || hasArtifactType('PPT'))) {
+    await finalizeSuccessfulGeneration();
   }
 }
 
@@ -681,20 +770,50 @@ async function handlePptJobTerminal(job: PptHarnessJob) {
   }
 
   try {
-    const [artifacts, versions] = await Promise.all([
-      getArtifacts(projectId.value),
-      listArtifactVersions(projectId.value),
-    ]);
-    if (workspace.value) workspace.value.artifacts = artifacts || [];
-    artifactVersions.value = versions || [];
-    ElMessage.success('PPT 已生成并保存为新成果版本');
-    await router.push(`/projects/${projectId.value}/preview`);
+    const nonPptSucceeded = initialNonPptGeneration
+      ? await initialNonPptGeneration
+      : !missingNonPptArtifacts.value && !nonPptError.value;
+    initialNonPptGeneration = null;
+    await refreshGeneratedResults();
+    if (!nonPptSucceeded) {
+      ElMessage.warning('PPT 已生成；教案/互动生成失败，可单独重试。');
+      return;
+    }
+    await finalizeSuccessfulGeneration(false);
   } catch (error) {
     pptJobError.value = safePptHarnessError(
       error instanceof Error ? error.message : undefined,
       'PPT 已生成，但成果刷新失败，请刷新结果页重试。',
     );
   } finally {
+    await loadGatewayStatus();
+  }
+}
+
+async function refreshGeneratedResults() {
+  const [artifacts, versions] = await Promise.all([
+    getArtifacts(projectId.value),
+    listArtifactVersions(projectId.value),
+  ]);
+  if (workspace.value) workspace.value.artifacts = artifacts || [];
+  artifactVersions.value = versions || [];
+}
+
+async function finalizeSuccessfulGeneration(showPptMessage = true) {
+  const pptReady = pptJob.value?.status === 'SUCCEEDED' || hasArtifactType('PPT');
+  if (resultRefreshInProgress || !pptReady || nonPptGenerating.value || nonPptError.value) return;
+  resultRefreshInProgress = true;
+  try {
+    await refreshGeneratedResults();
+    if (showPptMessage) ElMessage.success('PPT、教案和互动已生成并保存为成果版本');
+    await router.push(`/projects/${projectId.value}/preview`);
+  } catch (error) {
+    pptJobError.value = safePptHarnessError(
+      error instanceof Error ? error.message : undefined,
+      '成果已生成，但刷新结果失败，请刷新结果页重试。',
+    );
+  } finally {
+    resultRefreshInProgress = false;
     await loadGatewayStatus();
   }
 }
@@ -753,7 +872,7 @@ function retryLastAction() {
     create: () => { void createPlan(); },
     save: () => { void savePlan(); },
     confirm: () => { void confirmPlan(); },
-    generate: () => { void generateContent(); },
+    generate: () => { retryPptGeneration(); },
   };
   if (lastFailedAction.value) retryActions[lastFailedAction.value]();
 }
@@ -787,6 +906,7 @@ onBeforeUnmount(() => {
 .generation-empty,
 .generation-actions,
 .ppt-job-panel,
+.non-ppt-job-panel,
 .generation-side-panel {
   border: 1px solid var(--ui-border);
   border-radius: 8px;
@@ -799,6 +919,30 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 16px 18px;
   margin-top: 14px;
+}
+
+.non-ppt-job-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  margin-top: 14px;
+  border-left: 3px solid var(--ui-info);
+}
+
+.non-ppt-job-panel h3,
+.non-ppt-job-panel p {
+  margin: 0;
+}
+
+.non-ppt-job-panel h3 {
+  margin-top: 3px;
+  font-size: 16px;
+}
+
+.non-ppt-job-panel p {
+  margin-top: 3px;
+  color: var(--ui-muted);
+  font-size: 12px;
 }
 
 .ppt-job-panel__header,

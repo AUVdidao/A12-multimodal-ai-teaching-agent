@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -192,6 +193,7 @@ public class GenerationService {
         if (request == null) {
             throw new BadRequestException("Request body is required");
         }
+        List<ArtifactType> requestedTypes = normalizeNonPptArtifactTypes(request.artifactTypes());
         GenerationPlan plan = requirePlan(projectId, request.planId());
         if (!Boolean.TRUE.equals(plan.getConfirmed())) {
             throw new ConflictException("Generation plan must be confirmed before artifact generation");
@@ -212,10 +214,11 @@ public class GenerationService {
                 .collect(() -> EnumSet.noneOf(ArtifactType.class), EnumSet::add, EnumSet::addAll);
 
         List<GeneratedArtifact> newArtifacts = new ArrayList<>();
-        Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> structuredDrafts = existingTypes.size() == ARTIFACT_TYPES.size()
+        boolean hasMissingRequestedType = requestedTypes.stream().anyMatch(type -> !existingTypes.contains(type));
+        Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> structuredDrafts = !hasMissingRequestedType
                 ? Map.of()
                 : structuredDrafts(projectId, intent, plan);
-        for (ArtifactType type : ARTIFACT_TYPES) {
+        for (ArtifactType type : requestedTypes) {
             if (!existingTypes.contains(type)) {
                 newArtifacts.add(createArtifact(project, intent, plan, version, type, structuredDrafts.get(type)));
             }
@@ -228,7 +231,10 @@ public class GenerationService {
             project.setStatus(ProjectStatus.GENERATED);
         }
         projectRepository.save(project);
-        return toArtifactResponses(artifactRepository.findByProjectIdAndGenerationPlanIdOrderByCreatedAtAsc(projectId, plan.getId()));
+        return toArtifactResponses(artifactRepository.findByProjectIdAndGenerationPlanIdOrderByCreatedAtAsc(projectId, plan.getId())
+                .stream()
+                .filter(artifact -> requestedTypes.contains(artifact.getArtifactType()))
+                .toList());
     }
 
     @Transactional(readOnly = true)
@@ -263,7 +269,13 @@ public class GenerationService {
         GenerationPlanResponse planResponse = plan == null ? null : toPlanResponse(plan);
         List<ArtifactResponse> artifactResponses = toArtifactResponses(artifacts);
         boolean planConfirmed = plan != null && Boolean.TRUE.equals(plan.getConfirmed());
-        boolean canGenerate = planConfirmed && artifacts.isEmpty();
+        EnumSet<ArtifactType> existingTypes = artifacts.stream()
+                .map(GeneratedArtifact::getArtifactType)
+                .filter(Objects::nonNull)
+                .collect(() -> EnumSet.noneOf(ArtifactType.class), EnumSet::add, EnumSet::addAll);
+        boolean hasMissingExpectedArtifact = ARTIFACT_TYPES.stream()
+                .anyMatch(type -> !existingTypes.contains(type));
+        boolean canGenerate = planConfirmed && hasMissingExpectedArtifact;
         GenerationCapabilities capabilities = new GenerationCapabilities(
                 intent != null,
                 plan != null && !planConfirmed,
@@ -495,6 +507,19 @@ public class GenerationService {
                         .thenComparing(GeneratedArtifact::getId, Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(artifact -> toArtifactResponse(artifact, versionNumbers.get(artifact.getVersionId())))
                 .toList();
+    }
+
+    private static List<ArtifactType> normalizeNonPptArtifactTypes(List<ArtifactType> requestedTypes) {
+        if (requestedTypes == null || requestedTypes.isEmpty()) {
+            throw new BadRequestException("artifactTypes must contain at least one artifact type");
+        }
+        if (requestedTypes.stream().anyMatch(Objects::isNull)) {
+            throw new BadRequestException("artifactTypes must not contain null values");
+        }
+        if (requestedTypes.contains(ArtifactType.PPT)) {
+            throw new BadRequestException("PPT generation must use the PPT Harness job endpoint");
+        }
+        return List.copyOf(new LinkedHashSet<>(requestedTypes));
     }
 
     private ArtifactResponse toArtifactResponse(GeneratedArtifact artifact, Integer versionNumber) {

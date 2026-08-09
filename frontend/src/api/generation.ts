@@ -154,13 +154,13 @@ export async function confirmGenerationPlan(
 }
 
 /**
- * Legacy generic artifact generation for existing non-PPT callers.
- * The PPT product flow must use the dedicated pptHarness client instead.
+ * Synchronous generic generation for the non-PPT artifacts only.
+ * PPT generation belongs to the dedicated pptHarness client.
  */
-export async function generateArtifacts(projectId: number | string, planId: number | string) {
+export async function generateNonPptArtifacts(projectId: number | string, planId: number | string) {
   const response = await http.post<ApiResponse<Artifact[]>>(
     `/api/projects/${projectId}/artifacts/generate`,
-    { planId },
+    { planId, artifactTypes: ['DOCX', 'INTERACTION'] },
   );
   return response.data.data;
 }

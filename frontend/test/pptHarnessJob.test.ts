@@ -52,11 +52,22 @@ test('task storage is project-scoped and does not store credentials', () => {
 test('generation view uses Harness create job and does not call generic artifact generation', async () => {
   const source = await readFile(join(frontendRoot, 'src/views/GenerationPlanView.vue'), 'utf8');
   assert.match(source, /createPptHarnessJob\(projectId\.value\)/);
+  assert.match(source, /generateNonPptArtifacts\(projectId\.value, plan\.value!\.id\)/);
   assert.doesNotMatch(source, /generateArtifacts\(/);
   assert.match(source, /onError:.*startPptStatusPolling|onError:/s);
   assert.match(source, /PPT_STATUS_POLL_INTERVAL_MS = 2500/);
   assert.match(source, /getArtifacts\(projectId\.value\)[\s\S]*listArtifactVersions\(projectId\.value\)/);
-  assert.match(source, /:disabled="!canGenerateContent \|\| generating \|\| pptJobActive"/);
+  assert.match(source, /:disabled="!canGenerateContent \|\| generating \|\| pptJobActive \|\| nonPptGenerating"/);
+  assert.match(source, /runNonPptGeneration\(\)/);
+  assert.match(source, /retryPptGeneration/);
+  assert.match(source, /retryNonPptGeneration/);
+});
+
+test('generic frontend generation requests DOCX and INTERACTION without PPT', async () => {
+  const source = await readFile(join(frontendRoot, 'src/api/generation.ts'), 'utf8');
+  assert.match(source, /export async function generateNonPptArtifacts/);
+  assert.match(source, /artifactTypes: \['DOCX', 'INTERACTION'\]/);
+  assert.doesNotMatch(source, /generateArtifacts\(/);
 });
 
 test('Harness API paths are explicit and separate from generic artifact generation', async () => {

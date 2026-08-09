@@ -1,8 +1,10 @@
 package com.auvdidao.a12teachingagent.generation;
 
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
+import com.auvdidao.a12teachingagent.domain.common.ArtifactType;
 import com.auvdidao.a12teachingagent.domain.common.ProjectStatus;
 import com.auvdidao.a12teachingagent.domain.common.TeachingIntentStatus;
+import com.auvdidao.a12teachingagent.domain.generation.ArtifactVersion;
 import com.auvdidao.a12teachingagent.domain.generation.GeneratedArtifact;
 import com.auvdidao.a12teachingagent.domain.generation.GenerationPlan;
 import com.auvdidao.a12teachingagent.domain.generation.TeachingIntent;
@@ -186,7 +188,7 @@ class GenerationWorkflowControllerTest {
     }
 
     @Test
-    void generatesPreviewableV1ArtifactsIdempotentlyAndMarksProjectGenerated() throws Exception {
+    void generatesRequestedNonPptArtifactsIdempotentlyAndMarksProjectGenerated() throws Exception {
         Project project = createProject("Artificial intelligence foundations");
         createIntent(project, TeachingIntentStatus.CONFIRMED, "Explain core AI concepts and apply them in cases");
         long planId = responseDataId(createPlan(project.getId()).andReturn());
@@ -194,38 +196,21 @@ class GenerationWorkflowControllerTest {
 
         MvcResult first = generateArtifacts(project.getId(), planId)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(3)))
-                .andExpect(jsonPath("$.data[0].type", is("PPT")))
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[0].type", is("DOCX")))
                 .andExpect(jsonPath("$.data[0].schemaVersion", is(1)))
                 .andExpect(jsonPath("$.data[0].generationPlanId", is((int) planId)))
                 .andExpect(jsonPath("$.data[0].versionNumber", is(1)))
-                .andExpect(jsonPath("$.data[0].content.slides", hasSize(7)))
-                .andExpect(jsonPath("$.data[0].content.slides[*].index", hasSize(7)))
-                .andExpect(jsonPath("$.data[0].content.slides[*].title", hasSize(7)))
-                .andExpect(jsonPath("$.data[0].content.slides[*].layout", hasSize(7)))
-                .andExpect(jsonPath("$.data[0].content.slides[*].points", hasSize(7)))
-                .andExpect(jsonPath("$.data[0].content.slides[*].speakerNotes", hasSize(7)))
-                .andExpect(jsonPath("$.data[0].content.slides[*].kind", contains(
-                        "COVER", "AGENDA", "OBJECTIVES", "CONTENT", "CASE", "INTERACTION", "SUMMARY"
-                )))
-                .andExpect(jsonPath("$.data[1].type", is("DOCX")))
-                .andExpect(jsonPath("$.data[1].content.courseInfo", notNullValue()))
-                .andExpect(jsonPath("$.data[1].content.teachingGoals", not(empty())))
-                .andExpect(jsonPath("$.data[1].content.keyPoints", not(empty())))
-                .andExpect(jsonPath("$.data[1].content.difficultPoints", not(empty())))
-                .andExpect(jsonPath("$.data[1].content.methods", not(empty())))
-                .andExpect(jsonPath("$.data[1].content.teachingProcess", not(empty())))
-                .andExpect(jsonPath("$.data[1].content.classroomActivities", not(empty())))
-                .andExpect(jsonPath("$.data[1].content.homework", not(empty())))
-                .andExpect(jsonPath("$.data[1].content.resourceNotes", not(empty())))
-                .andExpect(jsonPath("$.data[1].content.sections", hasSize(9)))
-                .andExpect(jsonPath("$.data[2].type", is("INTERACTION")))
-                .andExpect(jsonPath("$.data[2].content.questions", hasSize(3)))
-                .andExpect(jsonPath("$.data[2].content.questions[*].question", hasSize(3)))
-                .andExpect(jsonPath("$.data[2].content.questions[*].options", hasSize(3)))
-                .andExpect(jsonPath("$.data[2].content.questions[*].correctOption", hasSize(3)))
-                .andExpect(jsonPath("$.data[2].content.questions[*].correctAnswer", contains("B", "A", "C")))
-                .andExpect(jsonPath("$.data[2].content.questions[*].explanation", hasSize(3)))
+                .andExpect(jsonPath("$.data[0].content.courseInfo", notNullValue()))
+                .andExpect(jsonPath("$.data[0].content.teachingGoals", not(empty())))
+                .andExpect(jsonPath("$.data[0].content.sections", hasSize(9)))
+                .andExpect(jsonPath("$.data[1].type", is("INTERACTION")))
+                .andExpect(jsonPath("$.data[1].content.questions", hasSize(3)))
+                .andExpect(jsonPath("$.data[1].content.questions[*].question", hasSize(3)))
+                .andExpect(jsonPath("$.data[1].content.questions[*].options", hasSize(3)))
+                .andExpect(jsonPath("$.data[1].content.questions[*].correctOption", hasSize(3)))
+                .andExpect(jsonPath("$.data[1].content.questions[*].correctAnswer", contains("B", "A", "C")))
+                .andExpect(jsonPath("$.data[1].content.questions[*].explanation", hasSize(3)))
                 .andReturn();
 
         JsonNode firstData = responseData(first);
@@ -239,10 +224,10 @@ class GenerationWorkflowControllerTest {
 
         MvcResult repeated = generateArtifacts(project.getId(), planId)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(3)))
+                .andExpect(jsonPath("$.data", hasSize(2)))
                 .andReturn();
         assertThat(artifactIds(responseData(repeated))).containsExactlyElementsOf(firstArtifactIds);
-        assertThat(artifactRepository.findByProjectIdOrderByCreatedAtAsc(project.getId())).hasSize(3);
+        assertThat(artifactRepository.findByProjectIdOrderByCreatedAtAsc(project.getId())).hasSize(2);
         assertThat(versionRepository.findByProjectIdOrderByCreatedAtAsc(project.getId())).hasSize(1);
         assertThat(projectRepository.findById(project.getId()).orElseThrow().getStatus())
                 .isEqualTo(ProjectStatus.GENERATED);
@@ -258,17 +243,97 @@ class GenerationWorkflowControllerTest {
 
         mockMvc.perform(get("/api/projects/{projectId}/artifacts", project.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(3)));
+                .andExpect(jsonPath("$.data", hasSize(2)));
         mockMvc.perform(get("/api/projects/{projectId}/artifacts/{artifactId}", project.getId(), firstArtifactIds.get(0)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content.slides", hasSize(7)));
+                .andExpect(jsonPath("$.data.content.courseInfo", notNullValue()));
         mockMvc.perform(get("/api/projects/{projectId}/generation/workspace", project.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.projectStatus", is("GENERATED")))
+                .andExpect(jsonPath("$.data.artifacts", hasSize(2)))
+                .andExpect(jsonPath("$.data.capabilities.canGenerate", is(true)))
+                .andExpect(jsonPath("$.data.capabilities.canGenerateArtifacts", is(true)))
+                .andExpect(jsonPath("$.data.capabilities.canPreview", is(true)));
+    }
+
+    @Test
+    void rejectsPptRequestsAndEmptyArtifactTypeLists() throws Exception {
+        Project project = createProject("PPT contract");
+        createIntent(project, TeachingIntentStatus.CONFIRMED, "Confirmed teaching goal");
+        long planId = responseDataId(createPlan(project.getId()).andReturn());
+        confirmPlan(project.getId(), planId);
+
+        mockMvc.perform(post("/api/projects/{projectId}/artifacts/generate", project.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"planId\":" + planId + ",\"artifactTypes\":[\"PPT\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("PPT Harness job endpoint")));
+        mockMvc.perform(post("/api/projects/{projectId}/artifacts/generate", project.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"planId\":" + planId + ",\"artifactTypes\":[]}"))
+                .andExpect(status().isBadRequest());
+        assertThat(artifactRepository.findByProjectIdOrderByCreatedAtAsc(project.getId())).isEmpty();
+    }
+
+    @Test
+    void deduplicatesRequestedTypesAndAddsOnlyMissingNonPptArtifacts() throws Exception {
+        Project project = createProject("Partial generation");
+        createIntent(project, TeachingIntentStatus.CONFIRMED, "Confirmed teaching goal");
+        long planId = responseDataId(createPlan(project.getId()).andReturn());
+        confirmPlan(project.getId(), planId);
+
+        generateArtifacts(project.getId(), planId, List.of("DOCX"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].type", is("DOCX")));
+        generateArtifacts(project.getId(), planId, List.of("DOCX", "DOCX", "INTERACTION"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[0].type", is("DOCX")))
+                .andExpect(jsonPath("$.data[1].type", is("INTERACTION")));
+
+        assertThat(artifactRepository.findByProjectIdOrderByCreatedAtAsc(project.getId()))
+                .extracting(GeneratedArtifact::getArtifactType)
+                .containsExactly(ArtifactType.DOCX, ArtifactType.INTERACTION);
+    }
+
+    @Test
+    void workspaceCapabilityTracksMissingPptAndNonPptArtifacts() throws Exception {
+        Project project = createProject("Capability semantics");
+        createIntent(project, TeachingIntentStatus.CONFIRMED, "Confirmed teaching goal");
+        long planId = responseDataId(createPlan(project.getId()).andReturn());
+        confirmPlan(project.getId(), planId);
+
+        ArtifactVersion version = new ArtifactVersion();
+        version.setProjectId(project.getId());
+        version.setGenerationPlanId(planId);
+        version.setVersionNumber(1);
+        version.setDescription("Harness-created PPT version");
+        version.setFinalVersion(false);
+        versionRepository.save(version);
+
+        GeneratedArtifact ppt = new GeneratedArtifact();
+        ppt.setProjectId(project.getId());
+        ppt.setGenerationPlanId(planId);
+        ppt.setVersionId(version.getId());
+        ppt.setArtifactType(ArtifactType.PPT);
+        ppt.setTitle("Harness PPT");
+        ppt.setSchemaVersion(1);
+        ppt.setContentJson("{\"slides\":[]}");
+        artifactRepository.save(ppt);
+
+        mockMvc.perform(get("/api/projects/{projectId}/generation/workspace", project.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.capabilities.canGenerate", is(true)));
+
+        generateArtifacts(project.getId(), planId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)));
+        mockMvc.perform(get("/api/projects/{projectId}/generation/workspace", project.getId()))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.artifacts", hasSize(3)))
                 .andExpect(jsonPath("$.data.capabilities.canGenerate", is(false)))
-                .andExpect(jsonPath("$.data.capabilities.canGenerateArtifacts", is(false)))
-                .andExpect(jsonPath("$.data.capabilities.canPreview", is(true)));
+                .andExpect(jsonPath("$.data.capabilities.canGenerateArtifacts", is(false)));
     }
 
     @Test
@@ -291,7 +356,7 @@ class GenerationWorkflowControllerTest {
         generateArtifacts(secondProject.getId(), firstPlanId)
                 .andExpect(status().isNotFound());
 
-        assertThat(artifactRepository.findByProjectIdOrderByCreatedAtAsc(firstProject.getId())).hasSize(3);
+        assertThat(artifactRepository.findByProjectIdOrderByCreatedAtAsc(firstProject.getId())).hasSize(2);
         assertThat(artifactRepository.findByProjectIdOrderByCreatedAtAsc(secondProject.getId())).isEmpty();
     }
 
@@ -305,9 +370,20 @@ class GenerationWorkflowControllerTest {
     }
 
     private org.springframework.test.web.servlet.ResultActions generateArtifacts(Long projectId, Long planId) throws Exception {
+        return generateArtifacts(projectId, planId, List.of("DOCX", "INTERACTION"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions generateArtifacts(
+            Long projectId,
+            Long planId,
+            List<String> artifactTypes
+    ) throws Exception {
+        String serializedTypes = artifactTypes.stream()
+                .map(type -> "\"" + type + "\"")
+                .collect(java.util.stream.Collectors.joining(","));
         return mockMvc.perform(post("/api/projects/{projectId}/artifacts/generate", projectId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"planId\":" + planId + "}"));
+                .content("{\"planId\":" + planId + ",\"artifactTypes\":[" + serializedTypes + "]}"));
     }
 
     private Project createProject(String name) {

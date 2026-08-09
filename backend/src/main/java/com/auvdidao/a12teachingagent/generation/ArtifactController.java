@@ -3,8 +3,7 @@ package com.auvdidao.a12teachingagent.generation;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.ArtifactGenerationRequest;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.ArtifactResponse;
-import com.auvdidao.a12teachingagent.config.PptGeneratorProperties;
-import com.auvdidao.a12teachingagent.pptskill.harness.PptHarnessGenerationService;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,30 +21,16 @@ import java.util.List;
 public class ArtifactController {
 
     private final GenerationService generationService;
-    private final PptGeneratorProperties pptGeneratorProperties;
-    private final PptHarnessGenerationService pptHarnessGenerationService;
 
-    public ArtifactController(
-            GenerationService generationService,
-            PptGeneratorProperties pptGeneratorProperties,
-            PptHarnessGenerationService pptHarnessGenerationService
-    ) {
+    public ArtifactController(GenerationService generationService) {
         this.generationService = generationService;
-        this.pptGeneratorProperties = pptGeneratorProperties;
-        this.pptHarnessGenerationService = pptHarnessGenerationService;
     }
 
     @PostMapping("/generate")
-    public ApiResponse<?> generate(
+    public ApiResponse<List<ArtifactResponse>> generate(
             @PathVariable @Positive(message = "projectId must be greater than 0") Long projectId,
-            @RequestBody(required = false) ArtifactGenerationRequest request
+            @RequestBody(required = false) @Valid ArtifactGenerationRequest request
     ) {
-        if (pptGeneratorProperties.isHarnessEnabled()) {
-            return ApiResponse.success(pptHarnessGenerationService.start(projectId));
-        }
-        if ("PRESENTATION_SKILL".equalsIgnoreCase(pptGeneratorProperties.getProvider())) {
-            return ApiResponse.success(generationService.generatePresentationSkillPpt(projectId));
-        }
         return ApiResponse.success(generationService.generateArtifacts(projectId, request));
     }
 

@@ -47,7 +47,8 @@ public final class GenerationDtos {
     }
 
     public record ArtifactGenerationRequest(
-            @NotNull @Positive Long planId
+            @NotNull @Positive Long planId,
+            @NotEmpty List<@NotNull ArtifactType> artifactTypes
     ) {
     }
 
