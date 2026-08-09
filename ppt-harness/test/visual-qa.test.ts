@@ -19,6 +19,7 @@ const config: HarnessConfig = {
   port: 8091, host: "127.0.0.1", databaseUrl: "postgres://unused", runnerBaseUrl: "http://runner",
   runnerTimeoutMs: 1_000, generationSource: "FIXTURE", visualReviewEnabled: true, eventPollIntervalMs: 750,
   artifactRetentionDays: 7, maxRepairAttempts: 1, kimiBaseUrl: "https://kimi.example/v1", kimiModel: "kimi-k2.6", kimiTimeoutMs: 1_000,
+  kimiVisionEnabled: true, kimiVisionModel: "kimi-vision",
 };
 
 const job = { id: jobId } as PresentationJob;
@@ -91,7 +92,7 @@ test("clean rendered slides pass and send controlled PNG plus minimal SlideSpec 
 });
 
 test("visual issue taxonomy classifies overflow, overlap, tiny text, and broken rendering", async () => {
-  const cases: Array<[typeof VISUAL_ISSUE_CODES[number], "WARNING" | "ERROR"]> = [["TEXT_OVERFLOW", "ERROR"], ["ELEMENT_OVERLAP", "ERROR"], ["TEXT_TOO_SMALL", "WARNING"], ["BROKEN_RENDERING", "ERROR"]];
+  const cases: Array<[typeof VISUAL_ISSUE_CODES[number], "WARNING" | "ERROR"]> = [["TEXT_OVERFLOW", "ERROR"], ["ELEMENT_OVERLAP", "ERROR"], ["TEXT_TOO_SMALL", "WARNING"], ["BROKEN_RENDERING", "ERROR"], ["TABLE_UNREADABLE", "WARNING"], ["FLOW_UNREADABLE", "WARNING"]];
   for (const [code, severity] of cases) {
     const provider = new FakeProvider([{ slideNumber: 1, issues: [issue(1, code, severity)] }]);
     const oneSlide = { ...spec, slides: [spec.slides[0]] };
@@ -122,6 +123,16 @@ test("missing preview and PNG hash mismatch fail closed", async () => {
   await assert.rejects(() => service(provider, bad).review(job, oneSlide, bad), (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_PNG_HASH_MISMATCH");
 });
 
+test("preview manifest slide order must match SlideSpec order", async () => {
+  const one = { ...spec, slides: [spec.slides[0], spec.slides[1]] };
+  const generation = runnerGeneration([png(1), png(2)]);
+  generation.preview.files[0].slideNumber = 2;
+  await assert.rejects(
+    () => service(new FakeProvider([{ slideNumber: 1, issues: [] }]), generation).review(job, one, generation),
+    (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_COUNT_MISMATCH",
+  );
+});
+
 test("invalid visual JSON gets at most one structured repair", async () => {
   const valid = { slideNumber: 1, issues: [] };
   const repaired = new FakeProvider([{}], [valid]);
@@ -138,6 +149,14 @@ test("invalid visual JSON gets at most one structured repair", async () => {
 test("review count mismatch and provider unavailability are explicit failures", async () => {
   assert.throws(() => validateVisualQaResult({ jobId, passed: true, reviewedSlideCount: 2, issues: [] }, jobId, 3), (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_COUNT_MISMATCH");
   await assert.rejects(() => new KimiVisualQaProvider(config).review({ slideNumber: 1, imageDataUrl: "data:image/png;base64,AA==", expected: spec.slides[0] } as VisualQaSlideInput), (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_PROVIDER_UNAVAILABLE");
+});
+
+test("Visual QA refuses an unverified vision capability", async () => {
+  await assert.rejects(
+    () => new KimiVisualQaProvider({ ...config, kimiApiKey: "test-key", kimiVisionEnabled: false, kimiVisionModel: undefined })
+      .review({ slideNumber: 1, imageDataUrl: "data:image/png;base64,AA==", expected: spec.slides[0] } as VisualQaSlideInput),
+    (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_MODEL_NOT_VISION_CAPABLE",
+  );
 });
 
 test("Kimi Visual QA uses the configured multimodal image input contract", async () => {
@@ -162,10 +181,10 @@ test("Kimi Visual QA uses the configured multimodal image input contract", async
       },
     });
     const body = JSON.parse(String(request?.body)) as { model: string; thinking?: { type?: string }; response_format: { type: string; json_schema?: { name?: string; strict?: boolean; schema?: { required?: string[] } } }; messages: Array<{ role: string; content: unknown }> };
-    assert.equal(body.model, "kimi-k2.6");
+    assert.equal(body.model, "kimi-vision");
     assert.equal(body.thinking?.type, "disabled");
     assert.equal(body.response_format.type, "json_schema");
-    assert.equal(body.response_format.json_schema?.name, "visual_qa_slide_result_v1");
+    assert.equal(body.response_format.json_schema?.name, "visual_qa_slide_result");
     assert.equal(body.response_format.json_schema?.strict, true);
     assert.deepEqual(body.response_format.json_schema?.schema?.required, ["slideNumber", "issues"]);
     const userContent = body.messages[1].content as Array<{ type: string; text?: string; image_url?: { url: string } }>;

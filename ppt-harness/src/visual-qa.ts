@@ -21,31 +21,6 @@ export const VISUAL_ISSUE_CODES = [
 export type VisualIssueCode = typeof VISUAL_ISSUE_CODES[number];
 export type VisualIssueSeverity = "INFO" | "WARNING" | "ERROR";
 
-const VISUAL_QA_RESPONSE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["slideNumber", "issues"],
-  properties: {
-    slideNumber: { type: "integer", minimum: 1 },
-    issues: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["slideNumber", "code", "severity", "confidence", "description", "repairHint"],
-        properties: {
-          slideNumber: { type: "integer", minimum: 1 },
-          code: { type: "string", enum: VISUAL_ISSUE_CODES },
-          severity: { type: "string", enum: ["INFO", "WARNING", "ERROR"] },
-          confidence: { type: "number", minimum: 0, maximum: 1 },
-          description: { type: "string" },
-          repairHint: { type: "string" },
-        },
-      },
-    },
-  },
-} as const;
-
 export type VisualQaIssue = {
   slideNumber: number;
   code: VisualIssueCode;
@@ -76,6 +51,31 @@ export type VisualQaSlideInput = {
   };
 };
 
+export const VISUAL_QA_SLIDE_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["slideNumber", "issues"],
+  properties: {
+    slideNumber: { type: "integer" },
+    issues: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["slideNumber", "code", "severity", "confidence", "description", "repairHint"],
+        properties: {
+          slideNumber: { type: "integer" },
+          code: { type: "string", enum: [...VISUAL_ISSUE_CODES] },
+          severity: { type: "string", enum: ["INFO", "WARNING", "ERROR"] },
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+          description: { type: "string", minLength: 1, maxLength: 500 },
+          repairHint: { type: "string", minLength: 1, maxLength: 300 },
+        },
+      },
+    },
+  },
+} as const;
+
 export interface VisualQaProvider {
   review(input: VisualQaSlideInput): Promise<unknown>;
   repair(input: VisualQaSlideInput, invalidResult: unknown, reason: string): Promise<unknown>;
@@ -97,6 +97,9 @@ export class KimiVisualQaProvider implements VisualQaProvider {
   }
 
   private async request(input: VisualQaSlideInput, mode: "REVIEW" | "REPAIR", reason?: string, invalidResult?: unknown): Promise<unknown> {
+    if (!this.config.kimiVisionEnabled || !this.config.kimiVisionModel) {
+      throw new HarnessError("VISUAL_REVIEW_MODEL_NOT_VISION_CAPABLE", "Visual QA requires an explicitly configured vision-capable model", 503);
+    }
     if (!this.config.kimiApiKey) {
       throw new HarnessError("VISUAL_REVIEW_PROVIDER_UNAVAILABLE", "Visual QA requires a server-side MOONSHOT_API_KEY", 503);
     }
@@ -111,14 +114,14 @@ export class KimiVisualQaProvider implements VisualQaProvider {
           "Authorization": `Bearer ${this.config.kimiApiKey}`,
         },
         body: JSON.stringify({
-          model: this.config.kimiModel,
+          model: this.config.kimiVisionModel,
           thinking: { type: "disabled" },
           response_format: {
             type: "json_schema",
             json_schema: {
-              name: "visual_qa_slide_result_v1",
+              name: "visual_qa_slide_result",
               strict: true,
-              schema: VISUAL_QA_RESPONSE_SCHEMA,
+              schema: VISUAL_QA_SLIDE_JSON_SCHEMA,
             },
           },
           messages: [
@@ -131,7 +134,7 @@ export class KimiVisualQaProvider implements VisualQaProvider {
         }),
       });
       if (!response.ok) {
-        throw new HarnessError("VISUAL_REVIEW_PROVIDER_FAILED", `Visual QA provider failed with HTTP ${response.status}: ${safeProviderError(await response.text())}`, 502);
+        throw new HarnessError("VISUAL_REVIEW_PROVIDER_FAILED", `Visual QA provider failed with HTTP ${response.status}: ${safeProviderError()}`, 502);
       }
       const payload = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> };
       const content = responseContent(payload.choices?.[0]?.message?.content);
@@ -165,9 +168,9 @@ export class VisualQaService {
     }
     const issues: VisualQaIssue[] = [];
     let reviewedSlideCount = 0;
-    for (const file of generation.preview.files) {
+    for (const [index, file] of generation.preview.files.entries()) {
       const slide = spec.slides[file.slideNumber - 1];
-      if (!slide || file.slideNumber < 1 || file.slideNumber > expectedSlideCount) {
+      if (!slide || file.slideNumber !== index + 1 || file.slideNumber < 1 || file.slideNumber > expectedSlideCount) {
         throw new HarnessError("VISUAL_REVIEW_COUNT_MISMATCH", "Visual QA preview slide ordering is invalid", 502);
       }
       if (!controlledPreviewRef(generation.jobId, file.downloadRef, file.slideNumber)) {
@@ -313,11 +316,11 @@ function responseContent(value: unknown): string | undefined {
   return text || undefined;
 }
 
-function safeProviderError(value: string): string {
-  return value.replace(/\s+/g, " ").replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]").slice(0, 180);
+function safeProviderError(): string {
+  return "upstream response rejected";
 }
 
-function truncate(value: string): string { return value.length > 2000 ? `${value.slice(0, 2000)}…` : value; }
+function truncate(value: string): string { return value.length > 2000 ? `${value.slice(0, 2000)}...` : value; }
 function ascii(bytes: Uint8Array, offset: number, length: number): string { return String.fromCharCode(...bytes.slice(offset, offset + length)); }
 function nonEmpty(value: unknown, max: number): value is string { return typeof value === "string" && value.trim().length > 0 && value.length <= max; }
 function isSeverity(value: unknown): value is VisualIssueSeverity { return value === "INFO" || value === "WARNING" || value === "ERROR"; }

@@ -24,6 +24,8 @@ const config: HarnessConfig = {
   kimiBaseUrl: "https://api.moonshot.ai/v1",
   kimiModel: "kimi-k2.6",
   kimiTimeoutMs: 1_000,
+  kimiVisionEnabled: false,
+  kimiVisionModel: undefined,
 };
 
 const template: TemplateSpec = {

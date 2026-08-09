@@ -67,6 +67,22 @@ test("missing, zero-byte, and invalid-signature previews fail closed", async () 
 });
 
 test("preview symlinks fail closed", async (t) => {
+  const capabilityRoot = await fs.mkdtemp(path.join(os.tmpdir(), "a12-symlink-capability-"));
+  const capabilityTarget = path.join(capabilityRoot, "target");
+  const capabilityLink = path.join(capabilityRoot, "link");
+  try {
+    await fs.writeFile(capabilityTarget, "fixture", "utf8");
+    await fs.symlink(capabilityTarget, capabilityLink, "file");
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : "";
+    if (code === "EPERM" || code === "EACCES") {
+      t.skip("platform does not permit creating symlinks for the renderer fixture");
+      await fs.rm(capabilityRoot, { recursive: true, force: true });
+      return;
+    }
+    throw error;
+  }
+  await fs.rm(capabilityRoot, { recursive: true, force: true });
   await withRunner(async ({ config }) => {
     const runner = new PresentationRunner(config, mockExecutor({ renderSymlink: true }).executor);
     const outline = await readFixture();
