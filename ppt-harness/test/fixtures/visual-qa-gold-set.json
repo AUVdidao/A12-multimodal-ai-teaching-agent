@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "source": "PPT-010 real PPT-008 grade-8 biology fixture",
+  "cases": [
+    {"caseId":"clean-cover","fileName":"clean-slide-01.png","slideNumber":1,"expectedCodes":[],"expectedMaxSeverity":"INFO","knownClean":true,"notes":"Human-confirmed real cover slide."},
+    {"caseId":"clean-content","fileName":"clean-slide-02.png","slideNumber":2,"expectedCodes":[],"expectedMaxSeverity":"INFO","knownClean":true,"notes":"Human-confirmed real content/inquiry slide."},
+    {"caseId":"clean-flow","fileName":"clean-slide-05.png","slideNumber":5,"expectedCodes":[],"expectedMaxSeverity":"INFO","knownClean":true,"notes":"Real FLOW slide retained as a clean reference."},
+    {"caseId":"clean-chart","fileName":"clean-slide-06.png","slideNumber":6,"expectedCodes":[],"expectedMaxSeverity":"INFO","knownClean":true,"notes":"Real chart slide; manual review found the chart readable."},
+    {"caseId":"clean-comparison","fileName":"clean-slide-07.png","slideNumber":7,"expectedCodes":[],"expectedMaxSeverity":"INFO","knownClean":true,"notes":"Human-confirmed real comparison slide."},
+    {"caseId":"clean-table","fileName":"clean-slide-08.png","slideNumber":8,"expectedCodes":[],"expectedMaxSeverity":"INFO","knownClean":true,"notes":"Real table slide retained as a clean reference."},
+    {"caseId":"clean-summary","fileName":"clean-slide-09.png","slideNumber":9,"expectedCodes":[],"expectedMaxSeverity":"INFO","knownClean":true,"notes":"Human-confirmed real summary slide."},
+    {"caseId":"broken-text-overflow","fileName":"broken-text_overflow.png","slideNumber":1,"expectedCodes":["TEXT_OVERFLOW"],"expectedMaxSeverity":"ERROR","knownClean":false,"notes":"Deterministic oversized text line clipped at the canvas edge."},
+    {"caseId":"broken-text-too-small","fileName":"broken-text_too_small.png","slideNumber":1,"expectedCodes":["TEXT_TOO_SMALL"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic reduced-scale content with tiny annotation."},
+    {"caseId":"broken-element-overlap","fileName":"broken-element_overlap.png","slideNumber":1,"expectedCodes":["ELEMENT_OVERLAP"],"expectedMaxSeverity":"ERROR","knownClean":false,"notes":"Deterministic overlapping opaque elements."},
+    {"caseId":"broken-element-clipped","fileName":"broken-element_clipped.png","slideNumber":1,"expectedCodes":["ELEMENT_CLIPPED"],"expectedMaxSeverity":"ERROR","knownClean":false,"notes":"Deterministic element extends beyond right/bottom canvas bounds."},
+    {"caseId":"broken-unbalanced-layout","fileName":"broken-unbalanced_layout.png","slideNumber":1,"expectedCodes":["UNBALANCED_LAYOUT"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic dominant region leaves only a negligible secondary accent."},
+    {"caseId":"broken-excessive-empty-space","fileName":"broken-excessive_empty_space.png","slideNumber":1,"expectedCodes":["EXCESSIVE_EMPTY_SPACE"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic small content island surrounded by unused canvas."},
+    {"caseId":"broken-low-contrast","fileName":"broken-low_contrast.png","slideNumber":1,"expectedCodes":["LOW_CONTRAST"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic contrast-reduced slide and annotation."},
+    {"caseId":"broken-visual-hierarchy-weak","fileName":"broken-visual_hierarchy_weak.png","slideNumber":1,"expectedCodes":["VISUAL_HIERARCHY_WEAK"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic equal-weight repeated blocks remove a clear focal point."},
+    {"caseId":"broken-table-unreadable","fileName":"broken-table_unreadable.png","slideNumber":1,"expectedCodes":["TABLE_UNREADABLE"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic dense table grid with unreadable-sized rows."},
+    {"caseId":"broken-chart-unreadable","fileName":"broken-chart_unreadable.png","slideNumber":1,"expectedCodes":["CHART_UNREADABLE"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic chart with dense tiny annotations."},
+    {"caseId":"broken-flow-unreadable","fileName":"broken-flow_unreadable.png","slideNumber":1,"expectedCodes":["FLOW_UNREADABLE"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic dense multi-node flow."},
+    {"caseId":"broken-dense-content","fileName":"broken-dense_content.png","slideNumber":1,"expectedCodes":["DENSE_CONTENT"],"expectedMaxSeverity":"WARNING","knownClean":false,"notes":"Deterministic crowded content panel."},
+    {"caseId":"broken-rendering","fileName":"broken-broken_rendering.png","slideNumber":1,"expectedCodes":["BROKEN_RENDERING"],"expectedMaxSeverity":"ERROR","knownClean":false,"notes":"Deterministic rendering corruption bands."}
+  ]
+}
