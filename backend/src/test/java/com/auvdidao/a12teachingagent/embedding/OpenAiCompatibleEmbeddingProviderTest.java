@@ -43,7 +43,7 @@ class OpenAiCompatibleEmbeddingProviderTest {
         startServer((exchange, body) -> {
             requestBody.set(body);
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
-            writeResponse(exchange, 200, response("server-model", List.of(List.of(0.1, 0.2)), List.of(0)));
+            writeResponse(exchange, 200, response("embedding-model", List.of(List.of(0.1, 0.2)), List.of(0)));
         });
         EmbeddingProperties properties = properties(32, 5);
 
@@ -54,10 +54,73 @@ class OpenAiCompatibleEmbeddingProviderTest {
         assertThat(requestBody.get().path("input").get(0).asText()).isEqualTo("plain text");
         assertThat(requestBody.get().fieldNames()).toIterable().containsExactlyInAnyOrder("model", "input");
         assertThat(result.provider()).isEqualTo("OPENAI_COMPATIBLE");
-        assertThat(result.model()).isEqualTo("server-model");
+        assertThat(result.model()).isEqualTo("embedding-model");
         assertThat(result.dimensions()).isEqualTo(2);
         assertThat(result.vectors()).extracting(EmbeddingVector::index).containsExactly(0);
         assertThat(result.vectors().get(0).values()).containsExactly(0.1, 0.2);
+    }
+
+    @Test
+    void acceptsMissingResponseModelAndUsesRequestedModel() throws Exception {
+        startServer((exchange, body) -> writeResponse(exchange, 200,
+                "{\"data\":[{\"index\":0,\"embedding\":[0.1,0.2]}]}"));
+
+        EmbeddingBatchResult result = provider(properties(32, 5)).embed(List.of("plain text"));
+
+        assertThat(result.model()).isEqualTo("embedding-model");
+    }
+
+    @Test
+    void acceptsTrimmedResponseModelWhenIdentityMatchesExactly() throws Exception {
+        startServer((exchange, body) -> writeResponse(exchange, 200,
+                response(" embedding-model ", List.of(List.of(0.1, 0.2)), List.of(0))));
+
+        EmbeddingBatchResult result = provider(properties(32, 5)).embed(List.of("plain text"));
+
+        assertThat(result.model()).isEqualTo("embedding-model");
+    }
+
+    @Test
+    void rejectsDifferentResponseModelWithoutRetry() throws Exception {
+        startServer((exchange, body) -> {
+            requestCount.incrementAndGet();
+            writeResponse(exchange, 200,
+                    response("different-model", List.of(List.of(0.1, 0.2)), List.of(0)));
+        });
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(3);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("plain text")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception ->
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.INVALID_RESPONSE));
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void rejectsCaseChangedResponseModel() throws Exception {
+        startServer((exchange, body) -> writeResponse(exchange, 200,
+                response("EMBEDDING-MODEL", List.of(List.of(0.1, 0.2)), List.of(0))));
+
+        assertThatThrownBy(() -> provider(properties(32, 5)).embed(List.of("plain text")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception ->
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.INVALID_RESPONSE));
+    }
+
+    @Test
+    void rejectsModelChangeBetweenBatchesWithoutRetry() throws Exception {
+        AtomicInteger batches = new AtomicInteger();
+        startServer((exchange, body) -> {
+            requestCount.incrementAndGet();
+            String model = batches.getAndIncrement() == 0 ? "embedding-model" : "different-model";
+            writeResponse(exchange, 200, response(model, List.of(List.of(0.1, 0.2)), List.of(0)));
+        });
+        EmbeddingProperties properties = properties(1, 5);
+        properties.setRequestAttempts(3);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("first", "second")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception ->
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.INVALID_RESPONSE));
+        assertThat(requestCount).hasValue(2);
     }
 
     @Test
@@ -193,6 +256,95 @@ class OpenAiCompatibleEmbeddingProviderTest {
         assertThatThrownBy(() -> provider(properties).embed(List.of("a")))
                 .isInstanceOfSatisfying(EmbeddingException.class, exception ->
                         assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.NOT_CONFIGURED));
+    }
+
+    @Test
+    void descriptorDefaultsToDisabledWithoutExposingCredentials() {
+        EmbeddingProviderDescriptor descriptor = provider(new EmbeddingProperties()).describe();
+
+        assertThat(descriptor.provider()).isEqualTo("OPENAI_COMPATIBLE");
+        assertThat(descriptor.model()).isEmpty();
+        assertThat(descriptor.enabled()).isFalse();
+        assertThat(descriptor.configured()).isFalse();
+        assertThat(descriptor.toString()).doesNotContain("test-secret");
+    }
+
+    @Test
+    void descriptorReportsCompleteLocalConfiguration() {
+        EmbeddingProviderDescriptor descriptor = provider(properties(32, 5)).describe();
+
+        assertThat(descriptor.provider()).isEqualTo("OPENAI_COMPATIBLE");
+        assertThat(descriptor.model()).isEqualTo("embedding-model");
+        assertThat(descriptor.enabled()).isTrue();
+        assertThat(descriptor.configured()).isTrue();
+    }
+
+    @Test
+    void descriptorReportsMissingBaseUrlAsNotConfigured() {
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setBaseUrl("");
+
+        assertThat(provider(properties).describe().configured()).isFalse();
+    }
+
+    @Test
+    void descriptorReportsMissingApiKeyAsNotConfigured() {
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setApiKey("");
+
+        assertThat(provider(properties).describe().configured()).isFalse();
+    }
+
+    @Test
+    void descriptorReportsMissingModelAsNotConfigured() {
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setModel("");
+
+        assertThat(provider(properties).describe().configured()).isFalse();
+    }
+
+    @Test
+    void descriptorReportsNonPositiveTimeoutAsNotConfigured() {
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setTimeoutSeconds(0);
+
+        assertThat(provider(properties).describe().configured()).isFalse();
+    }
+
+    @Test
+    void descriptorReportsInvalidBatchSizeAsNotConfigured() {
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setBatchSize(0);
+
+        assertThat(provider(properties).describe().configured()).isFalse();
+    }
+
+    @Test
+    void descriptorReportsInvalidRequestAttemptsAsNotConfigured() {
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(0);
+
+        assertThat(provider(properties).describe().configured()).isFalse();
+    }
+
+    @Test
+    void descriptorReportsNegativeRetryDelayAsNotConfigured() {
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRetryDelayMillis(-1);
+
+        assertThat(provider(properties).describe().configured()).isFalse();
+    }
+
+    @Test
+    void descriptorReportsUnsupportedProviderAsEnabledButNotConfigured() {
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setProvider("OTHER");
+
+        EmbeddingProviderDescriptor descriptor = provider(properties).describe();
+
+        assertThat(descriptor.provider()).isEqualTo("OPENAI_COMPATIBLE");
+        assertThat(descriptor.enabled()).isTrue();
+        assertThat(descriptor.configured()).isFalse();
     }
 
     @Test

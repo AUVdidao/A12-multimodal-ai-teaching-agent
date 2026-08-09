@@ -298,5 +298,10 @@ class KnowledgeEmbeddingServiceTest {
             calls.add(List.copyOf(inputs));
             return responseFactory.apply(inputs);
         }
+
+        @Override
+        public EmbeddingProviderDescriptor describe() {
+            return new EmbeddingProviderDescriptor("FAKE", "fake-model", true, true);
+        }
     }
 }

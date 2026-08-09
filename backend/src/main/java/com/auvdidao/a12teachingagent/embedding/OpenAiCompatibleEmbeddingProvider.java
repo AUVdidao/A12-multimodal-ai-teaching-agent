@@ -72,26 +72,36 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
     }
 
     @Override
+    public EmbeddingProviderDescriptor describe() {
+        ConfigurationState state = configurationState();
+        return new EmbeddingProviderDescriptor(
+                PROVIDER_NAME,
+                state.model(),
+                state.enabled(),
+                state.configured()
+        );
+    }
+
+    @Override
     public EmbeddingBatchResult embed(List<String> inputs) {
         validateInputs(inputs);
-        String configuredProvider = normalize(properties.getProvider());
-        if ("DISABLED".equals(configuredProvider)) {
+        ConfigurationState state = configurationState();
+        if (!state.enabled()) {
             throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding provider is disabled");
         }
-        if (!PROVIDER_NAME.equals(configuredProvider)) {
+        if (!PROVIDER_NAME.equals(state.configuredProvider())) {
             throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding provider is not supported");
         }
 
-        requireConfiguration();
-        int batchSize = properties.getBatchSize();
-        if (batchSize <= 0) {
-            throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding batch size must be positive");
+        if (!state.configured()) {
+            throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding provider is not configured");
         }
-        validateRetryConfiguration();
+
+        int batchSize = properties.getBatchSize();
+        String requestedModel = state.model();
 
         long started = System.nanoTime();
         Map<Integer, EmbeddingVector> byIndex = new HashMap<>();
-        String serverModel = null;
         int dimensions = 0;
         int batchCount = 0;
 
@@ -102,10 +112,9 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
             batchCount++;
 
             if (StringUtils.hasText(response.model())) {
-                if (serverModel != null && !serverModel.equals(response.model())) {
-                    throw invalidResponse("Embedding response model changed between batches");
+                if (!requestedModel.equals(response.model())) {
+                    throw invalidResponse("Embedding response model does not match requested model");
                 }
-                serverModel = response.model();
             }
 
             for (EmbeddingVector vector : response.vectors()) {
@@ -138,7 +147,7 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         LOGGER.info(
                 "Embedding request completed: provider={}, model={}, batches={}, inputs={}, dimensions={}, latencyMs={}",
                 PROVIDER_NAME,
-                StringUtils.hasText(serverModel) ? serverModel : properties.getModel().strip(),
+                requestedModel,
                 batchCount,
                 inputs.size(),
                 dimensions,
@@ -146,7 +155,7 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         );
         return new EmbeddingBatchResult(
                 PROVIDER_NAME,
-                StringUtils.hasText(serverModel) ? serverModel : properties.getModel().strip(),
+                requestedModel,
                 dimensions,
                 ordered
         );
@@ -219,15 +228,6 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
             }
         }
         throw failure(EmbeddingFailureKind.TRANSPORT, "Embedding provider retry attempts were exhausted");
-    }
-
-    private void validateRetryConfiguration() {
-        if (properties.getRequestAttempts() < 1) {
-            throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding request attempts must be at least one");
-        }
-        if (properties.getRetryDelayMillis() < 0) {
-            throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding retry delay must not be negative");
-        }
     }
 
     private boolean shouldRetry(EmbeddingException failure, int attempt, int attempts) {
@@ -364,24 +364,32 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         }
     }
 
-    private void requireConfiguration() {
-        if (!StringUtils.hasText(properties.getBaseUrl())
-                || !StringUtils.hasText(properties.getApiKey())
-                || !StringUtils.hasText(properties.getModel())) {
-            throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding provider is not configured");
+    private ConfigurationState configurationState() {
+        String configuredProvider = normalize(properties.getProvider());
+        boolean enabled = !configuredProvider.isBlank() && !"DISABLED".equals(configuredProvider);
+        boolean configured = enabled
+                && PROVIDER_NAME.equals(configuredProvider)
+                && StringUtils.hasText(properties.getBaseUrl())
+                && StringUtils.hasText(properties.getApiKey())
+                && StringUtils.hasText(properties.getModel())
+                && properties.getTimeoutSeconds() > 0
+                && properties.getBatchSize() > 0
+                && properties.getRequestAttempts() >= 1
+                && properties.getRetryDelayMillis() >= 0
+                && validBaseUrl();
+        return new ConfigurationState(configuredProvider, normalizedModel(), enabled, configured);
+    }
+
+    private boolean validBaseUrl() {
+        if (!StringUtils.hasText(properties.getBaseUrl())) {
+            return false;
         }
         try {
             URI uri = URI.create(normalizedBaseUrl());
-            if (uri.getHost() == null || !("http".equalsIgnoreCase(uri.getScheme())
-                    || "https".equalsIgnoreCase(uri.getScheme()))) {
-                throw new IllegalArgumentException("unsupported endpoint");
-            }
+            return uri.getHost() != null && ("http".equalsIgnoreCase(uri.getScheme())
+                    || "https".equalsIgnoreCase(uri.getScheme()));
         } catch (IllegalArgumentException exception) {
-            throw new EmbeddingException(
-                    EmbeddingFailureKind.NOT_CONFIGURED,
-                    "Embedding provider endpoint is invalid",
-                    exception
-            );
+            return false;
         }
     }
 
@@ -391,6 +399,10 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
 
     private String normalizedBaseUrl() {
         return properties.getBaseUrl().strip().replaceAll("/+$", "");
+    }
+
+    private String normalizedModel() {
+        return properties.getModel() == null ? "" : properties.getModel().strip();
     }
 
     private EmbeddingException httpFailure(int statusCode) {
@@ -421,6 +433,14 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
     }
 
     private record BatchResponse(String model, List<EmbeddingVector> vectors) {
+    }
+
+    private record ConfigurationState(
+            String configuredProvider,
+            String model,
+            boolean enabled,
+            boolean configured
+    ) {
     }
 
     @FunctionalInterface
