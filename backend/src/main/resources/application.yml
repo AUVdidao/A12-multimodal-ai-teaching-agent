@@ -56,13 +56,13 @@ a12:
     style-preset: ${PPT_SKILL_STYLE_PRESET:forest-research}
     outline-provider: ${PPT_OUTLINE_PROVIDER:KIMI}
     fixture-enabled: ${PPT_OUTLINE_FIXTURE_ENABLED:false}
-    kimi-base-url: ${KIMI_API_BASE_URL:https://api.moonshot.ai/v1}
+    kimi-base-url: ${PPT_KIMI_API_BASE_URL:https://api.moonshot.ai/v1}
     kimi-api-key: ${MOONSHOT_API_KEY:}
     kimi-model: ${KIMI_PPT_MODEL:kimi-k2.6}
     kimi-timeout-seconds: ${KIMI_PPT_TIMEOUT_SECONDS:120}
     kimi-max-completion-tokens: ${KIMI_PPT_MAX_COMPLETION_TOKENS:6000}
   kimi:
-    base-url: ${KIMI_API_BASE_URL:https://api.moonshot.ai/v1}
+    base-url: ${KIMI_API_BASE_URL:https://api.moonshot.cn/v1}
     api-key: ${MOONSHOT_API_KEY:}
     connect-timeout-seconds: ${KIMI_CONNECT_TIMEOUT_SECONDS:15}
     request-attempts: ${KIMI_REQUEST_ATTEMPTS:2}
