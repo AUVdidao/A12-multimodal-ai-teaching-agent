@@ -5,15 +5,24 @@ import { executeCommand } from "./command";
 import { RunnerConfig } from "./config";
 import { RunnerError } from "./errors";
 import { validatePreviewDirectory } from "./preview";
+import { cleanupExpiredResults, RESULT_RETENTION_DAYS_DEFAULT, RetentionCleanup, RetentionCleanupReport } from "./retention";
 import { validateOutline } from "./schema";
 import { assertNoSymlinks, assertPathInside, ensureDirectory, validateOutlineSecurity, validatePreset } from "./security";
 import { CommandExecutor, GenerationRequest, GenerationResult } from "./types";
 
 export class PresentationRunner {
+  private initialization?: Promise<void>;
+
   constructor(
     private readonly config: RunnerConfig,
-    private readonly executor: CommandExecutor = executeCommand
+    private readonly executor: CommandExecutor = executeCommand,
+    private readonly cleanup: RetentionCleanup = cleanupExpiredResults,
   ) {}
+
+  async initialize(): Promise<void> {
+    if (!this.initialization) this.initialization = this.runStartupCleanup();
+    await this.initialization;
+  }
 
   async generate(request: GenerationRequest): Promise<GenerationResult> {
     const startedAt = Date.now();
@@ -22,6 +31,7 @@ export class PresentationRunner {
     const preset = request.stylePreset?.trim() || this.config.defaultPreset;
     validatePreset(preset);
     const outlineSlideCount = outlineSlideCountOf(request.outline);
+    await this.initialize();
 
     const tempRoot = await ensureDirectory(this.config.tempRoot);
     const resultRoot = await ensureDirectory(this.config.resultRoot);
@@ -191,6 +201,20 @@ export class PresentationRunner {
     }
   }
 
+  private async runStartupCleanup(): Promise<void> {
+    await ensureDirectory(this.config.resultRoot);
+    try {
+      const report = await this.cleanup(
+        this.config.resultRoot,
+        this.config.resultRetentionDays ?? RESULT_RETENTION_DAYS_DEFAULT,
+      );
+      if (report.skipped.length > 0 || report.failures.length > 0) logCleanupIssues(report);
+    } catch (error) {
+      if (error instanceof RunnerError && ["PATH_TRAVERSAL", "SYMLINK_FORBIDDEN"].includes(error.code)) throw error;
+      console.warn(`[runner-retention] cleanup unavailable code=${cleanupErrorCode(error)}`);
+    }
+  }
+
   async resolveResultFile(jobId: string, fileName: string): Promise<string> {
     if (!/^[0-9a-f-]{36}$/i.test(jobId) || !["presentation.pptx", "outline.json", "qa-report.json"].includes(fileName)) {
       throw new RunnerError("RESULT_NOT_FOUND", "Result file not found", 404);
@@ -217,6 +241,16 @@ export class PresentationRunner {
     assertPathInside(previewsRoot, real);
     return real;
   }
+}
+
+function logCleanupIssues(report: RetentionCleanupReport): void {
+  console.warn(`[runner-retention] cleanup issues skipped=${report.skipped.length} failures=${report.failures.length}`, JSON.stringify({ skipped: report.skipped, failures: report.failures }));
+}
+
+function cleanupErrorCode(error: unknown): string {
+  if (error instanceof RunnerError) return error.code;
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") return error.code;
+  return "RESULT_CLEANUP_FAILED";
 }
 
 async function assertRegularNonEmptyFile(filePath: string, controlledRoot: string, code: string): Promise<void> {

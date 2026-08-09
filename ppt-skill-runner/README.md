@@ -157,3 +157,17 @@ Preview limits can be configured with `PPT_SKILL_PREVIEW_TIMEOUT_MS`
 (default 180000), `PPT_SKILL_PREVIEW_DPI` (default 150),
 `PPT_SKILL_PREVIEW_MAX_FILE_BYTES` (default 20 MB), and
 `PPT_SKILL_PREVIEW_MAX_TOTAL_BYTES` (default 200 MB).
+
+## Result retention
+
+The Runner performs one bounded cleanup during startup. It scans only direct
+children of `PPT_SKILL_RESULT_ROOT` and uses each legal UUID job directory's
+mtime as the expiry basis. `PPT_SKILL_RESULT_RETENTION_DAYS` defaults to 7
+days, matching the Harness artifact retention default. Expired jobs are
+deleted as a whole, including `presentation.pptx`, `outline.json`,
+`qa-report.json`, and `previews/*.png`.
+
+Non-UUID entries and symbolic links are left untouched. Every deletion is
+confined to the result root; deletion failures are recorded and logged without
+preventing startup, while path-safety violations fail closed. Generation and
+result/preview download lookups do not rescan the result root.

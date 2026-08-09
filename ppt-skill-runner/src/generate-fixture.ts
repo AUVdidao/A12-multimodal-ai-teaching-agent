@@ -8,7 +8,9 @@ async function main(): Promise<void> {
   const runnerRoot = path.resolve(__dirname, "..", "..");
   const fixturePath = path.join(runnerRoot, "fixtures", "grade-8-biology-photosynthesis-outline.json");
   const outline = JSON.parse(await fs.readFile(fixturePath, "utf8")) as Record<string, unknown>;
-  const result = await new PresentationRunner(loadConfig()).generate({ outline, stylePreset: "forest-research" });
+  const runner = new PresentationRunner(loadConfig());
+  await runner.initialize();
+  const result = await runner.generate({ outline, stylePreset: "forest-research" });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 

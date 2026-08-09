@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node dist/test/runner.test.js",
+    "test": "npm run build && node --test dist/test/runner.test.js dist/test/retention.test.js",
     "generate:fixture": "npm run build && node dist/src/generate-fixture.js",
     "start": "node dist/src/server.js"
   },

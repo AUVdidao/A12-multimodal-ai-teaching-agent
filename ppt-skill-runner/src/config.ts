@@ -1,5 +1,6 @@
 import path from "node:path";
 import os from "node:os";
+import { RESULT_RETENTION_DAYS_DEFAULT } from "./retention";
 
 export interface RunnerConfig {
   port: number;
@@ -14,6 +15,7 @@ export interface RunnerConfig {
   previewDpi: number;
   previewMaxFileBytes: number;
   previewMaxTotalBytes: number;
+  resultRetentionDays?: number;
   defaultPreset: string;
 }
 
@@ -32,6 +34,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
     previewDpi: parsePositiveInt(env.PPT_SKILL_PREVIEW_DPI, 150),
     previewMaxFileBytes: parsePositiveInt(env.PPT_SKILL_PREVIEW_MAX_FILE_BYTES, 20 * 1024 * 1024),
     previewMaxTotalBytes: parsePositiveInt(env.PPT_SKILL_PREVIEW_MAX_TOTAL_BYTES, 200 * 1024 * 1024),
+    resultRetentionDays: parsePositiveInt(env.PPT_SKILL_RESULT_RETENTION_DAYS, RESULT_RETENTION_DAYS_DEFAULT),
     defaultPreset: env.PPT_SKILL_STYLE_PRESET?.trim() || "forest-research"
   };
 }

@@ -5,9 +5,10 @@ import { loadConfig } from "./config";
 import { RunnerError } from "./errors";
 import { PresentationRunner } from "./runner";
 
-export function buildServer() {
+export async function buildServer() {
   const config = loadConfig();
   const runner = new PresentationRunner(config);
+  await runner.initialize();
   const app = Fastify({ logger: true, bodyLimit: 2 * 1024 * 1024 });
 
   app.get("/health", async () => ({ status: "UP", service: "a12-ppt-skill-runner", qaLevel: "AUTOMATED_GEOMETRY_ONLY" }));
@@ -45,9 +46,8 @@ function requestLogSafe(app: ReturnType<typeof Fastify>, error: unknown): void {
 }
 
 if (require.main === module) {
-  const { app, config } = buildServer();
-  app.listen({ host: config.host, port: config.port }).catch((error) => {
-    app.log.error(error);
+  buildServer().then(({ app, config }) => app.listen({ host: config.host, port: config.port })).catch((error) => {
+    console.error(error);
     process.exit(1);
   });
 }
