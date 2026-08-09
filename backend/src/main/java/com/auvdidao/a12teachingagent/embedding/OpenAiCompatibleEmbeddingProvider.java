@@ -27,16 +27,18 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenAiCompatibleEmbeddingProvider.class);
     private static final String PROVIDER_NAME = "OPENAI_COMPATIBLE";
+    private static final long MAX_RETRY_AFTER_MILLIS = 30_000;
 
     private final ObjectMapper objectMapper;
     private final EmbeddingProperties properties;
     private final HttpClient httpClient;
+    private final Sleeper sleeper;
 
     @Autowired
     public OpenAiCompatibleEmbeddingProvider(ObjectMapper objectMapper, EmbeddingProperties properties) {
         this(objectMapper, properties, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(Math.max(1, properties.getTimeoutSeconds())))
-                .build());
+                .build(), Thread::sleep);
     }
 
     OpenAiCompatibleEmbeddingProvider(
@@ -44,9 +46,29 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
             EmbeddingProperties properties,
             HttpClient httpClient
     ) {
+        this(objectMapper, properties, httpClient, Thread::sleep);
+    }
+
+    OpenAiCompatibleEmbeddingProvider(
+            ObjectMapper objectMapper,
+            EmbeddingProperties properties,
+            Sleeper sleeper
+    ) {
+        this(objectMapper, properties, HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(Math.max(1, properties.getTimeoutSeconds())))
+                .build(), sleeper);
+    }
+
+    OpenAiCompatibleEmbeddingProvider(
+            ObjectMapper objectMapper,
+            EmbeddingProperties properties,
+            HttpClient httpClient,
+            Sleeper sleeper
+    ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.httpClient = httpClient;
+        this.sleeper = sleeper;
     }
 
     @Override
@@ -65,6 +87,7 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         if (batchSize <= 0) {
             throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding batch size must be positive");
         }
+        validateRetryConfiguration();
 
         long started = System.nanoTime();
         Map<Integer, EmbeddingVector> byIndex = new HashMap<>();
@@ -75,7 +98,7 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         for (int offset = 0; offset < inputs.size(); offset += batchSize) {
             int end = Math.min(inputs.size(), offset + batchSize);
             List<String> batch = inputs.subList(offset, end);
-            BatchResponse response = requestBatch(batch);
+            BatchResponse response = requestBatch(batch, batchCount + 1);
             batchCount++;
 
             if (StringUtils.hasText(response.model())) {
@@ -129,7 +152,7 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         );
     }
 
-    private BatchResponse requestBatch(List<String> inputs) {
+    private BatchResponse requestBatch(List<String> inputs, int batchNumber) {
         String requestBody;
         try {
             requestBody = objectMapper.writeValueAsString(Map.of(
@@ -144,33 +167,136 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
             );
         }
 
-        HttpResponse<String> response;
+        int attempts = properties.getRequestAttempts();
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(embeddingsUri())
+                        .timeout(Duration.ofSeconds(Math.max(1, properties.getTimeoutSeconds())))
+                        .header("Authorization", "Bearer " + properties.getApiKey().strip())
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                        .build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    EmbeddingException failure = httpFailure(response.statusCode());
+                    if (!shouldRetry(failure, attempt, attempts)) {
+                        throw failure;
+                    }
+                    retry(batchNumber, attempt, attempts, failure, retryAfterMillis(response));
+                    continue;
+                }
+                return parseResponse(response.body(), inputs.size());
+            } catch (java.net.http.HttpTimeoutException exception) {
+                EmbeddingException failure = new EmbeddingException(
+                        EmbeddingFailureKind.TIMEOUT,
+                        "Embedding request timed out",
+                        exception
+                );
+                if (!shouldRetry(failure, attempt, attempts)) {
+                    throw failure;
+                }
+                retry(batchNumber, attempt, attempts, failure, 0);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new EmbeddingException(EmbeddingFailureKind.TRANSPORT, "Embedding request was interrupted", exception);
+            } catch (IOException exception) {
+                EmbeddingException failure = new EmbeddingException(
+                        EmbeddingFailureKind.TRANSPORT,
+                        "Embedding provider transport failed",
+                        exception
+                );
+                if (!shouldRetry(failure, attempt, attempts)) {
+                    throw failure;
+                }
+                retry(batchNumber, attempt, attempts, failure, 0);
+            } catch (IllegalArgumentException exception) {
+                throw new EmbeddingException(
+                        EmbeddingFailureKind.TRANSPORT,
+                        "Embedding provider transport failed",
+                        exception
+                );
+            }
+        }
+        throw failure(EmbeddingFailureKind.TRANSPORT, "Embedding provider retry attempts were exhausted");
+    }
+
+    private void validateRetryConfiguration() {
+        if (properties.getRequestAttempts() < 1) {
+            throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding request attempts must be at least one");
+        }
+        if (properties.getRetryDelayMillis() < 0) {
+            throw failure(EmbeddingFailureKind.NOT_CONFIGURED, "Embedding retry delay must not be negative");
+        }
+    }
+
+    private boolean shouldRetry(EmbeddingException failure, int attempt, int attempts) {
+        if (attempt >= attempts) {
+            return false;
+        }
+        return switch (failure.getKind()) {
+            case RATE_LIMITED, TIMEOUT -> true;
+            case TRANSPORT -> failure.getStatusCode() == 0;
+            case UPSTREAM_FAILURE -> failure.getStatusCode() == 0
+                    || isRetryableHttpStatus(failure.getStatusCode());
+            default -> false;
+        };
+    }
+
+    private boolean isRetryableHttpStatus(int statusCode) {
+        return statusCode == 408
+                || statusCode == 429
+                || statusCode == 500
+                || statusCode == 502
+                || statusCode == 503
+                || statusCode == 504;
+    }
+
+    private void retry(
+            int batchNumber,
+            int attempt,
+            int attempts,
+            EmbeddingException failure,
+            long retryAfterMillis
+    ) {
+        long delayMillis = Math.max(properties.getRetryDelayMillis(), retryAfterMillis);
+        LOGGER.warn(
+                "Embedding batch transient failure: provider={}, model={}, batch={}, attempt={}/{}, kind={}, status={}, delayMs={}",
+                PROVIDER_NAME,
+                properties.getModel().strip(),
+                batchNumber,
+                attempt,
+                attempts,
+                failure.getKind(),
+                failure.getStatusCode(),
+                delayMillis
+        );
         try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(embeddingsUri())
-                    .timeout(Duration.ofSeconds(Math.max(1, properties.getTimeoutSeconds())))
-                    .header("Authorization", "Bearer " + properties.getApiKey().strip())
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                    .build();
-            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (java.net.http.HttpTimeoutException exception) {
-            throw new EmbeddingException(EmbeddingFailureKind.TIMEOUT, "Embedding request timed out", exception);
+            sleeper.sleep(delayMillis);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new EmbeddingException(EmbeddingFailureKind.TRANSPORT, "Embedding request was interrupted", exception);
-        } catch (IOException | IllegalArgumentException exception) {
             throw new EmbeddingException(
                     EmbeddingFailureKind.TRANSPORT,
-                    "Embedding provider transport failed",
+                    "Embedding retry was interrupted",
                     exception
             );
         }
+    }
 
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw httpFailure(response.statusCode());
+    private long retryAfterMillis(HttpResponse<?> response) {
+        String value = response.headers().firstValue("Retry-After").orElse(null);
+        if (!StringUtils.hasText(value)) {
+            return 0;
         }
-        return parseResponse(response.body(), inputs.size());
+        try {
+            long seconds = Long.parseLong(value.strip());
+            if (seconds < 0) {
+                return 0;
+            }
+            return Math.min(seconds, MAX_RETRY_AFTER_MILLIS / 1000) * 1000;
+        } catch (NumberFormatException exception) {
+            return 0;
+        }
     }
 
     private BatchResponse parseResponse(String responseBody, int expectedCount) {
@@ -295,5 +421,10 @@ public class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
     }
 
     private record BatchResponse(String model, List<EmbeddingVector> vectors) {
+    }
+
+    @FunctionalInterface
+    interface Sleeper {
+        void sleep(long millis) throws InterruptedException;
     }
 }

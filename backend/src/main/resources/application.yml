@@ -43,6 +43,8 @@ a12:
     model: ${A12_EMBEDDING_MODEL:}
     timeout-seconds: ${A12_EMBEDDING_TIMEOUT_SECONDS:60}
     batch-size: ${A12_EMBEDDING_BATCH_SIZE:32}
+    request-attempts: ${A12_EMBEDDING_REQUEST_ATTEMPTS:2}
+    retry-delay-millis: ${A12_EMBEDDING_RETRY_DELAY_MILLIS:1000}
   ppt-skill:
     provider: ${PPT_GENERATOR_PROVIDER:LEGACY}
     generation-mode: ${PPT_GENERATION_MODE:LEGACY}
