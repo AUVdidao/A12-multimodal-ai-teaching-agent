@@ -21,6 +21,31 @@ export const VISUAL_ISSUE_CODES = [
 export type VisualIssueCode = typeof VISUAL_ISSUE_CODES[number];
 export type VisualIssueSeverity = "INFO" | "WARNING" | "ERROR";
 
+const VISUAL_QA_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["slideNumber", "issues"],
+  properties: {
+    slideNumber: { type: "integer", minimum: 1 },
+    issues: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["slideNumber", "code", "severity", "confidence", "description", "repairHint"],
+        properties: {
+          slideNumber: { type: "integer", minimum: 1 },
+          code: { type: "string", enum: VISUAL_ISSUE_CODES },
+          severity: { type: "string", enum: ["INFO", "WARNING", "ERROR"] },
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+          description: { type: "string" },
+          repairHint: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
 export type VisualQaIssue = {
   slideNumber: number;
   code: VisualIssueCode;
@@ -87,7 +112,15 @@ export class KimiVisualQaProvider implements VisualQaProvider {
         },
         body: JSON.stringify({
           model: this.config.kimiModel,
-          response_format: { type: "json_object" },
+          thinking: { type: "disabled" },
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "visual_qa_slide_result_v1",
+              strict: true,
+              schema: VISUAL_QA_RESPONSE_SCHEMA,
+            },
+          },
           messages: [
             { role: "system", content: visualSystemPrompt(mode) },
             {

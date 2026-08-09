@@ -161,9 +161,13 @@ test("Kimi Visual QA uses the configured multimodal image input contract", async
         importance: spec.slides[0].importance,
       },
     });
-    const body = JSON.parse(String(request?.body)) as { model: string; response_format: { type: string }; messages: Array<{ role: string; content: unknown }> };
+    const body = JSON.parse(String(request?.body)) as { model: string; thinking?: { type?: string }; response_format: { type: string; json_schema?: { name?: string; strict?: boolean; schema?: { required?: string[] } } }; messages: Array<{ role: string; content: unknown }> };
     assert.equal(body.model, "kimi-k2.6");
-    assert.equal(body.response_format.type, "json_object");
+    assert.equal(body.thinking?.type, "disabled");
+    assert.equal(body.response_format.type, "json_schema");
+    assert.equal(body.response_format.json_schema?.name, "visual_qa_slide_result_v1");
+    assert.equal(body.response_format.json_schema?.strict, true);
+    assert.deepEqual(body.response_format.json_schema?.schema?.required, ["slideNumber", "issues"]);
     const userContent = body.messages[1].content as Array<{ type: string; text?: string; image_url?: { url: string } }>;
     assert.equal(userContent[1].type, "image_url");
     assert.equal(userContent[1].image_url?.url, "data:image/png;base64,UE5H");
@@ -187,6 +191,35 @@ test("Kimi invalid JSON enters the single structured repair path", async () => {
     const result = await service(new KimiVisualQaProvider({ ...config, kimiApiKey: "test-key" }), runnerGeneration([png(1)])).review(job, oneSlide, runnerGeneration([png(1)]));
     assert.equal(result.passed, true);
     assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Kimi Visual QA aborts a provider request at the configured timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => await new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+  });
+  try {
+    const started = Date.now();
+    await assert.rejects(
+      () => new KimiVisualQaProvider({ ...config, kimiApiKey: "test-key", kimiTimeoutMs: 20 }).review({
+        slideNumber: 1,
+        imageDataUrl: "data:image/png;base64,UE5H",
+        expected: {
+          title: "Photosynthesis",
+          pedagogicalRole: "HOOK",
+          teachingPurpose: "Inspect the rendered cover slide",
+          visualIntent: { type: "MIXED", description: "Review the visible visual hierarchy" },
+          layoutIntent: "Keep the slide readable",
+          density: "MEDIUM",
+          importance: "CORE",
+        },
+      }),
+      (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+    );
+    assert.ok(Date.now() - started < 500);
   } finally {
     globalThis.fetch = originalFetch;
   }
