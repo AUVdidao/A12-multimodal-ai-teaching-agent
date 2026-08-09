@@ -27,6 +27,7 @@ class OpenAiCompatibleEmbeddingProviderTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private HttpServer server;
+    private final AtomicInteger requestCount = new AtomicInteger();
 
     @AfterEach
     void stopServer() {
@@ -216,6 +217,238 @@ class OpenAiCompatibleEmbeddingProviderTest {
         assertThat(properties.getModel()).isEmpty();
         assertThat(properties.getTimeoutSeconds()).isEqualTo(60);
         assertThat(properties.getBatchSize()).isEqualTo(32);
+        assertThat(properties.getRequestAttempts()).isEqualTo(2);
+        assertThat(properties.getRetryDelayMillis()).isEqualTo(1000);
+    }
+
+    @Test
+    void retries429ThenSucceeds() throws Exception {
+        startSequence(List.of(error(429), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        EmbeddingBatchResult result = provider(properties).embed(List.of("alpha"));
+
+        assertThat(requestCount).hasValue(2);
+        assertThat(result.vectors()).extracting(EmbeddingVector::index).containsExactly(0);
+    }
+
+    @Test
+    void retries503ThenSucceeds() throws Exception {
+        startSequence(List.of(error(503), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        provider(properties).embed(List.of("alpha"));
+
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void retries408ThenSucceeds() throws Exception {
+        startSequence(List.of(error(408), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        provider(properties).embed(List.of("alpha"));
+
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {500, 502, 504})
+    void retriesTransientFiveHundredStatusesThenSucceeds(int status) throws Exception {
+        startSequence(List.of(error(status), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        provider(properties).embed(List.of("alpha"));
+
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void retriesTimeoutThenSucceeds() throws Exception {
+        startSequence(List.of(new ResponseSpec(200, null, null, 1_500), success()));
+        EmbeddingProperties properties = properties(32, 1);
+        properties.setRequestAttempts(2);
+
+        provider(properties).embed(List.of("alpha"));
+
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void retriesTransportFailureThenSucceeds() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        startServer((exchange, body) -> {
+            if (calls.getAndIncrement() == 0) {
+                exchange.close();
+                return;
+            }
+            writeResponse(exchange, 200, successFor(body));
+        });
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        provider(properties).embed(List.of("alpha"));
+
+        assertThat(calls).hasValue(2);
+    }
+
+    @Test
+    void exhausted429RetriesRetainsRateLimitedKind() throws Exception {
+        startSequence(List.of(error(429), error(429)));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("alpha")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception -> {
+                    assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.RATE_LIMITED);
+                    assertThat(exception.getStatusCode()).isEqualTo(429);
+                    assertThat(exception).hasMessageNotContaining("alpha");
+                    assertThat(exception).hasMessageNotContaining("test-secret");
+                });
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void exhausted503RetriesRetainsUpstreamFailureKind() throws Exception {
+        startSequence(List.of(error(503), error(503)));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("alpha")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception -> {
+                    assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.UPSTREAM_FAILURE);
+                    assertThat(exception.getStatusCode()).isEqualTo(503);
+                });
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403, 404})
+    void doesNotRetryNonTransientHttpFailures(int status) throws Exception {
+        startSequence(List.of(error(status), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("alpha")))
+                .isInstanceOf(EmbeddingException.class);
+
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void doesNotRetryMalformedJson() throws Exception {
+        startSequence(List.of(new ResponseSpec(200, "not-json", null, 0), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("alpha")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception ->
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.INVALID_RESPONSE));
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void doesNotRetryInvalidVectorDimensions() throws Exception {
+        startSequence(List.of(new ResponseSpec(200, inconsistentDimensionsResponse(), null, 0), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("alpha", "beta")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception ->
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.INVALID_RESPONSE));
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void attemptsOneDisablesTransientRetry() throws Exception {
+        startSequence(List.of(error(503), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(1);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("alpha")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception ->
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.UPSTREAM_FAILURE));
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void rejectsInvalidRetryAttemptsConfiguration() throws Exception {
+        startServer((exchange, body) -> writeResponse(exchange, 200, successFor(body)));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(0);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("alpha")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception ->
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.NOT_CONFIGURED));
+        assertThat(requestCount).hasValue(0);
+    }
+
+    @Test
+    void rejectsNegativeRetryDelayConfiguration() throws Exception {
+        startServer((exchange, body) -> writeResponse(exchange, 200, successFor(body)));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRetryDelayMillis(-1);
+
+        assertThatThrownBy(() -> provider(properties).embed(List.of("alpha")))
+                .isInstanceOfSatisfying(EmbeddingException.class, exception ->
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.NOT_CONFIGURED));
+        assertThat(requestCount).hasValue(0);
+    }
+
+    @Test
+    void retriesOnlyTheFailedBatchAndPreservesGlobalOrder() throws Exception {
+        startSequence(List.of(success(), error(503), success(), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+        List<String> inputs = new ArrayList<>();
+        for (int index = 0; index < 70; index++) {
+            inputs.add("text-" + index);
+        }
+
+        EmbeddingBatchResult result = provider(properties).embed(inputs);
+
+        assertThat(requestCount).hasValue(4);
+        assertThat(result.vectors()).hasSize(70);
+        for (int index = 0; index < 70; index++) {
+            assertThat(result.vectors().get(index).index()).isEqualTo(index);
+            assertThat(result.vectors().get(index).values().get(0)).isEqualTo((double) index);
+        }
+    }
+
+    @Test
+    void honorsIntegerRetryAfterWithConfiguredDelayAsLowerBound() throws Exception {
+        startSequence(List.of(new ResponseSpec(429, errorBody(), "2", 0), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+        AtomicReference<Long> sleptMillis = new AtomicReference<>();
+
+        provider(properties, millis -> sleptMillis.set(millis)).embed(List.of("alpha"));
+
+        assertThat(sleptMillis).hasValue(2_000L);
+    }
+
+    @Test
+    void interruptedRetryRestoresInterruptAndStopsImmediately() throws Exception {
+        startSequence(List.of(error(503), success()));
+        EmbeddingProperties properties = properties(32, 5);
+        properties.setRequestAttempts(2);
+
+        try {
+            assertThatThrownBy(() -> provider(properties, millis -> {
+                throw new InterruptedException("test interrupt");
+            }).embed(List.of("alpha")))
+                    .isInstanceOfSatisfying(EmbeddingException.class, exception -> {
+                        assertThat(exception.getKind()).isEqualTo(EmbeddingFailureKind.TRANSPORT);
+                        assertThat(Thread.currentThread().isInterrupted()).isTrue();
+                    });
+            assertThat(requestCount).hasValue(1);
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     private EmbeddingProperties properties(int batchSize, long timeoutSeconds) {
@@ -229,11 +462,20 @@ class OpenAiCompatibleEmbeddingProviderTest {
         properties.setModel("embedding-model");
         properties.setBatchSize(batchSize);
         properties.setTimeoutSeconds(timeoutSeconds);
+        properties.setRequestAttempts(1);
+        properties.setRetryDelayMillis(0);
         return properties;
     }
 
     private OpenAiCompatibleEmbeddingProvider provider(EmbeddingProperties properties) {
         return new OpenAiCompatibleEmbeddingProvider(objectMapper, properties);
+    }
+
+    private OpenAiCompatibleEmbeddingProvider provider(
+            EmbeddingProperties properties,
+            OpenAiCompatibleEmbeddingProvider.Sleeper sleeper
+    ) {
+        return new OpenAiCompatibleEmbeddingProvider(objectMapper, properties, sleeper);
     }
 
     private void assertInvalid(EmbeddingProperties properties, List<String> inputs, String message) {
@@ -245,12 +487,68 @@ class OpenAiCompatibleEmbeddingProviderTest {
     }
 
     private void startServer(ExchangeHandler handler) throws IOException {
+        requestCount.set(0);
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/v1/embeddings", exchange -> {
             JsonNode body = objectMapper.readTree(exchange.getRequestBody());
             handler.handle(exchange, body);
         });
         server.start();
+    }
+
+    private void startSequence(List<ResponseSpec> responses) throws IOException {
+        startServer((exchange, body) -> {
+            int index = requestCount.getAndIncrement();
+            ResponseSpec response = responses.get(Math.min(index, responses.size() - 1));
+            if (response.delayMillis() > 0) {
+                try {
+                    Thread.sleep(response.delayMillis());
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            if (response.retryAfter() != null) {
+                exchange.getResponseHeaders().set("Retry-After", response.retryAfter());
+            }
+            writeResponse(exchange, response.status(), response.body() == null
+                    ? successFor(body)
+                    : response.body());
+        });
+    }
+
+    private static ResponseSpec success() {
+        return new ResponseSpec(200, null, null, 0);
+    }
+
+    private static ResponseSpec error(int status) {
+        return new ResponseSpec(status, errorBody(), null, 0);
+    }
+
+    private static String errorBody() {
+        return "{\"error\":{\"message\":\"temporary provider failure\"}}";
+    }
+
+    private static String inconsistentDimensionsResponse() {
+        return response(
+                "embedding-model",
+                List.of(List.of(1.0, 2.0), List.of(3.0)),
+                List.of(0, 1)
+        );
+    }
+
+    private String successFor(JsonNode requestBody) {
+        ArrayNode data = objectMapper.createArrayNode();
+        ArrayNode inputs = (ArrayNode) requestBody.path("input");
+        for (int index = inputs.size() - 1; index >= 0; index--) {
+            String input = inputs.get(index).asText();
+            int value = input.startsWith("text-")
+                    ? Integer.parseInt(input.substring("text-".length()))
+                    : index;
+            ObjectNode item = data.addObject();
+            item.put("index", index);
+            item.putArray("embedding").add(value).add(value + 0.5);
+        }
+        return response("embedding-model", data);
     }
 
     private static String response(String model, List<List<Double>> vectors, List<Integer> indices) {
@@ -284,5 +582,8 @@ class OpenAiCompatibleEmbeddingProviderTest {
     @FunctionalInterface
     private interface ExchangeHandler {
         void handle(HttpExchange exchange, JsonNode body) throws IOException;
+    }
+
+    private record ResponseSpec(int status, String body, String retryAfter, long delayMillis) {
     }
 }

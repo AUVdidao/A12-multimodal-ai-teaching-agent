@@ -11,6 +11,8 @@ public class EmbeddingProperties {
     private String model = "";
     private long timeoutSeconds = 60;
     private int batchSize = 32;
+    private int requestAttempts = 2;
+    private long retryDelayMillis = 1000;
 
     public String getProvider() {
         return provider;
@@ -58,5 +60,21 @@ public class EmbeddingProperties {
 
     public void setBatchSize(int batchSize) {
         this.batchSize = batchSize;
+    }
+
+    public int getRequestAttempts() {
+        return requestAttempts;
+    }
+
+    public void setRequestAttempts(int requestAttempts) {
+        this.requestAttempts = requestAttempts;
+    }
+
+    public long getRetryDelayMillis() {
+        return retryDelayMillis;
+    }
+
+    public void setRetryDelayMillis(long retryDelayMillis) {
+        this.retryDelayMillis = retryDelayMillis;
     }
 }
