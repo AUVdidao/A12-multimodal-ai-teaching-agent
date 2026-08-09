@@ -36,6 +36,13 @@ app:
     max-file-size: ${APP_MAX_UPLOAD_SIZE:209715200}
 
 a12:
+  embedding:
+    provider: ${A12_EMBEDDING_PROVIDER:DISABLED}
+    base-url: ${A12_EMBEDDING_BASE_URL:}
+    api-key: ${A12_EMBEDDING_API_KEY:}
+    model: ${A12_EMBEDDING_MODEL:}
+    timeout-seconds: ${A12_EMBEDDING_TIMEOUT_SECONDS:60}
+    batch-size: ${A12_EMBEDDING_BATCH_SIZE:32}
   ppt-skill:
     provider: ${PPT_GENERATOR_PROVIDER:LEGACY}
     generation-mode: ${PPT_GENERATION_MODE:LEGACY}
