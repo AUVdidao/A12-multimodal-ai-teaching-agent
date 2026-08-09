@@ -70,7 +70,7 @@ export class PresentationWorkflowService {
       await this.ensureActive(job.id);
 
       await this.transition(job.id, "RENDERING_PPTX", "Rendering native editable PPTX through the controlled runner", 50);
-      const runnerResult = await this.runner.generate(toRunnerOutline(spec), template.stylePreset);
+      const runnerResult = await this.runner.generate(toRunnerOutline(spec, job.jobSnapshot.materialEvidence), template.stylePreset);
       if (runnerResult.status !== "SUCCEEDED") throw new HarnessError("PPT_BUILD_FAILED", "PPT runner did not complete the task", 502);
       await this.repository.saveCheckpoint(job.id, "RUNNER", { runnerJobId: runnerResult.jobId, totalDurationMs: runnerResult.totalDurationMs });
       await this.ensureActive(job.id);
