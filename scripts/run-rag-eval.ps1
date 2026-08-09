@@ -8,7 +8,7 @@ param(
     [string]$EvalFile = "",
     [ValidateRange(1, 50)][int]$TopK = 5,
     [string]$OutputFile,
-    [ValidateSet("PRECISE", "BROAD")][string[]]$Modes = @("PRECISE", "BROAD"),
+    [ValidateSet("PRECISE", "BROAD", "DENSE")][string[]]$Modes = @("PRECISE", "BROAD"),
     [ValidateSet("TEACHER", "LEADER", "STUDENT")][string]$ActiveRole = "TEACHER",
     [switch]$BaselineSourceTruncated
 )
@@ -23,7 +23,8 @@ if ([string]::IsNullOrWhiteSpace($EvalFile)) {
 }
 
 $base = $BaseUrl.TrimEnd("/")
-$endpoint = "/api/projects/$ProjectId/knowledge/workspace-search"
+$lexicalEndpoint = "/api/projects/$ProjectId/knowledge/workspace-search"
+$denseEndpoint = "/api/projects/$ProjectId/knowledge/dense-search"
 $script:authToken = $null
 
 function Invoke-A12ApiJson {
@@ -97,6 +98,13 @@ function Invoke-A12KnowledgeSearch {
         [Parameter(Mandatory = $true)][string]$Question
     )
 
+    if ($Mode -eq "DENSE") {
+        return Invoke-A12ApiJson -Method "POST" -Path $denseEndpoint -Body @{
+            query = $Question
+            limit = $TopK
+        }
+    }
+
     $body = @{
         query = $Question
         matchMode = $Mode
@@ -107,7 +115,7 @@ function Invoke-A12KnowledgeSearch {
     if ($MaterialId -gt 0) {
         $body.materialId = $MaterialId
     }
-    return Invoke-A12ApiJson -Method "POST" -Path $endpoint -Body $body
+    return Invoke-A12ApiJson -Method "POST" -Path $lexicalEndpoint -Body $body
 }
 
 $cases = @(Read-A12EvalCases -Path $EvalFile)
@@ -131,9 +139,10 @@ foreach ($mode in $Modes) {
     $aggregate = Measure-A12Aggregate -QueryResults $queryResults
     $modeReports += [pscustomobject]@{
         mode = $mode
-        endpoint = $endpoint
-        retrievalStrategy = "LEXICAL"
+        endpoint = if ($mode -eq "DENSE") { $denseEndpoint } else { $lexicalEndpoint }
+        retrievalStrategy = if ($mode -eq "DENSE") { "DENSE" } else { "LEXICAL" }
         aggregate = $aggregate
+        failedQueryIds = @($queryResults | Where-Object { -not $_.hit } | ForEach-Object { $_.id })
         perQueryResults = @($queryResults)
     }
 }
@@ -148,8 +157,11 @@ $runMetadata = [pscustomobject]@{
     evalFile = (Resolve-Path -LiteralPath $EvalFile).Path
     topK = $TopK
     modes = @($Modes)
-    endpoint = $endpoint
-    retrievalStrategy = "LEXICAL"
+    endpoints = [pscustomobject]@{
+        lexical = $lexicalEndpoint
+        dense = $denseEndpoint
+    }
+    retrievalStrategy = if (@($Modes | Where-Object { $_ -eq "DENSE" }).Count -gt 0) { "DENSE" } else { "LEXICAL" }
     baselineSourceTruncated = [bool]$BaselineSourceTruncated
     kimiScoringUsed = $false
     authUser = if ($null -ne $session.user) { $session.user.username } else { $Username }
@@ -165,8 +177,9 @@ Write-Host "A12 RAG Retrieval Evaluation"
 Write-Host "========================================"
 Write-Host "Project: $ProjectId"
 Write-Host "Material: $(if ($MaterialId -gt 0) { $MaterialId } else { 'all project materials' })"
-Write-Host "Endpoint: $endpoint"
-Write-Host "Strategy: LEXICAL"
+Write-Host "Lexical endpoint: $lexicalEndpoint"
+Write-Host "Dense endpoint: $denseEndpoint"
+Write-Host "Strategies: $($Modes -join ', ')"
 Write-Host "TopK: $TopK"
 Write-Host "Questions: $($cases.Count)"
 $truncatedLabel = if ([bool]$BaselineSourceTruncated) { "true" } else { "false" }
@@ -179,6 +192,7 @@ foreach ($modeReport in $modeReports) {
     Write-Host "Any Hit@$TopK`: $(Format-A12Metric $modeReport.aggregate.anyHitAtK)"
     Write-Host "MRR: $(Format-A12Metric $modeReport.aggregate.mrr)"
     Write-Host "Material Precision: $(Format-A12Metric $modeReport.aggregate.materialPrecision)"
+    Write-Host "Failed query IDs: $($modeReport.failedQueryIds -join ', ')"
     Write-Host ""
     Write-Host "PASS / MISS questions:"
     foreach ($result in $modeReport.perQueryResults) {

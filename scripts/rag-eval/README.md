@@ -4,17 +4,19 @@ This folder contains the first repeatable black-box retrieval evaluation baselin
 
 ## Scope
 
-- It evaluates the current deterministic lexical retrieval behavior through real HTTP APIs.
-- It does not implement Embedding, Vector DB, Hybrid Retrieval, Reranking, Parser changes, or production-code fixes.
+- It evaluates deterministic lexical retrieval and the gated dense cosine retrieval endpoint through real HTTP APIs.
+- It does not implement Hybrid Retrieval, Reranking, Parser changes, or production-code fixes.
 - It stores only questions, expected anchors, expected concepts, expected chapter/title hints, and notes.
 - It does not store the source PDF or long book excerpts.
 
 ## Current API
 
-The current codebase exposes a workspace search API with explicit `PRECISE` and `BROAD` modes:
+The current codebase exposes a workspace search API with explicit `PRECISE` and `BROAD` modes, plus a separate dense cosine endpoint:
 
 ```text
 POST /api/projects/{projectId}/knowledge/workspace-search
+
+POST /api/projects/{projectId}/knowledge/dense-search
 ```
 
 Request fields used by the runner:
@@ -30,7 +32,7 @@ Request fields used by the runner:
 }
 ```
 
-The runner logs this endpoint as a `LEXICAL` retrieval strategy so future runs can compare `LEXICAL`, `DENSE`, and `HYBRID` without changing the eval dataset format.
+The runner logs lexical runs as `LEXICAL`. Use `-Modes DENSE` after the project's dense index is ready to evaluate the dense endpoint with the same 26-question dataset.
 
 ## Run
 

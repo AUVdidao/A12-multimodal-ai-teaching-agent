@@ -25,17 +25,20 @@ public class KnowledgeIndexService {
     private final ParseResultRepository parseResultRepository;
     private final MaterialPurposeRepository purposeRepository;
     private final ChunkSplitter chunkSplitter;
+    private final KnowledgeEmbeddingStore embeddingStore;
 
     public KnowledgeIndexService(
             KnowledgeChunkRepository chunkRepository,
             ParseResultRepository parseResultRepository,
             MaterialPurposeRepository purposeRepository,
-            ChunkSplitter chunkSplitter
+            ChunkSplitter chunkSplitter,
+            KnowledgeEmbeddingStore embeddingStore
     ) {
         this.chunkRepository = chunkRepository;
         this.parseResultRepository = parseResultRepository;
         this.purposeRepository = purposeRepository;
         this.chunkSplitter = chunkSplitter;
+        this.embeddingStore = embeddingStore;
     }
 
     @Transactional
@@ -63,6 +66,7 @@ public class KnowledgeIndexService {
             throw new ConflictException("Parsed material does not contain useful text");
         }
 
+        embeddingStore.deleteByMaterialId(material.getId());
         chunkRepository.deleteByMaterialId(material.getId());
         chunkRepository.flush();
 

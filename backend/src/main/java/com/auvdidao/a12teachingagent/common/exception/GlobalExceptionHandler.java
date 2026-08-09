@@ -3,6 +3,8 @@ package com.auvdidao.a12teachingagent.common.exception;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantException;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
+import com.auvdidao.a12teachingagent.embedding.EmbeddingException;
+import com.auvdidao.a12teachingagent.embedding.EmbeddingFailureKind;
 import com.auvdidao.a12teachingagent.pptskill.PptSkillGenerationException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -101,6 +103,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.failure(HttpStatus.CONFLICT.value(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(EmbeddingException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEmbedding(EmbeddingException exception) {
+        HttpStatus status = exception.getKind() == EmbeddingFailureKind.NOT_CONFIGURED
+                ? HttpStatus.SERVICE_UNAVAILABLE
+                : HttpStatus.BAD_GATEWAY;
+        return ResponseEntity
+                .status(status)
+                .body(ApiResponse.failure(status.value(), exception.getKind() + ": " + exception.getMessage()));
     }
 
     @ExceptionHandler(UnauthorizedException.class)

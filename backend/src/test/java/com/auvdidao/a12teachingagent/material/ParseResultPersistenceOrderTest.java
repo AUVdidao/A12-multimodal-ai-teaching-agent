@@ -10,6 +10,7 @@ import com.auvdidao.a12teachingagent.domain.material.UploadedMaterial;
 import com.auvdidao.a12teachingagent.domain.material.repository.MaterialPurposeRepository;
 import com.auvdidao.a12teachingagent.domain.material.repository.ParseResultRepository;
 import com.auvdidao.a12teachingagent.knowledge.KnowledgeIndexService;
+import com.auvdidao.a12teachingagent.knowledge.KnowledgeEmbeddingStore;
 import com.auvdidao.a12teachingagent.material.chunk.ChunkSplitter;
 import com.auvdidao.a12teachingagent.material.chunk.TextCleaner;
 import jakarta.persistence.EntityManager;
@@ -93,7 +94,8 @@ class ParseResultPersistenceOrderTest {
                 chunkRepository,
                 indexParseResultRepository,
                 purposeRepository,
-                new ChunkSplitter(new TextCleaner(), 1000, 120, 1)
+                new ChunkSplitter(new TextCleaner(), 1000, 120, 1),
+                mock(KnowledgeEmbeddingStore.class)
         ).index(material);
 
         ArgumentCaptor<List<KnowledgeChunk>> captor = ArgumentCaptor.forClass(List.class);

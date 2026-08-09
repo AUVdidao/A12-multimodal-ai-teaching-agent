@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +44,9 @@ class KnowledgeIndexServiceTest {
 
     @Mock
     private MaterialPurposeRepository purposeRepository;
+
+    @Mock
+    private KnowledgeEmbeddingStore embeddingStore;
 
     private UploadedMaterial material;
 
@@ -147,7 +151,11 @@ class KnowledgeIndexServiceTest {
             assertThat(batch).extracting(KnowledgeChunk::getChunkNo)
                     .containsExactly(1, 2, 3);
         }
-        verify(chunkRepository, times(2)).deleteByMaterialId(MATERIAL_ID);
+        org.mockito.InOrder order = inOrder(embeddingStore, chunkRepository);
+        order.verify(embeddingStore).deleteByMaterialId(MATERIAL_ID);
+        order.verify(chunkRepository).deleteByMaterialId(MATERIAL_ID);
+        order.verify(embeddingStore).deleteByMaterialId(MATERIAL_ID);
+        order.verify(chunkRepository).deleteByMaterialId(MATERIAL_ID);
     }
 
     private List<KnowledgeChunk> capturedChunks() {
@@ -163,7 +171,8 @@ class KnowledgeIndexServiceTest {
                 chunkRepository,
                 parseResultRepository,
                 purposeRepository,
-                new ChunkSplitter(new TextCleaner(), maxChars, overlapChars, minUsefulChars)
+                new ChunkSplitter(new TextCleaner(), maxChars, overlapChars, minUsefulChars),
+                embeddingStore
         ).index(material);
     }
 

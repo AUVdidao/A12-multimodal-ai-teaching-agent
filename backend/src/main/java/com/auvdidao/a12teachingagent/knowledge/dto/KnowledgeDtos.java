@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.knowledge.dto;
 
 import com.auvdidao.a12teachingagent.domain.common.PurposeType;
+import com.auvdidao.a12teachingagent.knowledge.DenseKnowledgeHit;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -61,6 +62,21 @@ public final class KnowledgeDtos {
             List<KnowledgeHitResponse> hits,
             boolean prototype,
             String algorithm
+    ) {
+    }
+
+    public record DenseSearchRequest(
+            @NotBlank(message = "Search query is required") String query,
+            @Min(value = 1, message = "limit must be at least 1")
+            @Max(value = 20, message = "limit must be at most 20")
+            Integer limit
+    ) {
+    }
+
+    public record DenseSearchResponse(
+            String query,
+            List<DenseKnowledgeHit> hits,
+            String retrievalStrategy
     ) {
     }
 }
