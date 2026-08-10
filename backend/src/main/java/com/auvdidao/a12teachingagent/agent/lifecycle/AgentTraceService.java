@@ -4,6 +4,8 @@ import com.auvdidao.a12teachingagent.agent.runtime.AgentRunSnapshot;
 import com.auvdidao.a12teachingagent.agent.runtime.AgentRunStatus;
 import com.auvdidao.a12teachingagent.agent.runtime.BusinessRef;
 import com.auvdidao.a12teachingagent.agent.runtime.ToolResult;
+import com.auvdidao.a12teachingagent.agent.model.ModelExecutionContext;
+import com.auvdidao.a12teachingagent.agent.model.ModelTraceObservation;
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
 import com.auvdidao.a12teachingagent.domain.agent.AgentRun;
@@ -101,6 +103,28 @@ public class AgentTraceService {
         trace.setSourceRefs(result.sourceRefs().stream().map(this::sourceIdentifier).toList());
         trace.setWarnings(result.warnings());
         return toolCallTraceRepository.save(trace);
+    }
+
+    /** Records safe model-call metadata on the already-created AgentTrace; prompt and response bodies stay out. */
+    @Transactional
+    public void recordModelCall(ModelExecutionContext context, ModelTraceObservation observation) {
+        if (context == null || observation == null) {
+            throw new BadRequestException("model context and observation are required");
+        }
+        projectAccessService.requireAccess(context.projectId());
+        traceRepository.findByProjectIdAndRunId(context.projectId(), context.runId()).ifPresent(trace -> {
+            trace.setProvider(observation.provider().name());
+            trace.setModel(SafeTraceText.normalize(observation.model(), 128, "model"));
+            trace.setRequestId(SafeTraceText.normalize(observation.requestId(), 256, "requestId"));
+            trace.setDurationMs(observation.durationMs());
+            if (observation.success()) {
+                trace.setFailureKind(null);
+            } else {
+                trace.setStatus(AgentRunStatus.FAILED);
+                trace.setFailureKind(observation.failureKind().toAgentFailureKind());
+            }
+            traceRepository.save(trace);
+        });
     }
 
     @Transactional(readOnly = true)

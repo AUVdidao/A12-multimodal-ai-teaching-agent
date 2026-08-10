@@ -57,6 +57,9 @@ public class AgentTrace extends BaseCreatedEntity {
     @Column(length = 128)
     private String model;
 
+    @Column(name = "request_id", length = 256)
+    private String requestId;
+
     @Column(name = "input_hash", length = 256)
     private String inputHash;
 
@@ -147,6 +150,17 @@ public class AgentTrace extends BaseCreatedEntity {
 
     public void setModel(String model) {
         this.model = model;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        if (requestId != null && (requestId.isBlank() || requestId.length() > 256)) {
+            throw new IllegalArgumentException("requestId must be blank or at most 256 characters");
+        }
+        this.requestId = requestId;
     }
 
     public String getInputHash() {
