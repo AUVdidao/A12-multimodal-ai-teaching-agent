@@ -27,7 +27,7 @@ const job: PresentationJob = {
 
 const config: HarnessConfig = {
   port: 8091, host: "127.0.0.1", databaseUrl: "postgres://unused", runnerBaseUrl: "http://runner",
-  runnerTimeoutMs: 1000, generationSource: "KIMI", visualReviewEnabled: false, eventPollIntervalMs: 750,
+  runnerTimeoutMs: 1000, generationSource: "KIMI", visualReviewMode: "DISABLED", eventPollIntervalMs: 750,
   artifactRetentionDays: 7, maxRepairAttempts: 1, kimiApiKey: "test-key", kimiBaseUrl: "https://kimi.example/v1",
   kimiModel: "kimi-k3", kimiTimeoutMs: 1000, kimiVisionEnabled: false, kimiVisionModel: undefined,
 };

@@ -13,7 +13,7 @@ const config: HarnessConfig = {
   runnerBaseUrl: "http://runner.test",
   runnerTimeoutMs: 1_000,
   generationSource: "FIXTURE",
-  visualReviewEnabled: false,
+  visualReviewMode: "DISABLED",
   eventPollIntervalMs: 10,
   artifactRetentionDays: 7,
   maxRepairAttempts: 1,

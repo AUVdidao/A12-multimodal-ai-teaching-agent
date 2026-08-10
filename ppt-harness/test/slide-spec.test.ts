@@ -87,4 +87,8 @@ test("public QA report excludes runner filesystem paths", () => {
   assert.equal(serialized.includes("/tmp/"), false);
   assert.equal(report.summary.expectedSlideCount, 9);
   assert.equal(report.limitations.visualReviewImplemented, false);
+  assert.equal(report.mode, "DISABLED");
+  assert.equal(report.reviewState, "NOT_RUN");
+  assert.equal(report.artifactGatePassed, true);
+  assert.deepEqual(report.issueCounts, { total: 0, info: 0, warning: 0, error: 0 });
 });

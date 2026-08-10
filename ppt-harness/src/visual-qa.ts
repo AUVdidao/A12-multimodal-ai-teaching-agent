@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { HarnessConfig } from "./config.js";
+import { HarnessConfig, VisualReviewMode } from "./config.js";
 import { HarnessError, PresentationJob, Slide, SlideSpec } from "./domain.js";
 import { PptSkillRunnerClient, RunnerGeneration } from "./runner-client.js";
 
@@ -20,6 +20,14 @@ export const VISUAL_ISSUE_CODES = [
 ] as const;
 export type VisualIssueCode = typeof VISUAL_ISSUE_CODES[number];
 export type VisualIssueSeverity = "INFO" | "WARNING" | "ERROR";
+export type VisualReviewState = "NOT_RUN" | "SUCCEEDED" | "UNAVAILABLE" | "FAILED_TO_REVIEW";
+
+export type VisualIssueCounts = {
+  total: number;
+  info: number;
+  warning: number;
+  error: number;
+};
 
 export type VisualQaIssue = {
   slideNumber: number;
@@ -32,10 +40,42 @@ export type VisualQaIssue = {
 
 export type VisualQaResult = {
   jobId: string;
-  passed: boolean;
+  reviewState: "SUCCEEDED";
+  visualAssessmentPassed: boolean;
   reviewedSlideCount: number;
+  issueCounts: VisualIssueCounts;
   issues: VisualQaIssue[];
 };
+
+export type VisualReviewSummary = {
+  mode: VisualReviewMode;
+  state: VisualReviewState;
+  reviewedSlideCount: number;
+  issueCounts: VisualIssueCounts;
+  visualAssessmentPassed: boolean | null;
+  issues: VisualQaIssue[];
+  failure?: { code: string; message: string };
+};
+
+export function countVisualIssues(issues: VisualQaIssue[]): VisualIssueCounts {
+  return {
+    total: issues.length,
+    info: issues.filter(issue => issue.severity === "INFO").length,
+    warning: issues.filter(issue => issue.severity === "WARNING").length,
+    error: issues.filter(issue => issue.severity === "ERROR").length,
+  };
+}
+
+export function emptyVisualReview(mode: VisualReviewMode): VisualReviewSummary {
+  return {
+    mode,
+    state: "NOT_RUN",
+    reviewedSlideCount: 0,
+    issueCounts: countVisualIssues([]),
+    visualAssessmentPassed: null,
+    issues: [],
+  };
+}
 
 export type VisualQaSlideInput = {
   slideNumber: number;
@@ -200,25 +240,31 @@ export class VisualQaService {
       issues.push(...parsed.result.issues);
       reviewedSlideCount += 1;
     }
+    const sortedIssues = issues.sort(compareIssues);
     const result = {
       jobId: job.id,
-      passed: !issues.some(issue => issue.severity === "ERROR"),
+      reviewState: "SUCCEEDED" as const,
+      visualAssessmentPassed: !sortedIssues.some(issue => issue.severity === "ERROR"),
       reviewedSlideCount,
-      issues: issues.sort(compareIssues),
+      issueCounts: countVisualIssues(sortedIssues),
+      issues: sortedIssues,
     };
     return validateVisualQaResult(result, job.id, expectedSlideCount);
   }
 }
 
 export function validateVisualQaResult(value: unknown, expectedJobId: string, expectedSlideCount: number): VisualQaResult {
-  if (!isRecord(value) || value.jobId !== expectedJobId || value.reviewedSlideCount !== expectedSlideCount || typeof value.passed !== "boolean" || !Array.isArray(value.issues)) {
+  if (!isRecord(value) || value.jobId !== expectedJobId || value.reviewState !== "SUCCEEDED" || value.reviewedSlideCount !== expectedSlideCount || typeof value.visualAssessmentPassed !== "boolean" || !isRecord(value.issueCounts) || !Array.isArray(value.issues)) {
     throw new HarnessError("VISUAL_REVIEW_COUNT_MISMATCH", "Visual QA reviewed slide count is invalid", 502);
   }
   const issues = value.issues.map(item => parseIssue(item)).filter((item): item is VisualQaIssue => item !== undefined);
   if (issues.length !== value.issues.length) throw new HarnessError("VISUAL_REVIEW_INVALID_RESULT", "Visual QA issue schema is invalid", 502);
-  const derivedPassed = !issues.some(issue => issue.severity === "ERROR");
-  if (value.passed !== derivedPassed) throw new HarnessError("VISUAL_REVIEW_INVALID_RESULT", "Visual QA overall pass/fail must be derived from ERROR issues", 502);
-  return { jobId: expectedJobId, passed: derivedPassed, reviewedSlideCount: expectedSlideCount, issues: issues.sort(compareIssues) };
+  const sortedIssues = issues.sort(compareIssues);
+  const derivedPassed = !sortedIssues.some(issue => issue.severity === "ERROR");
+  if (value.visualAssessmentPassed !== derivedPassed) throw new HarnessError("VISUAL_REVIEW_INVALID_RESULT", "Visual QA assessment must be derived from ERROR issues", 502);
+  const issueCounts = countVisualIssues(sortedIssues);
+  if (JSON.stringify(value.issueCounts) !== JSON.stringify(issueCounts)) throw new HarnessError("VISUAL_REVIEW_INVALID_RESULT", "Visual QA issue counts are inconsistent", 502);
+  return { jobId: expectedJobId, reviewState: "SUCCEEDED", visualAssessmentPassed: derivedPassed, reviewedSlideCount: expectedSlideCount, issueCounts, issues: sortedIssues };
 }
 
 export function parseSlideResult(value: unknown, expectedSlideNumber: number): { result?: { slideNumber: number; issues: VisualQaIssue[] }; reason: string } {

@@ -9,7 +9,11 @@
 - Persistent jobs in dedicated PostgreSQL schema `ppt_harness`.
 - REST and MCP use the same `PresentationWorkflowService`.
 - Generated artifacts are copied into controlled Harness storage. Internal runner paths are never returned. The QA endpoint returns a path-free quality summary rather than the raw runner report.
-- QA level is explicitly `AUTOMATED_GEOMETRY_ONLY`; visual review states and interfaces are reserved but disabled.
+- Geometry QA remains blocking. AI Visual QA is controlled by `PPT_HARNESS_VISUAL_REVIEW_MODE` and defaults to `ADVISORY`; `ENFORCING` is an explicit opt-in only after reliable calibration.
+
+## Visual QA safety policy
+
+`DISABLED` skips the Vision Provider, `ADVISORY` preserves visual findings without allowing them to block a Geometry-passing artifact, and `ENFORCING` fails closed on Visual ERROR or review unavailability. QA reports distinguish `visualAssessmentPassed` from `artifactGatePassed`.
 
 ## Local service
 

@@ -30,6 +30,9 @@ export interface JobArtifact {
   sha256: string;
   qaLevel: string;
   qaPassed: boolean;
+  visualReviewMode?: "DISABLED" | "ADVISORY" | "ENFORCING";
+  visualReviewState?: "NOT_RUN" | "SUCCEEDED" | "UNAVAILABLE" | "FAILED_TO_REVIEW";
+  visualAssessmentPassed?: boolean | null;
   runnerJobId: string;
   downloadRef: string;
   preview?: PreviewManifest;

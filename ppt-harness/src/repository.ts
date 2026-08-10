@@ -75,20 +75,22 @@ export class PgJobRepository {
     return result.rows[0]?.payload;
   }
 
-  async saveQaReport(id: string, qaLevel: string, passed: boolean, report: Record<string, unknown>): Promise<void> {
+  async saveQaReport(id: string, qaLevel: string, artifactGatePassed: boolean, report: Record<string, unknown>): Promise<void> {
     await this.pool.query(
       `INSERT INTO ppt_harness.qa_report (job_id, qa_level, passed, report) VALUES ($1, $2, $3, $4::jsonb)
        ON CONFLICT (job_id) DO UPDATE SET qa_level=EXCLUDED.qa_level, passed=EXCLUDED.passed, report=EXCLUDED.report, created_at=now()`,
-      [id, qaLevel, passed, JSON.stringify(report)]
+      [id, qaLevel, artifactGatePassed, JSON.stringify(report)]
     );
   }
 
-  async getQaReport(id: string): Promise<{ qaLevel: string; passed: boolean; report: Record<string, unknown> } | undefined> {
+  async getQaReport(id: string): Promise<{ qaLevel: string; artifactGatePassed: boolean; report: Record<string, unknown> } | undefined> {
     const result = await this.pool.query<{ qa_level: string; passed: boolean; report: Record<string, unknown> }>(
       "SELECT qa_level, passed, report FROM ppt_harness.qa_report WHERE job_id = $1", [id]
     );
     const row = result.rows[0];
-    return row ? { qaLevel: row.qa_level, passed: row.passed, report: row.report } : undefined;
+    // The historical SQL column is named `passed`; in code it is explicitly
+    // the deterministic-plus-mode artifact gate decision.
+    return row ? { qaLevel: row.qa_level, artifactGatePassed: row.passed, report: row.report } : undefined;
   }
 
   async recoverableJobs(): Promise<PresentationJob[]> {

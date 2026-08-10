@@ -9,7 +9,7 @@ export async function buildServer() {
   const harness = await createHarnessApplication();
   const templates = new TemplateRegistry();
   app.addHook("onClose", async () => harness.close());
-  app.get("/health", async () => ({ status: "UP", service: "a12-ppt-harness", generationSource: harness.config.generationSource, visualReviewEnabled: harness.config.visualReviewEnabled }));
+  app.get("/health", async () => ({ status: "UP", service: "a12-ppt-harness", generationSource: harness.config.generationSource, visualReviewMode: harness.config.visualReviewMode }));
   app.get("/api/v1/presentation-templates", async () => ({ templates: await templates.list() }));
   app.get<{ Params: { templateId: string }; Querystring: { version?: string } }>("/api/v1/presentation-templates/:templateId", async request => ({ template: await templates.get(request.params.templateId, request.query.version || "1.0.0") }));
   app.post("/api/v1/presentation-jobs", async (request, reply) => {
@@ -47,7 +47,7 @@ export async function buildServer() {
     if (!job) throw new HarnessError("TASK_NOT_FOUND", "Presentation task was not found", 404);
     const qa = await harness.workflow.qaReport(job.id);
     if (!qa) throw new HarnessError("QA_REPORT_NOT_READY", "Presentation QA report is not ready", 404);
-    return { taskId: job.id, ...toPublicQaReport(qa.qaLevel, qa.passed, qa.report) };
+    return { taskId: job.id, ...toPublicQaReport(qa.qaLevel, qa.artifactGatePassed, qa.report) };
   });
   app.get<{ Params: { taskId: string } }>("/api/v1/presentation-jobs/:taskId/artifact", async (request, reply) => {
     const content = await harness.workflow.artifact(request.params.taskId);
@@ -123,7 +123,17 @@ function publicJob(job: PresentationJob | undefined) {
     statusUrl, eventsUrl,
     urls: { status: statusUrl, events: eventsUrl, qaReport: qaReportUrl },
     artifact: job.artifact ? { ...job.artifact, downloadRef: artifactUrl, downloadUrl: artifactUrl } : undefined,
-    qa: job.artifact ? { passed: job.artifact.qaPassed, qaLevel: job.artifact.qaLevel, warnings: [] } : undefined,
+    qa: job.artifact ? {
+      // `passed` remains a legacy alias for clients; the explicit field below
+      // is the only gate decision used by the canonical contract.
+      passed: job.artifact.qaPassed,
+      artifactGatePassed: job.artifact.qaPassed,
+      mode: job.artifact.visualReviewMode ?? "DISABLED",
+      reviewState: job.artifact.visualReviewState ?? "NOT_RUN",
+      visualAssessmentPassed: job.artifact.visualAssessmentPassed ?? null,
+      qaLevel: job.artifact.qaLevel,
+      warnings: [],
+    } : undefined,
     error: job.errorCode ? { code: job.errorCode, message: job.errorMessage } : undefined, createdAt: job.createdAt, updatedAt: job.updatedAt, completedAt: job.completedAt
   };
 }

@@ -17,7 +17,7 @@ import {
 const jobId = "33333333-3333-4333-8333-333333333333";
 const config: HarnessConfig = {
   port: 8091, host: "127.0.0.1", databaseUrl: "postgres://unused", runnerBaseUrl: "http://runner",
-  runnerTimeoutMs: 1_000, generationSource: "FIXTURE", visualReviewEnabled: true, eventPollIntervalMs: 750,
+  runnerTimeoutMs: 1_000, generationSource: "FIXTURE", visualReviewMode: "ADVISORY", eventPollIntervalMs: 750,
   artifactRetentionDays: 7, maxRepairAttempts: 1, kimiBaseUrl: "https://kimi.example/v1", kimiModel: "kimi-k2.6", kimiTimeoutMs: 1_000,
   kimiVisionEnabled: true, kimiVisionModel: "kimi-vision",
 };
@@ -85,7 +85,7 @@ class FakeProvider implements VisualQaProvider {
 test("clean rendered slides pass and send controlled PNG plus minimal SlideSpec context", async () => {
   const provider = new FakeProvider(spec.slides.map((_slide, index) => ({ slideNumber: index + 1, issues: [] })));
   const result = await service(provider).review(job, spec, runnerGeneration());
-  assert.deepEqual(result, { jobId, passed: true, reviewedSlideCount: 3, issues: [] });
+  assert.deepEqual(result, { jobId, reviewState: "SUCCEEDED", visualAssessmentPassed: true, reviewedSlideCount: 3, issueCounts: { total: 0, info: 0, warning: 0, error: 0 }, issues: [] });
   assert.match(provider.inputs[0].imageDataUrl, /^data:image\/png;base64,/);
   assert.deepEqual(Object.keys(provider.inputs[0].expected).sort(), ["density", "importance", "layoutIntent", "pedagogicalRole", "teachingPurpose", "title", "visualIntent"]);
   assert.equal((provider.inputs[0].expected as Record<string, unknown>).content, undefined);
@@ -99,7 +99,7 @@ test("visual issue taxonomy classifies overflow, overlap, tiny text, and broken 
     const result = await service(provider, runnerGeneration([png(1)])).review(job, oneSlide, runnerGeneration([png(1)]));
     assert.equal(result.issues[0].code, code);
     assert.equal(result.issues[0].severity, severity);
-    assert.equal(result.passed, severity !== "ERROR");
+    assert.equal(result.visualAssessmentPassed, severity !== "ERROR");
   }
 });
 
@@ -138,7 +138,7 @@ test("invalid visual JSON gets at most one structured repair", async () => {
   const repaired = new FakeProvider([{}], [valid]);
   const oneSlide = { ...spec, slides: [spec.slides[0]] };
   const result = await service(repaired, runnerGeneration([png(1)])).review(job, oneSlide, runnerGeneration([png(1)]));
-  assert.equal(result.passed, true);
+  assert.equal(result.visualAssessmentPassed, true);
   assert.equal(repaired.repairCalls, 1);
 
   const stillInvalid = new FakeProvider([{}], [{}]);
@@ -147,7 +147,7 @@ test("invalid visual JSON gets at most one structured repair", async () => {
 });
 
 test("review count mismatch and provider unavailability are explicit failures", async () => {
-  assert.throws(() => validateVisualQaResult({ jobId, passed: true, reviewedSlideCount: 2, issues: [] }, jobId, 3), (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_COUNT_MISMATCH");
+  assert.throws(() => validateVisualQaResult({ jobId, reviewState: "SUCCEEDED", visualAssessmentPassed: true, reviewedSlideCount: 2, issueCounts: { total: 0, info: 0, warning: 0, error: 0 }, issues: [] }, jobId, 3), (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_COUNT_MISMATCH");
   await assert.rejects(() => new KimiVisualQaProvider(config).review({ slideNumber: 1, imageDataUrl: "data:image/png;base64,AA==", expected: spec.slides[0] } as VisualQaSlideInput), (error: unknown) => error instanceof HarnessError && error.code === "VISUAL_REVIEW_PROVIDER_UNAVAILABLE");
 });
 
@@ -208,7 +208,7 @@ test("Kimi invalid JSON enters the single structured repair path", async () => {
   try {
     const oneSlide = { ...spec, slides: [spec.slides[0]] };
     const result = await service(new KimiVisualQaProvider({ ...config, kimiApiKey: "test-key" }), runnerGeneration([png(1)])).review(job, oneSlide, runnerGeneration([png(1)]));
-    assert.equal(result.passed, true);
+    assert.equal(result.visualAssessmentPassed, true);
     assert.equal(calls, 2);
   } finally {
     globalThis.fetch = originalFetch;
