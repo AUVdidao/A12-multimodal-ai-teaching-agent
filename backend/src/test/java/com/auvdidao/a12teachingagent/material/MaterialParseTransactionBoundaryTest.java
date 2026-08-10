@@ -6,6 +6,7 @@ import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.domain.common.MaterialParseStatus;
 import com.auvdidao.a12teachingagent.domain.common.PurposeType;
+import com.auvdidao.a12teachingagent.domain.common.UploadStatus;
 import com.auvdidao.a12teachingagent.domain.material.MaterialPurpose;
 import com.auvdidao.a12teachingagent.domain.material.ParseResult;
 import com.auvdidao.a12teachingagent.domain.material.UploadedMaterial;
@@ -229,6 +230,62 @@ class MaterialParseTransactionBoundaryTest {
 
         verify(materialRepository, never()).saveAndFlush(any());
         verify(parseResultRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void staleProcessingResultIsMarkedFailedBeforeRetry() {
+        MaterialParseTransactionService transactionService = new MaterialParseTransactionService(
+                materialService,
+                materialRepository,
+                purposeRepository,
+                parseResultRepository,
+                knowledgeIndexService
+        );
+        UploadedMaterial material = new UploadedMaterial();
+        ParseResult staleResult = new ParseResult();
+        staleResult.setParseStatus(MaterialParseStatus.PROCESSING);
+        staleResult.setCreatedAt(LocalDateTime.now().minusMinutes(10));
+        staleResult.setUpdatedAt(LocalDateTime.now().minusMinutes(10));
+
+        when(materialService.requireMaterialForParse(PROJECT_ID, MATERIAL_ID)).thenReturn(material);
+        when(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(MATERIAL_ID))
+                .thenReturn(Optional.of(staleResult));
+
+        transactionService.recoverStaleProcessing(PROJECT_ID, MATERIAL_ID);
+
+        assertThat(staleResult.getParseStatus()).isEqualTo(MaterialParseStatus.FAILED);
+        assertThat(staleResult.getFailureReason()).contains("inactive");
+        assertThat(material.getParseStatus()).isEqualTo(MaterialParseStatus.FAILED);
+        assertThat(material.getUploadStatus()).isEqualTo(UploadStatus.FAILED);
+        verify(parseResultRepository).saveAndFlush(staleResult);
+        verify(materialRepository).saveAndFlush(material);
+    }
+
+    @Test
+    void activeProcessingResultRemainsInConflictDuringRecovery() {
+        MaterialParseTransactionService transactionService = new MaterialParseTransactionService(
+                materialService,
+                materialRepository,
+                purposeRepository,
+                parseResultRepository,
+                knowledgeIndexService
+        );
+        ParseResult activeResult = new ParseResult();
+        activeResult.setParseStatus(MaterialParseStatus.PROCESSING);
+        activeResult.setCreatedAt(LocalDateTime.now());
+        activeResult.setUpdatedAt(LocalDateTime.now());
+
+        when(materialService.requireMaterialForParse(PROJECT_ID, MATERIAL_ID))
+                .thenReturn(new UploadedMaterial());
+        when(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(MATERIAL_ID))
+                .thenReturn(Optional.of(activeResult));
+
+        assertThatThrownBy(() -> transactionService.recoverStaleProcessing(PROJECT_ID, MATERIAL_ID))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Material parsing is already in progress");
+
+        verify(parseResultRepository, never()).saveAndFlush(any());
+        verify(materialRepository, never()).saveAndFlush(any());
     }
 
     private boolean hasTransactionalAnnotation(String methodName, Class<?>... parameterTypes) throws NoSuchMethodException {

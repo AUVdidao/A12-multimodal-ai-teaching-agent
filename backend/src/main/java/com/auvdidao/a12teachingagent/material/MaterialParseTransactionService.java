@@ -12,7 +12,9 @@ import com.auvdidao.a12teachingagent.domain.material.repository.UploadedMaterial
 import com.auvdidao.a12teachingagent.domain.requirement.RequirementSummary;
 import com.auvdidao.a12teachingagent.knowledge.KnowledgeIndexService;
 import com.auvdidao.a12teachingagent.material.dto.MaterialDtos.ParseResultResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -26,12 +28,17 @@ public class MaterialParseTransactionService {
 
     private static final String FAILURE_REASON =
             "Prototype parsing could not be completed. Please retry.";
+    private static final String STALE_PROCESSING_FAILURE_REASON =
+            "The previous material parsing attempt became inactive. Please retry.";
 
     private final MaterialService materialService;
     private final UploadedMaterialRepository materialRepository;
     private final MaterialPurposeRepository purposeRepository;
     private final ParseResultRepository parseResultRepository;
     private final KnowledgeIndexService knowledgeIndexService;
+
+    @Value("${a12.material-parser.processing-stale-after-seconds:300}")
+    private long processingStaleAfterSeconds = 300L;
 
     public MaterialParseTransactionService(
             MaterialService materialService,
@@ -45,6 +52,48 @@ public class MaterialParseTransactionService {
         this.purposeRepository = purposeRepository;
         this.parseResultRepository = parseResultRepository;
         this.knowledgeIndexService = knowledgeIndexService;
+    }
+
+    /**
+     * Converts an abandoned PROCESSING attempt into an explicit retryable failure.
+     * This runs in its own transaction so a request interruption cannot leave the
+     * next retry permanently blocked by the old status.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recoverStaleProcessing(Long projectId, Long materialId) {
+        ParseResult result = parseResultRepository
+                .findFirstByMaterialIdOrderByCreatedAtDescIdDesc(materialId)
+                .orElse(null);
+        if (result == null || result.getParseStatus() != MaterialParseStatus.PROCESSING) {
+            return;
+        }
+
+        UploadedMaterial material = materialService.requireMaterialForParse(projectId, materialId);
+
+        if (!isStale(result)) {
+            throw new ConflictException("Material parsing is already in progress");
+        }
+
+        result.setParseStatus(MaterialParseStatus.FAILED);
+        result.setFailureReason(STALE_PROCESSING_FAILURE_REASON);
+        result.setParsedAt(LocalDateTime.now());
+        parseResultRepository.saveAndFlush(result);
+
+        material.setParseStatus(MaterialParseStatus.FAILED);
+        material.setUploadStatus(UploadStatus.FAILED);
+        materialRepository.saveAndFlush(material);
+    }
+
+    private boolean isStale(ParseResult result) {
+        LocalDateTime lastActivity = result.getUpdatedAt() != null
+                ? result.getUpdatedAt()
+                : result.getCreatedAt();
+        if (lastActivity == null) {
+            return false;
+        }
+        LocalDateTime cutoff = LocalDateTime.now()
+                .minusSeconds(Math.max(1L, processingStaleAfterSeconds));
+        return !lastActivity.isAfter(cutoff);
     }
 
     @Transactional

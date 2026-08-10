@@ -208,6 +208,7 @@ public class MaterialParseService {
     }
 
     public ParseResultResponse retry(Long projectId, Long materialId) {
+        transactionService.recoverStaleProcessing(projectId, materialId);
         MaterialParseTransactionService.ParsePreparation preparation = transactionService.prepare(
                 projectId,
                 materialId,
