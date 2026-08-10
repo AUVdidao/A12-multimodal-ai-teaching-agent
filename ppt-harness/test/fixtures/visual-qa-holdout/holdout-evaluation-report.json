@@ -1747,7 +1747,12 @@
       ]
     }
   },
-  "generalization": null,
+  "generalization": {
+    "conclusion": "DOES_NOT_GENERALIZE",
+    "basis": "PROVIDER_BLOCKED: baseline and Candidate A produced no valid model responses, so the holdout is not metrics-eligible; fail closed and do not promote Candidate A.",
+    "metricsEligible": false,
+    "autoRepairEligible": false
+  },
   "production": {
     "recommendation": "NOT_RECOMMENDED",
     "autoRepairEligible": false,
