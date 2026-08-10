@@ -89,9 +89,10 @@ public class RemoteMaterialPrototypeParser implements MaterialPrototypeParser {
                     response.sections() == null ? List.of() : response.sections()
             );
         } catch (RestClientResponseException exception) {
-            throw new MaterialParsingException("Remote material parser rejected the material: HTTP " + exception.getStatusCode().value() + ".");
+            throw new MaterialParsingException("Remote material parser rejected the material: HTTP "
+                    + exception.getStatusCode().value() + " (parser request failed before a result was committed).");
         } catch (RestClientException exception) {
-            throw new MaterialParsingException("Remote material parser is unavailable or timed out.");
+            throw new MaterialParsingException("Remote material parser request timed out or was cancelled before a result was returned.");
         }
     }
 

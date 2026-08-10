@@ -189,7 +189,8 @@ public class MaterialParseService {
                     preparation.materialId(),
                     material,
                     result,
-                    startedAt
+                    startedAt,
+                    exception.getMessage()
             ));
         } catch (RuntimeException exception) {
             try {
@@ -198,7 +199,8 @@ public class MaterialParseService {
                         preparation.materialId(),
                         material,
                         result,
-                        startedAt
+                        startedAt,
+                        exception.getMessage()
                 ));
             } catch (RuntimeException failureException) {
                 exception.addSuppressed(failureException);

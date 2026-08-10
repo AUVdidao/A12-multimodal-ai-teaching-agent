@@ -98,7 +98,8 @@ class MaterialParseTransactionAtomicityTest {
                 fixture.materialId(),
                 fixture.material(),
                 fixture.result(),
-                System.nanoTime()
+                System.nanoTime(),
+                "parser failed while reading the document"
         ));
 
         PersistedState failed = readState();

@@ -188,7 +188,9 @@ public class MaterialParseTransactionService {
             throw new IllegalStateException("Parse result is required to fail material parsing");
         }
         result.setParseStatus(MaterialParseStatus.FAILED);
-        result.setFailureReason(FAILURE_REASON);
+        result.setFailureReason(failure.failureReason() == null || failure.failureReason().isBlank()
+                ? FAILURE_REASON
+                : failure.failureReason());
         result.setParsedAt(LocalDateTime.now());
         result.setParseDurationMs(elapsedMillis(failure.startedAtNanos()));
         parseResultRepository.save(result);
@@ -271,7 +273,8 @@ public class MaterialParseTransactionService {
             Long materialId,
             UploadedMaterial material,
             ParseResult result,
-            long startedAtNanos
+            long startedAtNanos,
+            String failureReason
     ) {
     }
 }
