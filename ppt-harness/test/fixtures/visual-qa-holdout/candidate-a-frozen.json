@@ -1,0 +1,143 @@
+{
+  "version": 2,
+  "variant": "CANDIDATE_A",
+  "frozenAt": "2026-08-10T04:02:13.612Z",
+  "sourceCommit": "36833305105bf028700323dd5b96ac41498f6a52",
+  "model": "kimi-k2.6",
+  "prompt": {
+    "review": "You are a rendered-slide visual QA classifier. Inspect the supplied PNG itself and classify visible presentation quality only. Do not judge factual correctness, evidence truth, teaching objectives, or whether lesson content is pedagogically correct. Use only these issue codes: TEXT_OVERFLOW, TEXT_TOO_SMALL, ELEMENT_OVERLAP, ELEMENT_CLIPPED, UNBALANCED_LAYOUT, EXCESSIVE_EMPTY_SPACE, LOW_CONTRAST, VISUAL_HIERARCHY_WEAK, TABLE_UNREADABLE, CHART_UNREADABLE, FLOW_UNREADABLE, DENSE_CONTENT, BROKEN_RENDERING. Use severity INFO, WARNING, or ERROR and confidence from 0 to 1. DEFECT-ONLY REVIEW. Report only an actual, visible, demonstrable defect that materially harms reading, understanding, or presentation use. Do not report aesthetic preferences, ordinary asymmetry, normal whitespace, or a simple chart/table/flow that is readable. Do not report EXCESSIVE_EMPTY_SPACE unless whitespace clearly leaves content incomplete, clusters content into a broken local region, or makes the page look unfinished. Report UNBALANCED_LAYOUT only when the imbalance is obvious and disrupts the reading path. Report VISUAL_HIERARCHY_WEAK only when the title, main content, or reading order cannot be identified. Report CHART_UNREADABLE only when labels, legend, data, axes, or marks cannot be recognized; simple charts and non-ideal design are not defects. Report TABLE_UNREADABLE only when text, rows, columns, or table structure cannot be normally read. Report TEXT_TOO_SMALL only when text is actually illegible at presentation viewing size, not because it merely feels small. Report LOW_CONTRAST only when text or key graphics are genuinely difficult to distinguish. INFO is not a praise or style-feedback channel. If there is no clear defect, return issues as an empty array. Return one JSON object only. Do not use Markdown prose or code fences.",
+    "repair": "You are a rendered-slide visual QA classifier. Inspect the supplied PNG itself and classify visible presentation quality only. Do not judge factual correctness, evidence truth, teaching objectives, or whether lesson content is pedagogically correct. Use only these issue codes: TEXT_OVERFLOW, TEXT_TOO_SMALL, ELEMENT_OVERLAP, ELEMENT_CLIPPED, UNBALANCED_LAYOUT, EXCESSIVE_EMPTY_SPACE, LOW_CONTRAST, VISUAL_HIERARCHY_WEAK, TABLE_UNREADABLE, CHART_UNREADABLE, FLOW_UNREADABLE, DENSE_CONTENT, BROKEN_RENDERING. Use severity INFO, WARNING, or ERROR and confidence from 0 to 1. DEFECT-ONLY REVIEW. Report only an actual, visible, demonstrable defect that materially harms reading, understanding, or presentation use. Do not report aesthetic preferences, ordinary asymmetry, normal whitespace, or a simple chart/table/flow that is readable. Do not report EXCESSIVE_EMPTY_SPACE unless whitespace clearly leaves content incomplete, clusters content into a broken local region, or makes the page look unfinished. Report UNBALANCED_LAYOUT only when the imbalance is obvious and disrupts the reading path. Report VISUAL_HIERARCHY_WEAK only when the title, main content, or reading order cannot be identified. Report CHART_UNREADABLE only when labels, legend, data, axes, or marks cannot be recognized; simple charts and non-ideal design are not defects. Report TABLE_UNREADABLE only when text, rows, columns, or table structure cannot be normally read. Report TEXT_TOO_SMALL only when text is actually illegible at presentation viewing size, not because it merely feels small. Report LOW_CONTRAST only when text or key graphics are genuinely difficult to distinguish. INFO is not a praise or style-feedback channel. If there is no clear defect, return issues as an empty array. The previous response failed local schema validation. Return one corrected JSON object only. Do not use Markdown fences."
+  },
+  "userPromptTemplate": {
+    "parts": [
+      {
+        "type": "text",
+        "shape": {
+          "slideNumber": "number",
+          "expectedVisualContext": "the SlideSpec visual context without Gold labels",
+          "outputShape": "one slideNumber plus issues array matching the frozen response schema",
+          "schemaRepair": "present only for the one allowed repair request"
+        }
+      },
+      {
+        "type": "image_url",
+        "value": "data:image/png;base64,<holdout PNG bytes>"
+      }
+    ],
+    "repair": "The previous response failed local schema validation; return one corrected JSON object only."
+  },
+  "responseSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "slideNumber",
+      "issues"
+    ],
+    "properties": {
+      "slideNumber": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "issues": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "slideNumber",
+            "code",
+            "severity",
+            "confidence",
+            "description",
+            "repairHint"
+          ],
+          "properties": {
+            "slideNumber": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "code": {
+              "type": "string",
+              "enum": [
+                "TEXT_OVERFLOW",
+                "TEXT_TOO_SMALL",
+                "ELEMENT_OVERLAP",
+                "ELEMENT_CLIPPED",
+                "UNBALANCED_LAYOUT",
+                "EXCESSIVE_EMPTY_SPACE",
+                "LOW_CONTRAST",
+                "VISUAL_HIERARCHY_WEAK",
+                "TABLE_UNREADABLE",
+                "CHART_UNREADABLE",
+                "FLOW_UNREADABLE",
+                "DENSE_CONTENT",
+                "BROKEN_RENDERING"
+              ]
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "INFO",
+                "WARNING",
+                "ERROR"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "repairHint": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "taxonomy": {
+    "objective": [
+      "TEXT_OVERFLOW",
+      "TEXT_TOO_SMALL",
+      "ELEMENT_OVERLAP",
+      "ELEMENT_CLIPPED",
+      "LOW_CONTRAST",
+      "TABLE_UNREADABLE",
+      "CHART_UNREADABLE",
+      "FLOW_UNREADABLE",
+      "BROKEN_RENDERING"
+    ],
+    "subjective": [
+      "UNBALANCED_LAYOUT",
+      "EXCESSIVE_EMPTY_SPACE",
+      "VISUAL_HIERARCHY_WEAK",
+      "DENSE_CONTENT"
+    ],
+    "all": [
+      "TEXT_OVERFLOW",
+      "TEXT_TOO_SMALL",
+      "ELEMENT_OVERLAP",
+      "ELEMENT_CLIPPED",
+      "UNBALANCED_LAYOUT",
+      "EXCESSIVE_EMPTY_SPACE",
+      "LOW_CONTRAST",
+      "VISUAL_HIERARCHY_WEAK",
+      "TABLE_UNREADABLE",
+      "CHART_UNREADABLE",
+      "FLOW_UNREADABLE",
+      "DENSE_CONTENT",
+      "BROKEN_RENDERING"
+    ]
+  },
+  "policy": {
+    "objectiveThreshold": 0.9,
+    "subjectiveThreshold": 0.95,
+    "actionability": "confidence below the code-group threshold is IGNORED_FOR_GATE; otherwise objective ERROR is ACTIONABLE and all other findings are REVIEW_ONLY",
+    "automaticRepairEligible": false
+  },
+  "promptHash": "20a25c35e12253da54abe7d8d44324a116b2032e32fdb4612edf1bdeec188afd",
+  "policyHash": "219bada2ceb15943bae17de9ec6ea455d7797291177d076dc9289971f3a01e3b"
+}

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "status": "PROVIDER_BLOCKED",
+  "credentialProbe": {
+    "endpoint": "https://api.moonshot.ai/v1/models",
+    "encryptedSlotsChecked": 3,
+    "statuses": [401, 401, 401]
+  },
+  "holdoutAttempt": {
+    "baselineMainRequests": 30,
+    "candidateAMainRequests": 30,
+    "baselineVarianceRequests": 4,
+    "candidateAVarianceRequests": 4,
+    "repairRequests": 0,
+    "providerStatus": 401,
+    "validModelResponses": false,
+    "metricsEligible": false
+  },
+  "note": "Provider authentication failed before any valid structured model result. Do not interpret zero predictions as visual QA model metrics."
+}

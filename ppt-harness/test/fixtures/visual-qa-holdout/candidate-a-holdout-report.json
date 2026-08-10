@@ -1,0 +1,603 @@
+{
+  "variant": "CANDIDATE_A",
+  "model": "kimi-k2.6",
+  "promptHash": "20a25c35e12253da54abe7d8d44324a116b2032e32fdb4612edf1bdeec188afd",
+  "mainRequests": 0,
+  "repairRequests": 0,
+  "totalRequests": 0,
+  "elapsedMs": 38,
+  "usage": {
+    "promptTokens": 0,
+    "completionTokens": 0,
+    "totalTokens": 0,
+    "observedResponses": 0
+  },
+  "metrics": {
+    "rawPrecision": 0,
+    "rawRecall": 0,
+    "falsePositiveRate": 0,
+    "cleanPassRate": 1,
+    "errorPrecision": 0,
+    "errorRecall": 0,
+    "cleanHardFailRate": 0,
+    "brokenHardFailRecall": 0,
+    "objective": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 25,
+      "precision": 0,
+      "recall": 0
+    },
+    "subjective": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 4,
+      "precision": 0,
+      "recall": 0
+    },
+    "tp": 0,
+    "fp": 0,
+    "fn": 29,
+    "perCode": {
+      "TEXT_OVERFLOW": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 2,
+        "precision": 0,
+        "recall": 0,
+        "support": 2
+      },
+      "TEXT_TOO_SMALL": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 4,
+        "precision": 0,
+        "recall": 0,
+        "support": 4
+      },
+      "ELEMENT_OVERLAP": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 3,
+        "precision": 0,
+        "recall": 0,
+        "support": 3
+      },
+      "ELEMENT_CLIPPED": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 4,
+        "precision": 0,
+        "recall": 0,
+        "support": 4
+      },
+      "UNBALANCED_LAYOUT": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1,
+        "precision": 0,
+        "recall": 0,
+        "support": 1
+      },
+      "EXCESSIVE_EMPTY_SPACE": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1,
+        "precision": 0,
+        "recall": 0,
+        "support": 1
+      },
+      "LOW_CONTRAST": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 4,
+        "precision": 0,
+        "recall": 0,
+        "support": 4
+      },
+      "VISUAL_HIERARCHY_WEAK": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1,
+        "precision": 0,
+        "recall": 0,
+        "support": 1
+      },
+      "TABLE_UNREADABLE": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 2,
+        "precision": 0,
+        "recall": 0,
+        "support": 2
+      },
+      "CHART_UNREADABLE": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 2,
+        "precision": 0,
+        "recall": 0,
+        "support": 2
+      },
+      "FLOW_UNREADABLE": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 2,
+        "precision": 0,
+        "recall": 0,
+        "support": 2
+      },
+      "DENSE_CONTENT": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1,
+        "precision": 0,
+        "recall": 0,
+        "support": 1
+      },
+      "BROKEN_RENDERING": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 2,
+        "precision": 0,
+        "recall": 0,
+        "support": 2
+      }
+    },
+    "actionability": {
+      "objectiveThreshold": 0.9,
+      "subjectiveThreshold": 0.95,
+      "predicted": 0,
+      "truePositive": 0,
+      "falsePositive": 0,
+      "expected": 25,
+      "precision": 0,
+      "recall": 0,
+      "fpCount": 0,
+      "cleanActionableCases": 0,
+      "brokenActionableCases": 0
+    },
+    "cleanChartIssues": 0,
+    "cleanTableIssues": 0,
+    "cleanFlowIssues": 0
+  },
+  "cases": [
+    {
+      "caseId": "clean-01-cover",
+      "fileName": "clean-01-cover.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-02-agenda",
+      "fileName": "clean-02-agenda.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-03-concept",
+      "fileName": "clean-03-concept.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-04-comparison",
+      "fileName": "clean-04-comparison.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-05-timeline-process",
+      "fileName": "clean-05-timeline-process.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-06-chart",
+      "fileName": "clean-06-chart.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-07-table",
+      "fileName": "clean-07-table.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-08-diagram",
+      "fileName": "clean-08-diagram.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-09-activity-assessment",
+      "fileName": "clean-09-activity-assessment.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-10-summary",
+      "fileName": "clean-10-summary.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-11-summary-stats",
+      "fileName": "clean-11-summary-stats.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "clean-12-assessment",
+      "fileName": "clean-12-assessment.png",
+      "knownClean": true,
+      "expectedCodes": [],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "INFO",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-01-text-overflow",
+      "fileName": "broken-01-text-overflow.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_OVERFLOW"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-02-text-too-small",
+      "fileName": "broken-02-text-too-small.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_TOO_SMALL"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "WARNING",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-03-overlap-complex",
+      "fileName": "broken-03-overlap-complex.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-04-clipped-edge",
+      "fileName": "broken-04-clipped-edge.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-05-low-contrast",
+      "fileName": "broken-05-low-contrast.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "LOW_CONTRAST"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "WARNING",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-06-table-complex",
+      "fileName": "broken-06-table-complex.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "TABLE_UNREADABLE",
+        "TEXT_TOO_SMALL"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-07-chart-complex",
+      "fileName": "broken-07-chart-complex.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "CHART_UNREADABLE",
+        "LOW_CONTRAST"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-08-flow-complex",
+      "fileName": "broken-08-flow-complex.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "FLOW_UNREADABLE",
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-09-rendering-complex",
+      "fileName": "broken-09-rendering-complex.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "BROKEN_RENDERING",
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-10-unbalanced",
+      "fileName": "broken-10-unbalanced.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "UNBALANCED_LAYOUT"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "WARNING",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-11-empty-space",
+      "fileName": "broken-11-empty-space.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "EXCESSIVE_EMPTY_SPACE"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "WARNING",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-12-hierarchy",
+      "fileName": "broken-12-hierarchy.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "VISUAL_HIERARCHY_WEAK"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "WARNING",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-13-dense-complex",
+      "fileName": "broken-13-dense-complex.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "DENSE_CONTENT",
+        "TEXT_TOO_SMALL"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "WARNING",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-14-chart-small",
+      "fileName": "broken-14-chart-small.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "CHART_UNREADABLE",
+        "TEXT_TOO_SMALL"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-15-overflow-overlap",
+      "fileName": "broken-15-overflow-overlap.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_OVERFLOW",
+        "ELEMENT_OVERLAP"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-16-table-contrast",
+      "fileName": "broken-16-table-contrast.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "TABLE_UNREADABLE",
+        "LOW_CONTRAST"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-17-flow-clipped",
+      "fileName": "broken-17-flow-clipped.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "FLOW_UNREADABLE",
+        "ELEMENT_CLIPPED"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    },
+    {
+      "caseId": "broken-18-rendering-contrast",
+      "fileName": "broken-18-rendering-contrast.png",
+      "knownClean": false,
+      "expectedCodes": [
+        "BROKEN_RENDERING",
+        "LOW_CONTRAST"
+      ],
+      "predictedCodes": [],
+      "predictedIssues": [],
+      "expectedMaxSeverity": "ERROR",
+      "outcome": "PROVIDER_ERROR",
+      "repaired": false,
+      "errorCode": "VISUAL_REVIEW_PROVIDER_UNAVAILABLE",
+      "errorMessage": "Visual QA requires a server-side MOONSHOT_API_KEY"
+    }
+  ]
+}

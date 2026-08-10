@@ -1,0 +1,443 @@
+{
+  "version": 2,
+  "source": "PPT-016 independent holdout; labels frozen before Kimi calls",
+  "cases": [
+    {
+      "caseId": "clean-01-cover",
+      "fileName": "clean-01-cover.png",
+      "slideNumber": 1,
+      "slideType": "cover",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 1
+    },
+    {
+      "caseId": "clean-02-agenda",
+      "fileName": "clean-02-agenda.png",
+      "slideNumber": 2,
+      "slideType": "agenda",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 2
+    },
+    {
+      "caseId": "clean-03-concept",
+      "fileName": "clean-03-concept.png",
+      "slideNumber": 3,
+      "slideType": "concept",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 3
+    },
+    {
+      "caseId": "clean-04-comparison",
+      "fileName": "clean-04-comparison.png",
+      "slideNumber": 4,
+      "slideType": "comparison",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 4
+    },
+    {
+      "caseId": "clean-05-timeline-process",
+      "fileName": "clean-05-timeline-process.png",
+      "slideNumber": 5,
+      "slideType": "timeline-process",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 5
+    },
+    {
+      "caseId": "clean-06-chart",
+      "fileName": "clean-06-chart.png",
+      "slideNumber": 6,
+      "slideType": "chart",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 6
+    },
+    {
+      "caseId": "clean-07-table",
+      "fileName": "clean-07-table.png",
+      "slideNumber": 7,
+      "slideType": "table",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 7
+    },
+    {
+      "caseId": "clean-08-diagram",
+      "fileName": "clean-08-diagram.png",
+      "slideNumber": 8,
+      "slideType": "diagram",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 8
+    },
+    {
+      "caseId": "clean-09-activity-assessment",
+      "fileName": "clean-09-activity-assessment.png",
+      "slideNumber": 9,
+      "slideType": "activity-assessment",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 9
+    },
+    {
+      "caseId": "clean-10-summary",
+      "fileName": "clean-10-summary.png",
+      "slideNumber": 10,
+      "slideType": "summary",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 10
+    },
+    {
+      "caseId": "clean-11-summary-stats",
+      "fileName": "clean-11-summary-stats.png",
+      "slideNumber": 11,
+      "slideType": "summary-stats",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 11
+    },
+    {
+      "caseId": "clean-12-assessment",
+      "fileName": "clean-12-assessment.png",
+      "slideNumber": 12,
+      "slideType": "assessment",
+      "knownClean": true,
+      "expectedCodes": [],
+      "expectedMaxSeverity": "INFO",
+      "notes": "Fresh real Runner-rendered clean holdout slide; not copied from Development Gold Set.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "none",
+      "sourceSlideNumber": 12
+    },
+    {
+      "caseId": "broken-01-text-overflow",
+      "fileName": "broken-01-text-overflow.png",
+      "slideNumber": 1,
+      "slideType": "process",
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_OVERFLOW"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Bottom-right multi-line footer crosses the lower canvas edge; different location and text shape from Development Set.",
+      "sourceSlideNumber": 5
+    },
+    {
+      "caseId": "broken-02-text-too-small",
+      "fileName": "broken-02-text-too-small.png",
+      "slideNumber": 1,
+      "slideType": "activity-assessment",
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_TOO_SMALL"
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "A dense eight-line source strip is reduced to genuinely tiny labels in a footer region.",
+      "sourceSlideNumber": 9
+    },
+    {
+      "caseId": "broken-03-overlap-complex",
+      "fileName": "broken-03-overlap-complex.png",
+      "slideNumber": 1,
+      "slideType": "comparison",
+      "knownClean": false,
+      "expectedCodes": [
+        "ELEMENT_OVERLAP",
+        "ELEMENT_CLIPPED"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Two opaque panels cover the comparison middle and lower-right reading path.",
+      "sourceSlideNumber": 4
+    },
+    {
+      "caseId": "broken-04-clipped-edge",
+      "fileName": "broken-04-clipped-edge.png",
+      "slideNumber": 1,
+      "slideType": "summary",
+      "knownClean": false,
+      "expectedCodes": [
+        "ELEMENT_CLIPPED"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "A new status object extends past the right and bottom edges on a summary page.",
+      "sourceSlideNumber": 11
+    },
+    {
+      "caseId": "broken-05-low-contrast",
+      "fileName": "broken-05-low-contrast.png",
+      "slideNumber": 1,
+      "slideType": "concept",
+      "knownClean": false,
+      "expectedCodes": [
+        "LOW_CONTRAST"
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "The central concept annotation is painted in near-background tones over a pale panel.",
+      "sourceSlideNumber": 3
+    },
+    {
+      "caseId": "broken-06-table-complex",
+      "fileName": "broken-06-table-complex.png",
+      "slideNumber": 1,
+      "slideType": "table",
+      "knownClean": false,
+      "expectedCodes": [
+        "TABLE_UNREADABLE",
+        "TEXT_TOO_SMALL"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Heavy dark bars cross rows while tiny source labels occupy the table footer.",
+      "sourceSlideNumber": 7
+    },
+    {
+      "caseId": "broken-07-chart-complex",
+      "fileName": "broken-07-chart-complex.png",
+      "slideNumber": 1,
+      "slideType": "chart",
+      "knownClean": false,
+      "expectedCodes": [
+        "CHART_UNREADABLE",
+        "LOW_CONTRAST"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Chart plot, axis labels, and legend are washed into a low-contrast band.",
+      "sourceSlideNumber": 6
+    },
+    {
+      "caseId": "broken-08-flow-complex",
+      "fileName": "broken-08-flow-complex.png",
+      "slideNumber": 1,
+      "slideType": "process",
+      "knownClean": false,
+      "expectedCodes": [
+        "FLOW_UNREADABLE",
+        "ELEMENT_OVERLAP"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Diagonal crossing connectors cover process nodes and interrupt the path.",
+      "sourceSlideNumber": 5
+    },
+    {
+      "caseId": "broken-09-rendering-complex",
+      "fileName": "broken-09-rendering-complex.png",
+      "slideNumber": 1,
+      "slideType": "assessment",
+      "knownClean": false,
+      "expectedCodes": [
+        "BROKEN_RENDERING",
+        "ELEMENT_CLIPPED"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Offset multicolor raster bands and a diagonal tear corrupt the rendered assessment page.",
+      "sourceSlideNumber": 12
+    },
+    {
+      "caseId": "broken-10-unbalanced",
+      "fileName": "broken-10-unbalanced.png",
+      "slideNumber": 1,
+      "slideType": "agenda",
+      "knownClean": false,
+      "expectedCodes": [
+        "UNBALANCED_LAYOUT"
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "A dominant dark right rail overwhelms a small left-side agenda accent.",
+      "sourceSlideNumber": 2
+    },
+    {
+      "caseId": "broken-11-empty-space",
+      "fileName": "broken-11-empty-space.png",
+      "slideNumber": 1,
+      "slideType": "summary",
+      "knownClean": false,
+      "expectedCodes": [
+        "EXCESSIVE_EMPTY_SPACE"
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Most lower-right content is erased, leaving one small content island.",
+      "sourceSlideNumber": 10
+    },
+    {
+      "caseId": "broken-12-hierarchy",
+      "fileName": "broken-12-hierarchy.png",
+      "slideNumber": 1,
+      "slideType": "diagram",
+      "knownClean": false,
+      "expectedCodes": [
+        "VISUAL_HIERARCHY_WEAK"
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Four equal-weight nodes replace the original focal path on a diagram-like page.",
+      "sourceSlideNumber": 8
+    },
+    {
+      "caseId": "broken-13-dense-complex",
+      "fileName": "broken-13-dense-complex.png",
+      "slideNumber": 1,
+      "slideType": "summary",
+      "knownClean": false,
+      "expectedCodes": [
+        "DENSE_CONTENT",
+        "TEXT_TOO_SMALL"
+      ],
+      "expectedMaxSeverity": "WARNING",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "A thirteen-row by six-column note grid crowds a previously sparse summary.",
+      "sourceSlideNumber": 11
+    },
+    {
+      "caseId": "broken-14-chart-small",
+      "fileName": "broken-14-chart-small.png",
+      "slideNumber": 1,
+      "slideType": "chart",
+      "knownClean": false,
+      "expectedCodes": [
+        "CHART_UNREADABLE",
+        "TEXT_TOO_SMALL"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "The second chart mutation compresses labels into a tiny noisy strip rather than masking the plot.",
+      "sourceSlideNumber": 6
+    },
+    {
+      "caseId": "broken-15-overflow-overlap",
+      "fileName": "broken-15-overflow-overlap.png",
+      "slideNumber": 1,
+      "slideType": "activity-assessment",
+      "knownClean": false,
+      "expectedCodes": [
+        "TEXT_OVERFLOW",
+        "ELEMENT_OVERLAP"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "A clipped footer banner overlays the assessment instruction area.",
+      "sourceSlideNumber": 9
+    },
+    {
+      "caseId": "broken-16-table-contrast",
+      "fileName": "broken-16-table-contrast.png",
+      "slideNumber": 1,
+      "slideType": "table",
+      "knownClean": false,
+      "expectedCodes": [
+        "TABLE_UNREADABLE",
+        "LOW_CONTRAST"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Table rows are low-contrast and partially occluded by dark separators.",
+      "sourceSlideNumber": 7
+    },
+    {
+      "caseId": "broken-17-flow-clipped",
+      "fileName": "broken-17-flow-clipped.png",
+      "slideNumber": 1,
+      "slideType": "timeline-process",
+      "knownClean": false,
+      "expectedCodes": [
+        "FLOW_UNREADABLE",
+        "ELEMENT_CLIPPED"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Process route is crossed by clipped nodes at the lower edge.",
+      "sourceSlideNumber": 5
+    },
+    {
+      "caseId": "broken-18-rendering-contrast",
+      "fileName": "broken-18-rendering-contrast.png",
+      "slideNumber": 1,
+      "slideType": "assessment",
+      "knownClean": false,
+      "expectedCodes": [
+        "BROKEN_RENDERING",
+        "LOW_CONTRAST"
+      ],
+      "expectedMaxSeverity": "ERROR",
+      "notes": "Fresh Runner source with a holdout-only visible mutation; expected codes are frozen before Kimi calls.",
+      "sourceFixture": "ppt-skill-runner:deterministic-holdout-outline-v1",
+      "mutationDescription": "Raster corruption is combined with a pale overlay that removes readable contrast.",
+      "sourceSlideNumber": 12
+    }
+  ]
+}

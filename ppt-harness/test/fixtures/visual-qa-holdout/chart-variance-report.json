@@ -1,0 +1,99 @@
+{
+  "caseIds": [
+    "clean-06-chart",
+    "broken-07-chart-complex"
+  ],
+  "repeatsPerCase": 2,
+  "baseline": {
+    "variant": "BASELINE",
+    "repeats": 2,
+    "totalRequests": 0,
+    "elapsedMs": 4,
+    "cases": [
+      {
+        "caseId": "clean-06-chart",
+        "observations": [
+          {
+            "repeat": 1,
+            "predictedCodes": [],
+            "outcome": "PROVIDER_ERROR",
+            "repaired": false
+          },
+          {
+            "repeat": 2,
+            "predictedCodes": [],
+            "outcome": "PROVIDER_ERROR",
+            "repaired": false
+          }
+        ],
+        "codeSetStable": true,
+        "severityStable": true
+      },
+      {
+        "caseId": "broken-07-chart-complex",
+        "observations": [
+          {
+            "repeat": 1,
+            "predictedCodes": [],
+            "outcome": "PROVIDER_ERROR",
+            "repaired": false
+          },
+          {
+            "repeat": 2,
+            "predictedCodes": [],
+            "outcome": "PROVIDER_ERROR",
+            "repaired": false
+          }
+        ],
+        "codeSetStable": true,
+        "severityStable": true
+      }
+    ]
+  },
+  "candidateA": {
+    "variant": "CANDIDATE_A",
+    "repeats": 2,
+    "totalRequests": 0,
+    "elapsedMs": 3,
+    "cases": [
+      {
+        "caseId": "clean-06-chart",
+        "observations": [
+          {
+            "repeat": 1,
+            "predictedCodes": [],
+            "outcome": "PROVIDER_ERROR",
+            "repaired": false
+          },
+          {
+            "repeat": 2,
+            "predictedCodes": [],
+            "outcome": "PROVIDER_ERROR",
+            "repaired": false
+          }
+        ],
+        "codeSetStable": true,
+        "severityStable": true
+      },
+      {
+        "caseId": "broken-07-chart-complex",
+        "observations": [
+          {
+            "repeat": 1,
+            "predictedCodes": [],
+            "outcome": "PROVIDER_ERROR",
+            "repaired": false
+          },
+          {
+            "repeat": 2,
+            "predictedCodes": [],
+            "outcome": "PROVIDER_ERROR",
+            "repaired": false
+          }
+        ],
+        "codeSetStable": true,
+        "severityStable": true
+      }
+    ]
+  }
+}

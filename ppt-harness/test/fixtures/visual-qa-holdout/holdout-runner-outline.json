@@ -1,0 +1,269 @@
+{
+  "title": "Independent Visual QA Holdout",
+  "subtitle": "Deterministic Runner fixture with unseen layouts and controlled mutations",
+  "deck_style": {
+    "visual_density": "medium",
+    "header_variant": "auto",
+    "style_seed": "ppt-016-independent-holdout-v2",
+    "footer_page_numbers": true
+  },
+  "slides": [
+    {
+      "type": "title",
+      "title": "Independent Visual QA Holdout",
+      "subtitle": "PPT-016 \u00b7 frozen evaluation set"
+    },
+    {
+      "type": "content",
+      "variant": "cards-3",
+      "title": "Evaluation agenda",
+      "subtitle": "A compact route through the evidence",
+      "cards": [
+        {
+          "title": "Observe",
+          "body": "Inspect the rendered slide itself",
+          "accent": "accent_primary"
+        },
+        {
+          "title": "Compare",
+          "body": "Separate objective defects from preferences",
+          "accent": "accent_secondary"
+        },
+        {
+          "title": "Decide",
+          "body": "Keep automatic blocking out of scope",
+          "accent": "accent_primary"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "split",
+      "title": "What makes a defect real?",
+      "subtitle": "Concept and evidence",
+      "bullets": [
+        "The visible problem must harm reading or use",
+        "The affected element and location must be identifiable",
+        "A repair hint must describe a concrete correction"
+      ],
+      "highlights": [
+        "Visible evidence before interpretation",
+        "Readable does not mean perfect"
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "comparison-2col",
+      "title": "Signal versus preference",
+      "subtitle": "A clean comparison page",
+      "left": {
+        "title": "Signal",
+        "body": "A clipped label, unreadable table, or broken reading path"
+      },
+      "right": {
+        "title": "Preference",
+        "body": "A different color choice, ordinary whitespace, or mild asymmetry"
+      },
+      "verdict": "Only visible material defects belong in the issue list."
+    },
+    {
+      "type": "content",
+      "variant": "timeline",
+      "title": "The evaluation process",
+      "subtitle": "From source fixture to decision",
+      "milestones": [
+        {
+          "label": "01",
+          "title": "Render",
+          "body": "Build a deterministic outline with the real Runner."
+        },
+        {
+          "label": "02",
+          "title": "Mutate",
+          "body": "Apply a recorded, visible holdout-only mutation."
+        },
+        {
+          "label": "03",
+          "title": "Review",
+          "body": "Run one baseline call and one Candidate A call."
+        },
+        {
+          "label": "04",
+          "title": "Audit",
+          "body": "Compare hard-fail, code, group, and actionability metrics."
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "chart",
+      "title": "Readable chart baseline",
+      "subtitle": "A clean data page",
+      "chart": {
+        "type": "line",
+        "series": [
+          {
+            "name": "Observed signal",
+            "labels": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E"
+            ],
+            "values": [
+              12,
+              18,
+              16,
+              25,
+              31
+            ]
+          }
+        ],
+        "options": {}
+      },
+      "facts": [
+        {
+          "value": "31",
+          "label": "latest value",
+          "detail": "A single series with explicit labels."
+        },
+        {
+          "value": "2.6x",
+          "label": "range",
+          "detail": "The chart remains legible at slide scale."
+        }
+      ],
+      "caption": "Illustrative deterministic data; no factual claim is evaluated."
+    },
+    {
+      "type": "content",
+      "variant": "table",
+      "title": "Readable decision table",
+      "subtitle": "A clean tabular page",
+      "table": {
+        "headers": [
+          "Condition",
+          "Evidence",
+          "Action"
+        ],
+        "rows": [
+          [
+            "Clear label",
+            "Visible",
+            "Keep"
+          ],
+          [
+            "Strong contrast",
+            "Readable",
+            "Keep"
+          ],
+          [
+            "Useful spacing",
+            "Balanced",
+            "Keep"
+          ]
+        ]
+      }
+    },
+    {
+      "type": "content",
+      "variant": "cards-3",
+      "title": "Causal diagram",
+      "subtitle": "Diagram-like nodes with a clear left-to-right path",
+      "cards": [
+        {
+          "title": "Input",
+          "body": "Source image and slide context",
+          "accent": "accent_primary"
+        },
+        {
+          "title": "Inspection",
+          "body": "Visible evidence and issue taxonomy",
+          "accent": "accent_secondary"
+        },
+        {
+          "title": "Decision",
+          "body": "Advisory result, never an automatic block",
+          "accent": "accent_primary"
+        }
+      ],
+      "highlights": [
+        "Input \u2192 inspection \u2192 decision"
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "standard",
+      "title": "Activity and assessment",
+      "subtitle": "A clean classroom interaction page",
+      "body": "Ask reviewers to mark the first visible reading failure, then explain why it matters.",
+      "bullets": [
+        "Point to the affected element",
+        "Name the issue code",
+        "Separate a defect from a design preference"
+      ],
+      "highlights": [
+        "One observation",
+        "One reason",
+        "One repair direction"
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "cards-2",
+      "title": "Holdout summary",
+      "subtitle": "What the evaluation should protect",
+      "cards": [
+        {
+          "title": "Clean slides",
+          "body": "Do not turn ordinary layouts into false hard failures",
+          "accent": "accent_primary"
+        },
+        {
+          "title": "Broken slides",
+          "body": "Do not lose material defects when layouts become complex",
+          "accent": "accent_secondary"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "stats",
+      "title": "Coverage snapshot",
+      "subtitle": "A clean summary page",
+      "stats": [
+        {
+          "value": "13",
+          "label": "issue codes",
+          "detail": "Objective and subjective taxonomy."
+        },
+        {
+          "value": "2",
+          "label": "prompt variants",
+          "detail": "Baseline and frozen Candidate A."
+        },
+        {
+          "value": "1",
+          "label": "decision",
+          "detail": "Generalization is the only conclusion."
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "standard",
+      "title": "Final review question",
+      "subtitle": "Independent holdout",
+      "body": "Does Candidate A preserve clean-slide safety while improving objective defect precision on layouts it has never seen?",
+      "bullets": [
+        "Clean hard-fail must not worsen",
+        "Objective precision should improve",
+        "Broken hard-fail recall must not collapse"
+      ],
+      "highlights": [
+        "Best observed is not production-ready"
+      ]
+    }
+  ]
+}
