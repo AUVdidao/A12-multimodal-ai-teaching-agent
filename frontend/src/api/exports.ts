@@ -1,20 +1,15 @@
 import type { ApiResponse } from './health';
 import { http } from './http';
+import {
+  filterExportOptions,
+  isExportOption,
+  type ExportFormat,
+  type ExportOption,
+} from './exportContract';
 
-export type ExportFormat = 'PPTX' | 'DOCX';
-
-export interface ExportOption {
-  format: ExportFormat;
-  label: string;
-  description: string;
-  mediaType: string;
-  extension: string;
-  artifactId: number;
-  versionId?: number | null;
-  versionNumber?: number | null;
-  filename: string;
-  downloadUrl: string;
-}
+export { SUPPORTED_EXPORT_FORMATS } from './exportContract';
+export { filterExportOptions } from './exportContract';
+export type { ExportFormat, ExportOption } from './exportContract';
 
 export interface ExportCatalog {
   projectId: number;
@@ -22,14 +17,30 @@ export interface ExportCatalog {
   formats: ExportOption[];
 }
 
+interface RawExportCatalog {
+  projectId?: number;
+  projectName?: string;
+  formats?: unknown;
+}
+
 export async function getProjectExportCatalog(projectId: number | string) {
-  const response = await http.get<ApiResponse<ExportCatalog>>(`/api/v1/projects/${projectId}/exports`);
-  return response.data.data;
+  const response = await http.get<ApiResponse<RawExportCatalog>>(
+    `/api/v1/projects/${projectId}/exports`,
+  );
+  const catalog = response.data.data;
+  return {
+    projectId: catalog?.projectId ?? Number(projectId),
+    projectName: catalog?.projectName ?? '',
+    formats: filterExportOptions(catalog?.formats),
+  } satisfies ExportCatalog;
 }
 
 export async function downloadProjectExport(projectId: number | string, option: ExportOption) {
+  if (!isExportOption(option)) {
+    throw new Error('Export option is not a validated current-format option');
+  }
   const response = await http.get<Blob>(
-    option.downloadUrl || `/api/v1/projects/${projectId}/exports/${option.format.toLowerCase()}`,
+    option.downloadUrl,
     { responseType: 'blob' },
   );
   const filename = responseFilename(response.headers['content-disposition']) || option.filename;

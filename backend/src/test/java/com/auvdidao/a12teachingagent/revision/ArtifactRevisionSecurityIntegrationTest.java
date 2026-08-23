@@ -2,6 +2,7 @@ package com.auvdidao.a12teachingagent.revision;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.domain.common.ArtifactType;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.domain.common.ProjectStatus;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -32,6 +34,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -83,11 +88,15 @@ class ArtifactRevisionSecurityIntegrationTest {
     private ArtifactVersion sourceVersion;
     private ArtifactVersion finalVersion;
     private GeneratedArtifact sourcePpt;
+    private GeneratedArtifact sourceDocx;
     private GeneratedArtifact finalArtifact;
     private String ownerToken;
     private String otherTeacherToken;
     private String leaderToken;
     private String studentToken;
+
+    @SpyBean
+    private AIWorkflowGateway aiWorkflowGateway;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -111,9 +120,9 @@ class ArtifactRevisionSecurityIntegrationTest {
         ArtifactVersion otherVersion = createVersion(otherProject.getId(), 1, "Other source", false);
 
         sourcePpt = createArtifact(sourceVersion, ArtifactType.PPT, "Source PPT", pptJson("source"));
-        createArtifact(sourceVersion, ArtifactType.DOCX, "Source DOCX", docxJson());
+        sourceDocx = createArtifact(sourceVersion, ArtifactType.DOCX, "Source DOCX", docxJson());
         createArtifact(sourceVersion, ArtifactType.INTERACTION, "Source interaction", interactionJson());
-        finalArtifact = createArtifact(finalVersion, ArtifactType.PPT, "Final PPT", pptJson("final"));
+        finalArtifact = createArtifact(finalVersion, ArtifactType.DOCX, "Final DOCX", docxJson());
         createArtifact(otherVersion, ArtifactType.PPT, "Other PPT", pptJson("other"));
 
         ownerToken = login(owner.getUsername(), UserRole.TEACHER);
@@ -124,8 +133,8 @@ class ArtifactRevisionSecurityIntegrationTest {
 
     @Test
     void ownerCreatesIncrementedRevisionAndPreservesSource() throws Exception {
-        String originalSource = sourcePpt.getContentJson();
-        String response = mockMvc.perform(post(revisionPath(project.getId(), sourcePpt.getId()))
+        String originalSource = sourceDocx.getContentJson();
+        String response = mockMvc.perform(post(revisionPath(project.getId(), sourceDocx.getId()))
                         .header("Authorization", bearer(ownerToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"instruction\":\"Add a short recap for the lesson.\"}"))
@@ -142,9 +151,9 @@ class ArtifactRevisionSecurityIntegrationTest {
             assertThat(artifact.path("content").isObject()).isTrue();
             assertThat(artifact.path("content").toString()).isNotBlank();
         }
-        assertThat(body.path("data").path("artifacts").get(0).path("content").path("slides")).hasSize(2);
+        assertThat(body.path("data").path("artifacts").get(1).path("content").path("sections")).hasSize(2);
 
-        GeneratedArtifact savedSource = artifactRepository.findById(sourcePpt.getId()).orElseThrow();
+        GeneratedArtifact savedSource = artifactRepository.findById(sourceDocx.getId()).orElseThrow();
         assertThat(savedSource.getContentJson()).isEqualTo(originalSource);
         assertThat(versionRepository.findById(sourceVersion.getId()).orElseThrow().getFinalVersion()).isFalse();
         assertThat(artifactRepository.findByProjectIdAndVersionIdOrderByCreatedAtAsc(project.getId(),
@@ -154,6 +163,29 @@ class ArtifactRevisionSecurityIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
                 .andExpect(jsonPath("$.data[0].instruction", is("Add a short recap for the lesson.")));
+    }
+
+    @Test
+    void historicalPptRevisionIsRejectedBeforeAiOrPersistenceSideEffects() throws Exception {
+        String originalSource = sourcePpt.getContentJson();
+        long versionsBefore = versionRepository.count();
+        long artifactsBefore = artifactRepository.count();
+        long editRecordsBefore = editRecordRepository.count();
+
+        mockMvc.perform(post(revisionPath(project.getId(), sourcePpt.getId()))
+                        .header("Authorization", bearer(ownerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"instruction\":\"Add a historical PPT slide.\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is(400)))
+                .andExpect(jsonPath("$.message", is("新 PPT Engine 尚未接入，历史 PPT 不可修订")));
+
+        assertThat(versionRepository.count()).isEqualTo(versionsBefore);
+        assertThat(artifactRepository.count()).isEqualTo(artifactsBefore);
+        assertThat(editRecordRepository.count()).isEqualTo(editRecordsBefore);
+        assertThat(artifactRepository.findById(sourcePpt.getId()).orElseThrow().getContentJson())
+                .isEqualTo(originalSource);
+        verify(aiWorkflowGateway, never()).reviseArtifact(any());
     }
 
     @Test
@@ -184,11 +216,11 @@ class ArtifactRevisionSecurityIntegrationTest {
 
     @Test
     void otherTeacherAndNonTeacherRolesAreRejected() throws Exception {
-        assertForbidden(otherTeacherToken, post(revisionPath(project.getId(), sourcePpt.getId()))
+        assertForbidden(otherTeacherToken, post(revisionPath(project.getId(), sourceDocx.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"instruction\":\"No access.\"}"));
         assertForbidden(otherTeacherToken, get(editRecordsPath(project.getId())));
-        assertForbidden(leaderToken, post(revisionPath(project.getId(), sourcePpt.getId()))
+        assertForbidden(leaderToken, post(revisionPath(project.getId(), sourceDocx.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"instruction\":\"No access.\"}"));
         assertForbidden(studentToken, get(editRecordsPath(project.getId())));
@@ -196,7 +228,7 @@ class ArtifactRevisionSecurityIntegrationTest {
 
     @Test
     void instructionMustBePresentAndBounded() throws Exception {
-        mockMvc.perform(post(revisionPath(project.getId(), sourcePpt.getId()))
+        mockMvc.perform(post(revisionPath(project.getId(), sourceDocx.getId()))
                         .header("Authorization", bearer(ownerToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"instruction\":\"   \"}"))

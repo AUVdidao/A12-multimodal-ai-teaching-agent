@@ -336,14 +336,15 @@ class ClarificationControllerTest {
     @Test
     void gatewayFailureReturnsServiceUnavailable() throws Exception {
         when(aiWorkflowGateway.clarifyRequirement(any(ClarificationRequest.class)))
-                .thenThrow(new AiWorkflowUnavailableException("Mock gateway unavailable"));
+                .thenThrow(new AiWorkflowUnavailableException("provider response token=secret"));
 
         mockMvc.perform(post("/api/projects/1/clarification/questions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code", is(503)))
-                .andExpect(jsonPath("$.message", containsString("unavailable")));
+                .andExpect(jsonPath("$.message", containsString("unavailable")))
+                .andExpect(jsonPath("$.message", not(containsString("secret"))));
     }
 
     @Test

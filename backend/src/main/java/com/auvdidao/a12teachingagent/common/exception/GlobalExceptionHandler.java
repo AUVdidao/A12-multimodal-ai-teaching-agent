@@ -3,7 +3,6 @@ package com.auvdidao.a12teachingagent.common.exception;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantException;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
-import com.auvdidao.a12teachingagent.pptskill.PptSkillGenerationException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -65,21 +64,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleAiWorkflowUnavailable(AiWorkflowUnavailableException exception) {
         return ResponseEntity
                 .status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiResponse.failure(HttpStatus.SERVICE_UNAVAILABLE.value(), exception.getMessage()));
-    }
-
-    @ExceptionHandler(PptSkillGenerationException.class)
-    public ResponseEntity<ApiResponse<Void>> handlePptSkillGeneration(PptSkillGenerationException exception) {
-        return ResponseEntity
-                .status(exception.getStatus())
-                .body(ApiResponse.failure(exception.getStatus().value(), exception.getCode() + ": " + exception.getMessage()));
+                .body(ApiResponse.failure(
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
+                        "AI workflow is temporarily unavailable. Please retry."
+                ));
     }
 
     @ExceptionHandler(KimiAssistantException.class)
     public ResponseEntity<ApiResponse<Void>> handleKimiAssistant(KimiAssistantException exception) {
         return ResponseEntity
                 .status(exception.getStatus())
-                .body(ApiResponse.failure(exception.getStatus().value(), exception.getCode() + ": " + exception.getMessage()));
+                .body(ApiResponse.failure(
+                        exception.getStatus().value(),
+                        "AI teaching assistant is temporarily unavailable. Please retry."
+                ));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -140,12 +138,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleFileStorage(FileStorageException exception) {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.failure(HttpStatus.INTERNAL_SERVER_ERROR.value(), exception.getMessage()));
+                .body(ApiResponse.failure(
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        "Material storage operation failed. Please retry."
+                ));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
-        LOGGER.error("Unhandled API exception", exception);
+        LOGGER.error("Unhandled API exception (exceptionType={})", exception.getClass().getSimpleName());
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.failure(

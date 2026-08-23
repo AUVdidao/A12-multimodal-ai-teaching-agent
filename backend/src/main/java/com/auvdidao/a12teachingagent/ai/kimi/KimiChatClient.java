@@ -175,41 +175,7 @@ public class KimiChatClient {
     }
 
     private String describeHttpFailure(HttpResponse<String> response) {
-        String suffix = "";
-        try {
-            JsonNode root = objectMapper.readTree(response.body());
-            JsonNode error = root.path("error");
-            String providerCode = text(error, "code");
-            if (!StringUtils.hasText(providerCode)) {
-                providerCode = text(root, "code");
-            }
-            String providerMessage = text(error, "message");
-            if (!StringUtils.hasText(providerMessage)) {
-                providerMessage = text(root, "message");
-            }
-            if (StringUtils.hasText(providerCode) || StringUtils.hasText(providerMessage)) {
-                String details = String.join("; ",
-                        StringUtils.hasText(providerCode) ? "code=" + redact(providerCode) : "",
-                        StringUtils.hasText(providerMessage) ? redact(providerMessage) : ""
-                ).replaceAll("^; |; $", "");
-                suffix = ": " + details;
-            }
-        } catch (Exception ignored) {
-            // Keep the stable HTTP failure when the provider error body is not JSON.
-        }
-        return "Kimi returned HTTP " + response.statusCode() + suffix;
-    }
-
-    private static String text(JsonNode node, String field) {
-        JsonNode value = node == null ? null : node.get(field);
-        return value != null && value.isTextual() ? value.asText().strip() : "";
-    }
-
-    private static String redact(String value) {
-        String sanitized = value.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').strip();
-        sanitized = sanitized.replaceAll("(?i)sk-[A-Za-z0-9_-]+", "[REDACTED]");
-        sanitized = sanitized.replaceAll("(?i)(api[_ -]?key|authorization|bearer)\\s*[:=]\\s*\\S+", "$1=[REDACTED]");
-        return sanitized.length() <= 160 ? sanitized : sanitized.substring(0, 160);
+        return "Kimi returned HTTP " + response.statusCode();
     }
 
     private boolean isRetryableStatus(int statusCode) {

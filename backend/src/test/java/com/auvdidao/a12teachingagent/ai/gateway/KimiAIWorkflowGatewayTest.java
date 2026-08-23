@@ -5,6 +5,9 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationQuestion;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.KnowledgeRetrievalRequest;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.MaterialAnalysisRequest;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.GenerationPlanSnapshot;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.PlanSection;
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiChatClient;
 import com.auvdidao.a12teachingagent.ai.kimi.KimiChatRequest;
@@ -58,6 +61,7 @@ class KimiAIWorkflowGatewayTest {
                 .hasMessageContaining("WF-01")
                 .hasMessageContaining("KIMI_REQUEST_FAILED")
                 .hasMessageContaining("HTTP 401")
+                .hasMessageNotContaining("Invalid Authentication")
                 .extracting(exception -> ((AiWorkflowUnavailableException) exception).getProviderCode())
                 .isEqualTo("KIMI_REQUEST_FAILED");
     }
@@ -160,6 +164,53 @@ class KimiAIWorkflowGatewayTest {
 
         assertThat(response.nextAction()).isEqualTo("需求信息已足够。");
         verify(client, times(2)).complete(anyList(), anyString(), anyInt(), anyInt());
+    }
+
+    @Test
+    void structuredContentOnlyRequiresRequestedDocxAndDoesNotMentionPptInPrompt() throws Exception {
+        when(client.complete(anyList(), anyString(), anyInt(), anyInt())).thenReturn("""
+                {
+                  "docContent": {
+                    "artifactType": "DOCX",
+                    "title": "Lesson plan",
+                    "contentJson": {
+                      "title": "Lesson plan",
+                      "courseInfo": {"projectName":"Project","courseName":"Math","chapterTopic":"Fractions","targetAudience":"Grade 5","lessonDurationMinutes":45,"generationMode":"STANDARD"},
+                      "teachingGoals": ["Understand fractions"],
+                      "keyPoints": ["Numerator and denominator"],
+                      "difficultPoints": [],
+                      "methods": ["Guided practice"],
+                      "teachingProcess": [{"stage":"Explain","durationMinutes":10,"content":"Explain fractions","teacherActivity":"Model","studentActivity":"Observe"}],
+                      "classroomActivities": [],
+                      "homework": [],
+                      "resourceNotes": [],
+                      "sections": [{"order":1,"title":"Core concept","paragraphs":["A fraction represents a part of a whole."]}]
+                    },
+                    "assetSuggestions": []
+                  },
+                  "fallbackToBackendDrafts": false
+                }
+                """);
+
+        var response = gateway.generateStructuredContent(new StructuredContentRequest(
+                7L,
+                new GenerationPlanSnapshot(
+                        "plan-7",
+                        List.of(),
+                        List.of(new PlanSection("Core concept", List.of("Fractions"), "Confirmed plan")),
+                        List.of()
+                ),
+                List.of(),
+                List.of("DOCX")
+        ));
+
+        assertThat(response.docContent()).isNotNull();
+        assertThat(response.pptContent()).isNull();
+        ArgumentCaptor<List> messages = ArgumentCaptor.forClass(List.class);
+        verify(client).complete(messages.capture(), anyString(), anyInt(), anyInt());
+        assertThat(String.valueOf(((Map<?, ?>) messages.getValue().get(1)).get("content")))
+                .doesNotContain("pptContent")
+                .contains("docContent");
     }
 
     @Test

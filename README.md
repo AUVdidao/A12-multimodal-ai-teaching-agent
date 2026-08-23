@@ -9,7 +9,7 @@
 - AI 编排：Spring Boot 内部 `AIWorkflowGateway`
 - 模型服务：Spring Boot 通过 Moonshot OpenAI-compatible API 直接调用 Kimi
 - 离线降级：可选 Mock Provider，仅用于测试和演示保底
-- PPT 成果执行：独立 PPT Harness + PPT Skill Runner，负责文件生成和自动几何质量检查
+- PPT Engine：旧 PPT 链路已退出；PPT 页面暂保留为“尚未接入”页面壳
 - 文件服务：独立解析服务和生成服务
 - 部署：Docker Compose + Nginx 反向代理
 
@@ -23,10 +23,10 @@ Vue
        -> AIWorkflowGatewayRouter
             -> KimiAIWorkflowGateway
             -> MockAIWorkflowGateway (optional fallback)
-       -> PPT Harness / parser / generator services
+       -> file-parser-service / file-generator-service
 ```
 
-Spring Boot 负责鉴权、项目上下文、输入控制、模型调用、JSON 解析与校验、错误降级、持久化和审计。PPT Harness 只负责复杂 PPT 任务执行和质量门禁，不接管项目业务流程。
+Spring Boot 负责鉴权、项目上下文、输入控制、模型调用、JSON 解析与校验、错误降级、持久化和审计。新 PPT Engine 尚未接入；非 PPT 成果能力和通用文件服务继续保留。
 
 ## 本地启动
 
@@ -66,7 +66,6 @@ npm.cmd run build
 - `KIMI_WORKFLOW_TIMEOUT_SECONDS`
 - `KIMI_WORKFLOW_MAX_COMPLETION_TOKENS`
 - `KIMI_ASSISTANT_MODEL`
-- `KIMI_PPT_MODEL`
 
 真实密钥不得提交到 Git。
 
@@ -80,5 +79,5 @@ npm.cmd run build
 6. 本地知识检索与受控片段筛选
 7. 确认教学意图
 8. 生成并确认内容方案
-9. 生成 PPT、教案和互动内容
+9. 生成教案和互动内容；PPT Engine 待接入
 10. 预览、修改、版本化、审批、发布与学情分析

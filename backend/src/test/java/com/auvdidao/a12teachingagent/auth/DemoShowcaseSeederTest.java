@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.auth;
 
 import com.auvdidao.a12teachingagent.domain.approval.repository.ApprovalRequestRepository;
+import com.auvdidao.a12teachingagent.domain.common.ArtifactType;
 import com.auvdidao.a12teachingagent.domain.generation.repository.GeneratedArtifactRepository;
 import com.auvdidao.a12teachingagent.domain.generation.repository.TeachingIntentRepository;
 import com.auvdidao.a12teachingagent.domain.identity.AppUser;
@@ -87,7 +88,9 @@ class DemoShowcaseSeederTest {
         assertThat(materialRepository.count()).isGreaterThanOrEqualTo(8);
         assertThat(knowledgeChunkRepository.count()).isGreaterThanOrEqualTo(24);
         assertThat(teachingIntentRepository.count()).isGreaterThanOrEqualTo(3);
-        assertThat(artifactRepository.count()).isGreaterThanOrEqualTo(6);
+        assertThat(artifactRepository.count()).isGreaterThanOrEqualTo(4);
+        assertThat(artifactRepository.findAll())
+                .noneMatch(artifact -> artifact.getArtifactType() == ArtifactType.PPT);
         assertThat(taskRepository.count()).isGreaterThanOrEqualTo(5);
         assertThat(approvalRepository.count()).isEqualTo(2);
         assertThat(publicationRepository.count()).isEqualTo(1);

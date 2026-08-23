@@ -1,10 +1,11 @@
 package com.auvdidao.a12teachingagent.generation;
 
+import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.StructuredContentRequest;
+import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import com.auvdidao.a12teachingagent.domain.common.ArtifactType;
 import com.auvdidao.a12teachingagent.domain.common.ProjectStatus;
 import com.auvdidao.a12teachingagent.domain.common.TeachingIntentStatus;
-import com.auvdidao.a12teachingagent.domain.generation.ArtifactVersion;
 import com.auvdidao.a12teachingagent.domain.generation.GeneratedArtifact;
 import com.auvdidao.a12teachingagent.domain.generation.GenerationPlan;
 import com.auvdidao.a12teachingagent.domain.generation.TeachingIntent;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
@@ -39,6 +41,8 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentCaptor.forClass;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -72,6 +76,9 @@ class GenerationWorkflowControllerTest {
 
     @Autowired
     private ArtifactVersionRepository versionRepository;
+
+    @SpyBean
+    private AIWorkflowGateway aiWorkflowGateway;
 
     @Test
     void requiresConfirmedIntentAndUsesTheLatestConfirmedIntent() throws Exception {
@@ -213,6 +220,11 @@ class GenerationWorkflowControllerTest {
                 .andExpect(jsonPath("$.data[1].content.questions[*].explanation", hasSize(3)))
                 .andReturn();
 
+        org.mockito.ArgumentCaptor<StructuredContentRequest> requestCaptor = forClass(StructuredContentRequest.class);
+        verify(aiWorkflowGateway).generateStructuredContent(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().targetTypes()).containsExactly("DOCX", "INTERACTION");
+        assertThat(requestCaptor.getValue().targetTypes()).doesNotContain("PPT");
+
         JsonNode firstData = responseData(first);
         long versionId = firstData.get(0).path("versionId").asLong();
         List<Long> firstArtifactIds = artifactIds(firstData);
@@ -267,7 +279,7 @@ class GenerationWorkflowControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planId\":" + planId + ",\"artifactTypes\":[\"PPT\"]}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("PPT Harness job endpoint")));
+                .andExpect(jsonPath("$.message", containsString("new PPT Engine is integrated")));
         mockMvc.perform(post("/api/projects/{projectId}/artifacts/generate", project.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"planId\":" + planId + ",\"artifactTypes\":[]}"))
@@ -295,45 +307,6 @@ class GenerationWorkflowControllerTest {
         assertThat(artifactRepository.findByProjectIdOrderByCreatedAtAsc(project.getId()))
                 .extracting(GeneratedArtifact::getArtifactType)
                 .containsExactly(ArtifactType.DOCX, ArtifactType.INTERACTION);
-    }
-
-    @Test
-    void workspaceCapabilityTracksMissingPptAndNonPptArtifacts() throws Exception {
-        Project project = createProject("Capability semantics");
-        createIntent(project, TeachingIntentStatus.CONFIRMED, "Confirmed teaching goal");
-        long planId = responseDataId(createPlan(project.getId()).andReturn());
-        confirmPlan(project.getId(), planId);
-
-        ArtifactVersion version = new ArtifactVersion();
-        version.setProjectId(project.getId());
-        version.setGenerationPlanId(planId);
-        version.setVersionNumber(1);
-        version.setDescription("Harness-created PPT version");
-        version.setFinalVersion(false);
-        versionRepository.save(version);
-
-        GeneratedArtifact ppt = new GeneratedArtifact();
-        ppt.setProjectId(project.getId());
-        ppt.setGenerationPlanId(planId);
-        ppt.setVersionId(version.getId());
-        ppt.setArtifactType(ArtifactType.PPT);
-        ppt.setTitle("Harness PPT");
-        ppt.setSchemaVersion(1);
-        ppt.setContentJson("{\"slides\":[]}");
-        artifactRepository.save(ppt);
-
-        mockMvc.perform(get("/api/projects/{projectId}/generation/workspace", project.getId()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.capabilities.canGenerate", is(true)));
-
-        generateArtifacts(project.getId(), planId)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(2)));
-        mockMvc.perform(get("/api/projects/{projectId}/generation/workspace", project.getId()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.artifacts", hasSize(3)))
-                .andExpect(jsonPath("$.data.capabilities.canGenerate", is(false)))
-                .andExpect(jsonPath("$.data.capabilities.canGenerateArtifacts", is(false)));
     }
 
     @Test

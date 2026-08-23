@@ -4,7 +4,6 @@ import com.auvdidao.a12.generator.GeneratorDtos.PackageEntry;
 import com.auvdidao.a12.generator.GeneratorDtos.PackageRequest;
 import com.auvdidao.a12.generator.GeneratorDtos.RenderRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,8 +17,10 @@ import java.util.List;
 import java.util.zip.ZipInputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -29,14 +30,7 @@ class GeneratorControllerTest {
     @Autowired ObjectMapper objectMapper;
 
     @Test
-    void createsParseableOfficeFilesAndReadableInteractivePackage() throws Exception {
-        RenderRequest ppt = new RenderRequest("PPT", 1, "AI foundations", "AI", "Core", "AI deck",
-                "{\"deckTitle\":\"AI deck\",\"slides\":[{\"title\":\"Core concepts\",\"points\":[\"Machine learning\"]}]}" );
-        byte[] pptx = mockMvc.perform(post("/internal/file-generator/pptx").contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(ppt))).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-        assertThat(pptx).startsWith((byte) 'P', (byte) 'K');
-        try (XMLSlideShow show = new XMLSlideShow(new ByteArrayInputStream(pptx))) { assertThat(show.getSlides()).hasSize(1); }
-
+    void createsParseableDocxAndReadableInteractivePackage() throws Exception {
         RenderRequest doc = new RenderRequest("DOCX", 1, "AI foundations", "AI", "Core", "AI plan",
                 "{\"title\":\"AI plan\",\"sections\":[{\"title\":\"Goals\",\"paragraphs\":[\"Explain AI\"]}]}" );
         byte[] docx = mockMvc.perform(post("/internal/file-generator/docx").contentType(MediaType.APPLICATION_JSON)
@@ -54,5 +48,20 @@ class GeneratorControllerTest {
         byte[] zip = mockMvc.perform(post("/internal/file-generator/package").contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(packageRequest))).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try (ZipInputStream input = new ZipInputStream(new ByteArrayInputStream(zip))) { assertThat(input.getNextEntry().getName()).isEqualTo("lesson.html"); }
+    }
+
+    @Test
+    void doesNotExposePptxEndpointOrPackageFormat() throws Exception {
+        RenderRequest ppt = new RenderRequest("PPT", 1, "AI foundations", "AI", "Core", "AI deck",
+                "{\"deckTitle\":\"AI deck\",\"slides\":[{\"title\":\"Core concepts\"}]}" );
+        mockMvc.perform(post("/internal/file-generator/pptx").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(ppt)))
+                .andExpect(status().isNotFound());
+
+        PackageRequest packageRequest = new PackageRequest(List.of(new PackageEntry("lesson.pptx", "PPTX", ppt)));
+        mockMvc.perform(post("/internal/file-generator/package").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(packageRequest)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code", is("UNSUPPORTED_FORMAT")));
     }
 }

@@ -33,7 +33,7 @@
 | 409 | 409 | 重复创建、状态冲突、前置流程未完成、并发处理中 |
 | 413 | 413 | 上传文件超过配置大小 |
 | 500 | 500 | 未分类服务端异常 |
-| 503 | 503 | AI workflow 不可用，见第 4 节的 Mock/Dify 说明 |
+| 503 | 503 | AI workflow 不可用，见第 4 节的 KIMI/MOCK 说明 |
 
 错误 JSON 仍是 `{ code, message, data: null, timestamp }`。字段校验错误的 `message` 可能是多个 `field: reason` 用 `; ` 拼接。
 
@@ -276,7 +276,7 @@ POST /api/v1/projects/42/artifacts/101/revisions
 | `GET /api/projects/{projectId}/knowledge/overview` | 无 | `{ indexedMaterialCount, chunkCount, chunks, prototype }` | `403`/`404` |
 | `POST /api/projects/{projectId}/knowledge/search` | `{ query, limit? }`；query 非空，limit 1-20，默认 10 | `{ query, hits: [{ chunkId, materialId, sourceFilename, title, content, score, hitReason, usageTypes, keywords }], prototype, algorithm }` | `400` query 为空或 limit 越界，`403`/`404` |
 
-这是当前本地关键词/评分检索，响应 `prototype: true`；不要把它标记为向量库或 Dify 检索结果。
+这是当前本地关键词/评分检索，响应 `prototype: true`；不要把它标记为向量库检索结果。
 
 ### 4.4 教学意图
 
@@ -293,20 +293,20 @@ POST /api/v1/projects/42/artifacts/101/revisions
 意图状态：`DRAFT`、`CONFIRMED`。`evidenceItems` 是当前知识命中证据；前端展示时保留 `sourceFilename/hitReason/contentExcerpt`。
 对 `DRAFT` 调用修订接口幂等返回原草稿；原 `CONFIRMED` 版本保持不变，既有 PUT 仍以 `409` 拒绝修改。
 
-### 4.5 AI workflow 与 Dify 事实边界
+### 4.5 AI workflow Provider 事实边界
 
-源码存在 `/api/ai-workflow/status`、`/clarification`、`/requirement-summary`、`/material-analysis`、`/knowledge-retrieval`、`/teaching-intent`、`/generation-plan`、`/revision`，请求体 DTO 在 `ai.dto.AiWorkflowDtos` 中定义。这些接口经过 `AIWorkflowGatewayRouter`，当前默认 `app.ai.provider=MOCK`。
+源码存在 `/api/ai-workflow/status`、`/clarification`、`/requirement-summary`、`/material-analysis`、`/knowledge-retrieval`、`/teaching-intent`、`/generation-plan`、`/revision`，请求体 DTO 在 `ai.dto.AiWorkflowDtos` 中定义。这些接口经过 Spring Boot 的 `AIWorkflowGatewayRouter`，Provider 可配置为 `KIMI` 或 `MOCK`，当前默认配置为 `KIMI`。
 
-- `GET /api/ai-workflow/status` 返回 `requestedProvider/activeProvider/mockEnabled/difyConfigured/fallbackToMock/message`。
-- 当前真实 Dify workflow 尚未实现；源码明确表示 Dify 选择且关闭 Mock fallback 时返回 `503`。
-- Dify 配置项只有 `base-url/workflow-id/api-key`，不能据此宣称已完成 Dify 联调。
-- 前端应按 `status` 的 `activeProvider` 和 `mockEnabled` 展示能力；不要把 `workflow: "mock-ai-workflow"` 当作真实 Dify 结果。
+- `GET /api/ai-workflow/status` 返回 `requestedProvider/activeProvider/mockEnabled/providerConfigured/fallbackToMock/message`。
+- `KIMI` 由 `KimiAIWorkflowGateway` 调用 Kimi OpenAI-compatible API；`MOCK` 由 `MockAIWorkflowGateway` 提供确定性离线结果。
+- `A12_AI_FALLBACK_TO_MOCK=true` 时，KIMI 不可用可以由路由器降级到 MOCK；这不改变当前 Provider 契约。
+- 前端应按 `status` 的 `activeProvider` 和 `mockEnabled` 展示能力，不把 MOCK 结果伪装成真实模型结果。
 
 这些接口受 `/api/**` 的 `TEACHER` 认证规则保护；带 `projectId` 的请求还必须是该项目 owner，项目软删除后按 `404` 处理。所有成功响应仍包在 `ApiResponse.data` 中：
 
 | 方法与路径 | 请求体 | 成功 `data` 关键字段 | 主要 4xx/5xx |
 |---|---|---|---|
-| `GET /api/ai-workflow/status` | 无 | `requestedProvider/activeProvider/mockEnabled/difyConfigured/fallbackToMock/message` | `401`/`403` |
+| `GET /api/ai-workflow/status` | 无 | `requestedProvider/activeProvider/mockEnabled/providerConfigured/fallbackToMock/message` | `401`/`403` |
 | `POST /api/ai-workflow/clarification` | `{ projectId, rawRequirement, knownFields?, generationMode?, requestedMissingFields? }` | `workflow/missingFields/questions/suggestedFields/nextAction` | `400` 校验失败，`403`/`404` 项目门禁，`503` provider 不可用 |
 | `POST /api/ai-workflow/requirement-summary` | `{ projectId, rawRequirement, dialogTurns?: [{ role, content }], generationMode? }` | `workflow/summary/assumptions/confirmationQuestion`；`summary` 含课程、章节、受众、时长、目标、难点、产物等字段 | `400`，`403`/`404`，`503` |
 | `POST /api/ai-workflow/material-analysis` | `{ projectId, fileName, materialType, purpose? }` | `workflow/status/summary/keywords/teachingUses/suggestedChunks` | `400`，`403`/`404`，`503` |
@@ -315,7 +315,7 @@ POST /api/v1/projects/42/artifacts/101/revisions
 | `POST /api/ai-workflow/generation-plan` | `{ projectId, courseName, chapterTopic, targetAudience?, outputTypes?, generationMode? }` | `workflow/planId/pptOutline/docOutline/interactionPlan/estimatedDuration/nextAction` | `400`，`403`/`404`，`503` |
 | `POST /api/ai-workflow/revision` | `{ projectId, artifactId, instruction, currentContent }` | `workflow/changeSummary/changedSections/revisedContent/versionSuggestion` | `400`，`403`/`404`，`503` |
 
-`generationMode` 使用 `STANDARD`、`QUALITY`、`HIGH_QUALITY`、`ECONOMY`、`MOCK`；以上 workflow response 的 `workflow`、`status` 和 provider 字段是当前网关结果，不是持久化成果状态。前端必须以 `/status` 的 `activeProvider/mockEnabled` 标识 Mock，不能将 Mock response 伪装为真实模型或 Dify。
+`generationMode` 使用 `STANDARD`、`QUALITY`、`HIGH_QUALITY`、`ECONOMY`、`MOCK`；以上 workflow response 的 `workflow`、`status` 和 provider 字段是当前网关结果，不是持久化成果状态。前端必须以 `/status` 的 `activeProvider/mockEnabled` 标识 Mock，不能将 Mock response 伪装为真实模型结果。
 
 ### 4.6 容器内部 parser/generator 契约
 
@@ -326,7 +326,7 @@ POST /api/v1/projects/42/artifacts/101/revisions
 | backend 的 `RemoteMaterialPrototypeParser` | `POST /internal/file-parser/parse` | `multipart/form-data`：`file`、必填 `fileType`、可选 `topic`、可重复 `usageTypes` | `{ summary, keywords: string[], teachingStages: string[] }` | parser `422` `{ code, message }`；超限 `413` |
 | parser service 健康检查 | `GET /internal/health` | 无 | `{ "status": "UP" }` | 服务不可用 |
 
-backend 默认使用 `DeterministicMaterialPrototypeParser`（`a12.material-parser.mode=local`），不经过容器；设置为 `remote` 才由 `RemoteMaterialPrototypeParser` 调用上述地址。远程 parser 的 base URL、超时和 20 MiB 请求上限来自后端配置。后端自身没有公开的 generator HTTP endpoint：`GenerationService` 通过内部 `MockArtifactContentFactory.buildPpt/buildLessonPlan/buildInteraction` 生成 schema version 1 的 `PPT/DOCX/INTERACTION` JSON。AI revision 仍经 `/api/ai-workflow/revision` 和 `AIWorkflowGateway`，默认 Mock，不代表真实模型。
+backend 默认使用 `DeterministicMaterialPrototypeParser`（`a12.material-parser.mode=local`），不经过容器；设置为 `remote` 才由 `RemoteMaterialPrototypeParser` 调用上述地址。远程 parser 的 base URL、超时和 20 MiB 请求上限来自后端配置。后端自身没有公开的 generator HTTP endpoint：`GenerationService` 当前只通过内部 `MockArtifactContentFactory.buildLessonPlan/buildInteraction` 生成非 PPT 的 schema version 1 JSON；历史 `PPT` Artifact 数据仍可读取，但新 PPT 生成请求会被拒绝。AI revision 仍经 `/api/ai-workflow/revision` 和 `AIWorkflowGateway`，默认 Mock，不代表真实模型。
 
 ### 4.7 需求对话消息
 
@@ -382,7 +382,7 @@ backend 默认使用 `DeterministicMaterialPrototypeParser`（`a12.material-pars
 
 修订行为：版本号取 project 当前最大版本号加一；复制 source version 全部成果，只对目标类型做结构化追加。PPT 追加 revision slide，DOCX 追加 revision section，INTERACTION 追加合规 question；其他成果内容 JSON 原样克隆。源版本实体及其成果不会被更新，新版本永不自动定稿。`ArtifactResponse` 的 `content` 是 JSON 节点，不能按实体字段读取。
 
-前端联调：提交前展示 `activeProvider`；`mockProvider=true` 时明确标注 Mock，不显示为真实 Dify/模型结果。成功后用返回的 `version` 和 `artifacts` 刷新预览；`409` 应保留 instruction 并提示“定稿版本不可修改”，不要重试同一个 source。
+前端联调：提交前展示 `activeProvider`；`mockProvider=true` 时明确标注 Mock，不显示为真实模型结果。成功后用返回的 `version` 和 `artifacts` 刷新预览；`409` 应保留 instruction 并提示“定稿版本不可修改”，不要重试同一个 source。
 
 ### 前端联调注意事项
 
@@ -483,12 +483,12 @@ backend 默认使用 `DeterministicMaterialPrototypeParser`（`a12.material-pars
 | 方法与路径 | 请求体 | 成功响应 | 主要 4xx |
 |---|---|---|---|
 | `GET /api/v1/projects/{projectId}/exports` | 无 | JSON `ApiResponse<ExportCatalog>`：`{ projectId, projectName, formats: [{ format, label, description, mediaType, extension, artifactId, versionId, versionNumber, filename, downloadUrl }] }` | `400` projectId 非法，`403` 非授权 teacher/无任务分配，`404` project |
-| `GET /api/v1/projects/{projectId}/exports/pptx` | 无 | 二进制 PPTX；`Content-Type` 为 Office PPTX media type，带 `Content-Disposition`、`Content-Length`、`Cache-Control: no-store` | `400`/`403`/`404`；无可用 artifact 时 `404` |
+| `GET /api/v1/projects/{projectId}/exports/pptx` | 无 | 当前不可用；Backend 返回 `400`，提示新 PPT Engine 尚未接入，不调用旧 Renderer | `400`/`403`/`404` |
 | `GET /api/v1/projects/{projectId}/exports/docx` | 无 | 二进制 DOCX；同上 | 同上 |
 
-当前真实支持的格式只有 `PPTX`、`DOCX`。虽然 `ExportType` 枚举中存在 `INTERACTION`、`PACKAGE`，导出 service 的 supported formats 不包含它们；不要在前端展示或调用对应路径。
+当前真实支持的格式只有 `DOCX`。`ExportType.PPTX` 作为历史导出记录兼容枚举保留，但不再出现在导出目录，也不会调用旧 Renderer；`INTERACTION`、`PACKAGE` 仍不属于当前公开导出格式。不要在前端展示或调用 PPTX 下载入口。
 
-导出会从 project 中选择每种格式版本号最高的可用成果，并写入 export record；导出接口不是下载已存文件，而是服务端即时渲染。
+导出会从 project 中选择 DOCX 版本号最高的可用成果，并写入 export record；导出接口不是下载已存文件，而是服务端即时渲染。
 
 ## 10. 辅助工作台聚合接口
 
@@ -512,7 +512,7 @@ backend 默认使用 `DeterministicMaterialPrototypeParser`（`a12.material-pars
 以下不是前端遗漏，而是当前源码没有实现的能力，文档不提供伪路径：
 
 1. 当前没有班级成员关系的批量导入接口；单个班级成员的查询、添加、移除已经由 `/api/v1/classes/{classId}/members` 提供，具体权限以第 2.2 节为准。
-2. Dify provider 路由和配置字段存在，但真实 Dify workflow 未实现；当前默认是 Mock，关闭 fallback 时 AI workflow 返回 `503`。
-3. 真实导出只支持 PPTX/DOCX；`INTERACTION`、`PACKAGE` 尚未实现。
+2. KIMI / MOCK Provider 由 Spring Boot `AIWorkflowGatewayRouter` 统一路由；KIMI 不可用且关闭 fallback 时 AI workflow 返回 `503`。
+3. 真实导出当前只支持 DOCX；PPTX 等待新 PPT Engine，`INTERACTION`、`PACKAGE` 尚未接入公开导出。
 4. 版本接口只返回版本元数据与成果数量，不直接返回实体或成果内容；成果预览需调用 artifacts 接口。
 5. API 前缀尚未统一：认证、课程、教学任务、审批、发布、问答、版本、修订、导出使用 `/api/v1`，项目/需求/资料/知识/意图/生成使用 `/api` 或 `/api/projects`。前端 API 层应集中维护路径，不要自行补 `/v1`。

@@ -38,6 +38,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -209,7 +210,7 @@ public class KimiAIWorkflowGateway {
                 request.projectId(),
                 request,
                 StructuredContentResponse.class,
-                this::validateStructuredContent
+                response -> validateStructuredContent(response, request.targetTypes())
         );
     }
 
@@ -251,7 +252,7 @@ public class KimiAIWorkflowGateway {
 
                 Controlled input JSON:
                 %s
-                """.formatted(workflowCode.code(), operation, projectId, responseShape(operation), inputJson);
+                """.formatted(workflowCode.code(), operation, projectId, responseShape(operation, input), inputJson);
 
         String raw;
         try {
@@ -269,7 +270,7 @@ public class KimiAIWorkflowGateway {
         try {
             parsed = parseModelJson(raw, workflowCode);
         } catch (AiWorkflowUnavailableException firstFailure) {
-            parsed = repairJson(workflowCode, operation, raw, firstFailure.getMessage());
+            parsed = repairJson(workflowCode, operation, input, raw, firstFailure.getMessage());
         }
 
         ObjectNode payload = normalizePayload(parsed, workflowCode, operation, projectId);
@@ -286,6 +287,7 @@ public class KimiAIWorkflowGateway {
     private JsonNode repairJson(
             WorkflowCode workflowCode,
             String operation,
+            Object input,
             String invalidOutput,
             String failureReason
     ) {
@@ -300,7 +302,7 @@ public class KimiAIWorkflowGateway {
                 Required JSON shape: %s
                 Invalid output:
                 %s
-                """.formatted(failureReason, responseShape(operation), boundedOutput);
+                """.formatted(failureReason, responseShape(operation, input), boundedOutput);
         try {
             String repaired = kimiChatClient.complete(
                     List.of(message("system", SYSTEM_PROMPT), message("user", repairPrompt)),
@@ -440,14 +442,7 @@ public class KimiAIWorkflowGateway {
             case "generation-plan" -> """
                     {"planId":"","pptOutline":[{"title":"","points":[],"materialReference":""}],"docOutline":[{"title":"","points":[],"materialReference":""}],"interactionPlan":[],"estimatedDuration":"","nextAction":""}
                     """;
-            case "structured-content" -> """
-                    {
-                      "pptContent":{"artifactType":"PPT","title":"","contentJson":{"deckTitle":"","theme":"","slides":[{"index":1,"kind":"CONTENT","title":"","layout":"TITLE_AND_CONTENT","points":[],"speakerNotes":""}]},"assetSuggestions":[]},
-                      "docContent":{"artifactType":"DOCX","title":"","contentJson":{"title":"","courseInfo":{"projectName":"","courseName":"","chapterTopic":"","targetAudience":"","lessonDurationMinutes":40,"generationMode":"STANDARD"},"teachingGoals":[],"keyPoints":[],"difficultPoints":[],"methods":[],"teachingProcess":[{"stage":"","durationMinutes":5,"content":"","teacherActivity":"","studentActivity":""}],"classroomActivities":[],"homework":[],"resourceNotes":[],"sections":[{"order":1,"title":"","paragraphs":[]}]},"assetSuggestions":[]},
-                      "interactionContent":{"artifactType":"INTERACTION","title":"","contentJson":{"title":"","instructions":"","questions":[{"id":"q1","question":"","options":["",""],"correctOption":0,"correctAnswer":"","explanation":""}]},"assetSuggestions":[]},
-                      "fallbackToBackendDrafts":false
-                    }
-                    """;
+            case "structured-content" -> structuredContentResponseShape(List.of("PPT", "DOCX", "INTERACTION"));
             case "revision" -> """
                     {"changeSummary":"","changedSections":[],"revisedContent":"","versionSuggestion":""}
                     """;
@@ -560,13 +555,46 @@ public class KimiAIWorkflowGateway {
         require(StringUtils.hasText(response.versionSuggestion()), code, "versionSuggestion is missing");
     }
 
-    private void validateStructuredContent(StructuredContentResponse response) {
+    private String responseShape(String operation, Object input) {
+        if ("structured-content".equals(operation) && input instanceof StructuredContentRequest request) {
+            return structuredContentResponseShape(request.targetTypes());
+        }
+        return responseShape(operation);
+    }
+
+    private String structuredContentResponseShape(List<String> targetTypes) {
+        List<String> fields = new ArrayList<>();
+        if (requested(targetTypes, "PPT")) {
+            fields.add("\"pptContent\":{\"artifactType\":\"PPT\",\"title\":\"\",\"contentJson\":{\"deckTitle\":\"\",\"theme\":\"\",\"slides\":[{\"index\":1,\"kind\":\"CONTENT\",\"title\":\"\",\"layout\":\"TITLE_AND_CONTENT\",\"points\":[],\"speakerNotes\":\"\"}]},\"assetSuggestions\":[]}");
+        }
+        if (requested(targetTypes, "DOCX")) {
+            fields.add("\"docContent\":{\"artifactType\":\"DOCX\",\"title\":\"\",\"contentJson\":{\"title\":\"\",\"courseInfo\":{\"projectName\":\"\",\"courseName\":\"\",\"chapterTopic\":\"\",\"targetAudience\":\"\",\"lessonDurationMinutes\":40,\"generationMode\":\"STANDARD\"},\"teachingGoals\":[],\"keyPoints\":[],\"difficultPoints\":[],\"methods\":[],\"teachingProcess\":[{\"stage\":\"\",\"durationMinutes\":5,\"content\":\"\",\"teacherActivity\":\"\",\"studentActivity\":\"\"}],\"classroomActivities\":[],\"homework\":[],\"resourceNotes\":[],\"sections\":[{\"order\":1,\"title\":\"\",\"paragraphs\":[]}]},\"assetSuggestions\":[]}");
+        }
+        if (requested(targetTypes, "INTERACTION")) {
+            fields.add("\"interactionContent\":{\"artifactType\":\"INTERACTION\",\"title\":\"\",\"contentJson\":{\"title\":\"\",\"instructions\":\"\",\"questions\":[{\"id\":\"q1\",\"question\":\"\",\"options\":[\"\",\"\"],\"correctOption\":0,\"correctAnswer\":\"\",\"explanation\":\"\"}]},\"assetSuggestions\":[]}");
+        }
+        fields.add("\"fallbackToBackendDrafts\":false");
+        return "{\n  " + String.join(",\n  ", fields) + "\n}";
+    }
+
+    private static boolean requested(List<String> targetTypes, String expectedType) {
+        return targetTypes != null && targetTypes.stream().anyMatch(type -> expectedType.equalsIgnoreCase(type));
+    }
+
+    private void validateStructuredContent(StructuredContentResponse response, List<String> targetTypes) {
         WorkflowCode code = WorkflowCode.CONTENT_DRAFT;
         require(response != null, code, "structured content output is missing");
         require(!response.fallbackToBackendDrafts(), code, "model requested backend fallback drafts");
-        validateStructuredDraft(response.pptContent(), "PPT", "slides", code);
-        validateStructuredDraft(response.docContent(), "DOCX", "sections", code);
-        validateStructuredDraft(response.interactionContent(), "INTERACTION", "questions", code);
+        require(targetTypes != null && !targetTypes.isEmpty(), code, "targetTypes is missing");
+        if (requested(targetTypes, "PPT")) {
+            validateStructuredDraft(response.pptContent(), "PPT", "slides", code);
+        }
+        if (requested(targetTypes, "DOCX")) {
+            validateStructuredDraft(response.docContent(), "DOCX", "sections", code);
+        }
+        if (requested(targetTypes, "INTERACTION")) {
+            validateStructuredDraft(response.interactionContent(), "INTERACTION", "questions", code);
+        }
     }
 
     private void validateStructuredDraft(
@@ -694,14 +722,6 @@ public class KimiAIWorkflowGateway {
         return Map.of("role", role, "content", content);
     }
 
-    private static String sanitizeReason(String reason) {
-        if (!StringUtils.hasText(reason)) {
-            return "provider request failed";
-        }
-        String sanitized = reason.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').strip();
-        return sanitized.length() <= 200 ? sanitized : sanitized.substring(0, 200);
-    }
-
     private static void require(boolean condition, WorkflowCode workflowCode, String reason) {
         if (!condition) {
             throw unavailable(workflowCode, reason, AiFailureKind.VALIDATION_FAILED);
@@ -742,13 +762,9 @@ public class KimiAIWorkflowGateway {
             KimiClientException exception
     ) {
         String code = StringUtils.hasText(exception.getCode()) ? exception.getCode() : "KIMI_REQUEST_FAILED";
-        String reason = sanitizeReason(exception.getMessage());
         String message = workflowCode.code() + ": " + code;
         if (exception.getStatusCode() > 0) {
             message += " (HTTP " + exception.getStatusCode() + ")";
-        }
-        if (!reason.isBlank() && !reason.equalsIgnoreCase(code)) {
-            message += ": " + reason;
         }
         return new AiWorkflowUnavailableException(
                 message + ".",

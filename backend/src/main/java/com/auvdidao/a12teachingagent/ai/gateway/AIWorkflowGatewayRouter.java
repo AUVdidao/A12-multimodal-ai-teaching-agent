@@ -186,7 +186,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             AiWorkflowUnavailableException exception,
             Supplier<T> mockCall
     ) {
-        String reason = sanitizeReason(exception.getMessage());
+        String reason = sanitizeReason(exception);
         lastFallbackReason.set(reason);
         if (!properties.isFallbackToMock()) {
             lastActiveProvider.set("UNAVAILABLE");
@@ -242,11 +242,14 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
                 || (credentialService != null && credentialService.hasActiveCredential());
     }
 
-    private String sanitizeReason(String reason) {
-        if (!StringUtils.hasText(reason)) {
-            return "provider request failed";
+    private String sanitizeReason(AiWorkflowUnavailableException exception) {
+        String code = exception.getProviderCode();
+        if (StringUtils.hasText(code)) {
+            String status = exception.getProviderStatusCode() > 0
+                    ? " (HTTP " + exception.getProviderStatusCode() + ")"
+                    : "";
+            return code + status;
         }
-        String sanitized = reason.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').strip();
-        return sanitized.length() <= 200 ? sanitized : sanitized.substring(0, 200);
+        return "AI workflow unavailable";
     }
 }

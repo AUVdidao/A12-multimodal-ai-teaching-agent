@@ -9,16 +9,16 @@ confirmed teaching intent
   -> create generation plan
   -> edit plan
   -> confirm plan
-  -> generate normalized artifacts
-  -> preview PPT, lesson plan, and interaction content
+  -> generate normalized DOCX and interaction artifacts
+  -> preview lesson plan and interaction content; retain the PPT page shell for the future Engine
 ```
 
 - A project without a confirmed teaching intent cannot create a plan.
 - An unconfirmed plan cannot generate artifacts.
 - The first successful generation creates version `v1`.
 - Repeating generation for the same confirmed plan is idempotent and returns the existing artifacts.
-- M3 returns normalized JSON only. Real `.pptx`, `.docx`, HTML, and ZIP files are rendered from a selected version in M4.
-- `provider` is `MOCK` until the Dify provider is configured and successfully selected.
+- M3 returns normalized JSON only. Current file generation renders DOCX, HTML, and ZIP from a selected version; PPTX remains unavailable until the new PPT Engine is integrated.
+- `provider` is reported by the Spring Boot AI workflow gateway as `KIMI` or `MOCK`, according to the active environment configuration.
 
 ## 2. Shared Models
 
@@ -65,7 +65,7 @@ confirmed teaching intent
 }
 ```
 
-Artifact types are `PPT`, `DOCX`, and `INTERACTION`. `DOCX` is the persisted artifact type for a lesson-plan document; the M3 response is JSON and is not yet a downloadable Office file.
+Artifact types are `PPT`, `DOCX`, and `INTERACTION`. `PPT` remains in the model for historical persisted data and future compatibility; the artifact-generation endpoint rejects new PPT requests until the new PPT Engine is integrated. `DOCX` is the persisted artifact type for a lesson-plan document.
 
 ## 3. Workspace
 
@@ -140,11 +140,12 @@ Confirms the plan and unlocks artifact generation. Repeating confirmation is ide
 
 ```json
 {
-  "planId": 31
+  "planId": 31,
+  "artifactTypes": ["DOCX", "INTERACTION"]
 }
 ```
 
-The response is the complete artifact list for version `v1`. The Mock implementation is synchronous; a later real provider may expose an asynchronous job without changing artifact schemas.
+The current endpoint accepts `DOCX` and `INTERACTION`. A request containing `PPT` returns `400` with `PPT generation is unavailable until the new PPT Engine is integrated`; it does not create a PPT artifact or call a Renderer. The response is the complete non-PPT artifact list for version `v1`.
 
 ### `GET /api/projects/{projectId}/artifacts`
 
@@ -156,7 +157,7 @@ Returns one artifact only when it belongs to the path project. Cross-project acc
 
 ## 6. Content Schemas
 
-### 6.1 PPT
+### 6.1 Historical PPT content shape
 
 ```json
 {
@@ -175,7 +176,7 @@ Returns one artifact only when it belongs to the path project. Cross-project acc
 }
 ```
 
-The generated deck contains at least seven slides covering `COVER`, `AGENDA`, `OBJECTIVES`, `CONTENT`, `CASE`, `INTERACTION`, and `SUMMARY`.
+This shape documents historical persisted PPT content only. It is not a current generation or export specification; the new PPT Engine will define its own locked contract later.
 
 ### 6.2 Lesson plan (`DOCX`)
 
@@ -227,4 +228,4 @@ Server-side file paths and provider secrets are never returned to the frontend.
 
 ## 8. M4 Compatibility
 
-M4 will add immutable version snapshots, edit records, restore/finalize operations, and real export jobs. It must reuse the `schemaVersion=1` normalized content from this contract rather than re-prompting the AI during export.
+M4 will add immutable version snapshots, edit records, restore/finalize operations, and non-PPT export jobs. PPTX export remains deferred to the new Engine work and must not reuse the retired Renderer.

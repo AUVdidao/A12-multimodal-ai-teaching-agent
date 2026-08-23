@@ -9,6 +9,7 @@ import com.auvdidao.a12teachingagent.domain.common.UploadStatus;
 import com.auvdidao.a12teachingagent.domain.material.MaterialPurpose;
 import com.auvdidao.a12teachingagent.domain.material.UploadedMaterial;
 import com.auvdidao.a12teachingagent.domain.material.repository.MaterialPurposeRepository;
+import com.auvdidao.a12teachingagent.domain.material.repository.ParseResultRepository;
 import com.auvdidao.a12teachingagent.domain.material.repository.UploadedMaterialRepository;
 import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
@@ -36,6 +37,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -63,6 +65,9 @@ class MaterialParseRetryTest {
     @Autowired
     private MaterialPurposeRepository purposeRepository;
 
+    @Autowired
+    private ParseResultRepository parseResultRepository;
+
     @MockBean
     private MaterialPrototypeParser prototypeParser;
 
@@ -70,7 +75,7 @@ class MaterialParseRetryTest {
     void failedPrototypeParseCanRetryWithoutExposingStackTrace() throws Exception {
         Fixture fixture = createFixture();
         when(prototypeParser.parse(any(), anyList(), any()))
-                .thenThrow(new MaterialParsingException("sensitive parser detail"))
+                .thenThrow(new MaterialParsingException("C:\\secret\\parser.log token=secret-token provider detail"))
                 .thenReturn(new MaterialPrototypeParser.ParsedContent(
                         "重试后的确定性原型摘要",
                         List.of("光合作用", "教材依据", "概念讲解"),
@@ -85,7 +90,13 @@ class MaterialParseRetryTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.parseStatus", is("FAILED")))
                 .andExpect(jsonPath("$.data.failureReason", containsString("Please retry")))
-                .andExpect(jsonPath("$.data.failureReason", org.hamcrest.Matchers.not(containsString("sensitive"))));
+                .andExpect(jsonPath("$.data.failureReason", org.hamcrest.Matchers.not(containsString("secret"))))
+                .andExpect(jsonPath("$.data.failureReason", org.hamcrest.Matchers.not(containsString("provider detail"))));
+
+        assertThat(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(fixture.materialId())
+                .orElseThrow().getFailureReason())
+                .isEqualTo("Prototype parsing could not be completed. Please retry.")
+                .doesNotContain("secret", "provider detail", "C:\\");
 
         mockMvc.perform(post(
                         "/api/projects/{projectId}/materials/{materialId}/parse/retry",
@@ -100,6 +111,27 @@ class MaterialParseRetryTest {
         mockMvc.perform(get("/api/projects/{projectId}/knowledge/overview", fixture.projectId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.chunks", hasSize(1)));
+    }
+
+    @Test
+    void unexpectedParserFailureStillReturnsGenericApiErrorAndStoresSafeRetryReason() throws Exception {
+        Fixture fixture = createFixture();
+        when(prototypeParser.parse(any(), anyList(), any()))
+                .thenThrow(new IllegalStateException("C:\\secret\\parser.log token=secret-token provider response"));
+
+        mockMvc.perform(post(
+                        "/api/projects/{projectId}/materials/{materialId}/parse",
+                        fixture.projectId(),
+                        fixture.materialId()
+                ))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message", is("Internal server error")))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.not(containsString("secret"))));
+
+        assertThat(parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(fixture.materialId())
+                .orElseThrow().getFailureReason())
+                .isEqualTo("Prototype parsing could not be completed. Please retry.")
+                .doesNotContain("secret", "provider response", "C:\\");
     }
 
     private Fixture createFixture() {

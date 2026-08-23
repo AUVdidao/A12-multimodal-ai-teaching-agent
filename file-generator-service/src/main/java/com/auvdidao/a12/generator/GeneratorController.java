@@ -24,11 +24,6 @@ class GeneratorController {
     @GetMapping("/health")
     Map<String, String> health() { return Map.of("status", "UP"); }
 
-    @PostMapping(value = "/file-generator/pptx", produces = "application/vnd.openxmlformats-officedocument.presentationml.presentation")
-    ResponseEntity<byte[]> pptx(@RequestBody RenderRequest request) {
-        return binary(renderer.pptx(request), "application/vnd.openxmlformats-officedocument.presentationml.presentation");
-    }
-
     @PostMapping(value = "/file-generator/docx", produces = "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     ResponseEntity<byte[]> docx(@RequestBody RenderRequest request) {
         return binary(renderer.docx(request), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");

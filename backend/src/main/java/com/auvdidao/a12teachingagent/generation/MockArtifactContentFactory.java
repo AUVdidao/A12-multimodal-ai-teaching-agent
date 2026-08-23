@@ -11,8 +11,6 @@ import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.InteractionCo
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.InteractionQuestion;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.LessonPlanContent;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.PlanSection;
-import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.PptContent;
-import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.PptSlide;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.TeachingProcessStep;
 import org.springframework.stereotype.Component;
 
@@ -22,36 +20,6 @@ import java.util.List;
 
 @Component
 public class MockArtifactContentFactory {
-
-    public PptContent buildPpt(Project project, TeachingIntent intent, GenerationPlanResponse plan) {
-        String title = projectTitle(project);
-        String topic = topic(project);
-        List<String> goals = teachingGoals(intent, topic);
-        List<String> agenda = plan.pptOutline().stream().map(PlanSection::title).toList();
-
-        List<PptSlide> slides = List.of(
-                slide(1, "COVER", title, "TITLE",
-                        List.of("课程：" + courseName(project), "授课对象：" + audience(project)),
-                        "介绍课程背景、授课对象与本节主题。"),
-                slide(2, "AGENDA", "课程目录", "AGENDA", agenda,
-                        "说明本节课的内容结构与课堂节奏。"),
-                slide(3, "OBJECTIVES", "教学目标", "BULLETS", goals,
-                        "逐项说明可观察、可评价的学习目标。"),
-                slide(4, "CONTENT", "知识内容：" + topic, "CONTENT_WITH_SIDEBAR",
-                        sectionPoints(plan.pptOutline(), 2, topic + "的核心概念与关键步骤"),
-                        "围绕核心概念展开讲解，并及时检查学生理解。"),
-                slide(5, "CASE", "案例分析", "CASE_STUDY",
-                        List.of("案例主题：在真实情境中应用" + topic, "分析依据：" + contentBasis(intent), "形成可解释的结论"),
-                        "引导学生识别情境信息、应用知识并说明判断依据。"),
-                slide(6, "INTERACTION", "课堂互动", "QUIZ", plan.interactionPlan(),
-                        "先独立思考，再交流答案，最后根据解释完成纠正。"),
-                slide(7, "SUMMARY", "总结与延伸", "SUMMARY",
-                        List.of("回顾：" + topic, "达成目标：" + goals.get(0), "课后继续完成迁移练习"),
-                        "总结本节关键结论，布置课后任务并提示下一步学习。")
-        );
-
-        return new PptContent(title, "清晰教学", slides);
-    }
 
     public LessonPlanContent buildLessonPlan(Project project, TeachingIntent intent, GenerationPlanResponse plan) {
         String title = projectTitle(project);
@@ -166,25 +134,6 @@ public class MockArtifactContentFactory {
         return new InteractionContent(topic + "知识检查", "每题选择一个答案，提交后查看解释。", questions);
     }
 
-    private static PptSlide slide(
-            int index,
-            String kind,
-            String title,
-            String layout,
-            List<String> points,
-            String speakerNotes
-    ) {
-        return new PptSlide(index, kind, title, layout, List.copyOf(points), speakerNotes);
-    }
-
-    private static List<String> sectionPoints(List<PlanSection> sections, int preferredIndex, String fallback) {
-        if (sections.isEmpty()) {
-            return List.of(fallback);
-        }
-        PlanSection section = sections.get(Math.min(preferredIndex, sections.size() - 1));
-        return List.of(section.title(), section.description());
-    }
-
     private static String sectionDescription(List<PlanSection> sections, int preferredIndex, String fallback) {
         if (sections.isEmpty()) {
             return fallback;
@@ -260,10 +209,6 @@ public class MockArtifactContentFactory {
 
     private static String audience(Project project) {
         return firstNonBlank(project.getTargetAudience(), "目标学习者");
-    }
-
-    private static String contentBasis(TeachingIntent intent) {
-        return firstNonBlank(intent.getContentBasis(), "已确认教学意图");
     }
 
     private static String generationMode(Project project) {

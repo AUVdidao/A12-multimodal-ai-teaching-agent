@@ -85,6 +85,7 @@ class KimiChatClientTest {
                         assertThat(exception.getCode()).isEqualTo("KIMI_REQUEST_FAILED");
                         assertThat(exception.getStatusCode()).isEqualTo(status);
                         assertThat(exception).hasMessageContaining("Kimi returned HTTP " + status);
+                        assertThat(exception.getMessage()).doesNotContain("request rejected", "provider_error");
                     });
         }
     }

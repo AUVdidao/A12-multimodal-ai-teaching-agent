@@ -46,7 +46,7 @@
         >
           <header class="export-format__header">
             <span class="export-format__icon">
-              <el-icon><component :is="formatIcon(option.format)" /></el-icon>
+              <el-icon><component :is="Document" /></el-icon>
             </span>
             <div>
               <small>{{ option.extension.toUpperCase() }}</small>
@@ -86,7 +86,7 @@
       <section v-else class="export-empty">
         <span><el-icon><Files /></el-icon></span>
         <h3>尚无可导出的成果</h3>
-        <p>完成内容生成后，PPTX 课件和 DOCX 教案会显示在这里。</p>
+        <p>当前仅提供 DOCX 教案导出；新 PPT Engine 尚未接入。</p>
         <el-button type="primary" :icon="Back" @click="router.push(`/projects/${project.id}/plan`)">
           返回内容生成
         </el-button>
@@ -107,7 +107,7 @@ import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import UiStatusPill from '@/components/ui/UiStatusPill.vue';
-import { Back, DataBoard, Document, Download, Files, Refresh } from '@element-plus/icons-vue';
+import { Back, Document, Download, Files, Refresh } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -125,10 +125,6 @@ const downloadingFormat = ref<ExportFormat>();
 const formatSummary = computed(() => formats.value.length
   ? `当前版本提供 ${formats.value.map((item) => item.format).join('、')} 下载`
   : '当前项目还没有可导出的成果');
-
-function formatIcon(format: ExportFormat) {
-  return format === 'PPTX' ? DataBoard : Document;
-}
 
 async function loadExports() {
   loading.value = true;

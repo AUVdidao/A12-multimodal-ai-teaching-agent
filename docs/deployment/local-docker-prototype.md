@@ -10,9 +10,9 @@
 - `monitor-log` 使用 Dozzle 读取 Docker socket（只读），默认仅绑定 `127.0.0.1:8082`，展示实际容器日志。
 - `file-parser-service` 是内部真实解析服务，只在 Compose 网络中监听 `8080`。它仅接收受限 multipart 文件字节流和最小元数据，提供 `GET /internal/health` 与 `POST /internal/file-parser/parse`；不接收宿主机或容器文件路径。
 - 后端沿用当前开发数据库方案：H2 文件数据库，数据保存在 Compose 命名卷 `backend-data` 中。
-- Mock AI Workflow 默认启用，不需要真实 Dify Key。
+- AI Workflow 由 Spring Boot 的 `AIWorkflowGateway` 编排；默认使用 KIMI，离线演示或测试可设置 `AI_PROVIDER=MOCK`。
 - 资料正文解析由 `file-parser-service` 提供 TXT、MD、PDF、DOCX、PPTX 的实际提取；图片和视频仍按未启用 OCR、未启用转写诚实降级。Docker 中的 `backend-api` 使用远程解析适配器，测试与明确的 `local` 配置可继续使用本地确定性解析器。
-- 内容生成持久化规范化 PPT、教案和互动问答 JSON，并由 Vue 页面真实预览。`file-generator-service` 在 Compose 内网实际生成 `.pptx`、`.docx`、互动 HTML 和 ZIP；公开 PPTX/DOCX 导出接口保持现有契约。
+- 内容生成持久化规范化 PPT 计划、教案和互动问答 JSON，并由 Vue 页面预览；新 PPT Engine 尚未接入。`file-generator-service` 在 Compose 内网只生成 `.docx`、互动 HTML 和 ZIP；当前公开导出只提供 DOCX，PPTX 请求明确返回不可用。
 
 ## 数据库模式判断
 
@@ -26,7 +26,7 @@
 2. 确认当前目录为项目根目录。
 3. 如需自定义端口，可复制 `.env.example` 为 `.env` 后修改示例值。默认 `HOST_BIND_ADDRESS=127.0.0.1`，避免将固定演示账号和 Dozzle 暴露到局域网；不要在 `.env` 中写入真实密钥。
 
-`.env.example` 中的 `DIFY_API_KEY` 保持为空；当前原型部署使用 `AI_PROVIDER=mock`。`VITE_DEMO_MODE=true`、`A12_DEMO_SEED_ENABLED=true` 及示例固定凭据仅适用于本地演示；生产环境必须将两项设为 `false`，并覆盖全部演示密码或禁用演示账号。
+`.env.example` 中的 `MOONSHOT_API_KEY` 仅由需要真实 KIMI 调用的环境填写；离线演示设置 `AI_PROVIDER=MOCK`。`VITE_DEMO_MODE=true`、`A12_DEMO_SEED_ENABLED=true` 及示例固定凭据仅适用于本地演示；生产环境必须将两项设为 `false`，并覆盖全部演示密码或禁用演示账号。
 
 解析服务默认配置为 `A12_MATERIAL_PARSER_MODE=remote`、`A12_MATERIAL_PARSER_BASE_URL=http://file-parser-service:8080` 和 `A12_MATERIAL_PARSER_TIMEOUT_MS=10000`。远程解析超时、不可达或返回错误码时，后端资料解析会进入既有 `FAILED` 状态并可重试，不会伪造成功结果。
 
@@ -162,15 +162,14 @@ docker compose up -d
 `file-generator-service` 是内部专用 Spring 服务，没有宿主机端口。它提供 `GET /internal/health` 和以下 JSON 生成接口：
 
 ```text
-POST /internal/file-generator/pptx
 POST /internal/file-generator/docx
 POST /internal/file-generator/interactive-html
 POST /internal/file-generator/package
 ```
 
-服务使用 Apache POI 写出真实 OOXML PPTX/DOCX，生成可独立读取的互动 HTML，并可返回所请求生成文件的 ZIP 包。它只接收结构化项目/成果字段及持久化 `contentJson`，不接收宿主机路径或读取项目文件；内容 JSON 上限为 1 MiB，ZIP 上限为 8 个条目。
+服务使用 Apache POI 写出真实 OOXML DOCX，生成可独立读取的互动 HTML，并可返回所请求非 PPT 文件的 ZIP 包。它只接收结构化项目/成果字段及持久化 `contentJson`，不接收宿主机路径或读取项目文件；内容 JSON 上限为 1 MiB，ZIP 上限为 8 个条目。PPTX 生产接口已移除。
 
-Compose 中 `A12_ARTIFACT_GENERATOR_MODE=remote` 使 `backend-api` 调用 `http://file-generator-service:8080`，且 `backend-api` 会等待其健康检查。公开导出接口和前端契约保持不变。`A12_ARTIFACT_GENERATOR_MODE=local` 为本地/测试明确保留现有进程内 Apache POI 渲染器。远程校验失败仍返回公开导出的校验错误；远程不可用或超时时导出失败，不伪造文件字节。
+Compose 中 `A12_ARTIFACT_GENERATOR_MODE=remote` 使 `backend-api` 调用 `http://file-generator-service:8080`，且 `backend-api` 会等待其健康检查。公开导出目录和前端只展示 DOCX；PPTX 请求在 Backend 侧以明确 4xx 拒绝。`A12_ARTIFACT_GENERATOR_MODE=local` 为本地/测试保留 DOCX 的进程内 Apache POI 渲染器。远程校验失败仍返回公开导出的校验错误；远程不可用或超时时导出失败，不伪造文件字节。
 
 仅用于内部诊断：
 

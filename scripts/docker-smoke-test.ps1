@@ -567,27 +567,25 @@ Students predict variables, observe evidence, explain energy conversion, and com
 
     $artifacts = @(Invoke-A12Api -Name "M3 artifact generation" -Method "POST" -Path "/api/projects/$projectId/artifacts/generate" -Body @{
         planId = $planId
+        artifactTypes = @("DOCX", "INTERACTION")
     } -TimeoutSec $aiTimeoutSeconds)
     Assert-A12KimiActive -Stage "structured content"
-    if ($artifacts.Count -ne 3) {
-        throw "Artifact generation did not return all three artifact types"
+    if ($artifacts.Count -ne 2) {
+        throw "Artifact generation did not return both supported non-PPT artifact types"
     }
-    $pptArtifact = $artifacts | Where-Object { $_.type -eq "PPT" } | Select-Object -First 1
     $docArtifact = $artifacts | Where-Object { $_.type -eq "DOCX" } | Select-Object -First 1
     $interactionArtifact = $artifacts | Where-Object { $_.type -eq "INTERACTION" } | Select-Object -First 1
-    if ($null -eq $pptArtifact -or @($pptArtifact.content.slides).Count -lt 7) {
-        throw "PPT artifact does not contain the required slide structure"
-    }
     if ($null -eq $docArtifact -or @($docArtifact.content.sections).Count -lt 9) {
         throw "Lesson-plan artifact does not contain the required sections"
     }
     if ($null -eq $interactionArtifact -or @($interactionArtifact.content.questions).Count -lt 3) {
         throw "Interaction artifact does not contain the required questions"
     }
-    $versionId = [long]$pptArtifact.versionId
+    $versionId = [long]$docArtifact.versionId
 
     $repeatedArtifacts = @(Invoke-A12Api -Name "M3 idempotent artifact generation" -Method "POST" -Path "/api/projects/$projectId/artifacts/generate" -Body @{
         planId = $planId
+        artifactTypes = @("DOCX", "INTERACTION")
     } -TimeoutSec $aiTimeoutSeconds)
     $firstIds = @($artifacts | ForEach-Object { [long]$_.id }) -join ","
     $repeatedIds = @($repeatedArtifacts | ForEach-Object { [long]$_.id }) -join ","
@@ -596,18 +594,18 @@ Students predict variables, observe evidence, explain energy conversion, and com
     }
 
     $generatedWorkspace = Invoke-A12Api -Name "M3 generated workspace restore" -Method "GET" -Path "/api/projects/$projectId/generation/workspace"
-    if ($generatedWorkspace.projectStatus -ne "GENERATED" -or -not $generatedWorkspace.capabilities.canPreview -or @($generatedWorkspace.artifacts).Count -ne 3) {
+    if ($generatedWorkspace.projectStatus -ne "GENERATED" -or -not $generatedWorkspace.capabilities.canPreview -or @($generatedWorkspace.artifacts).Count -ne 2) {
         throw "Generated workspace did not restore the M3 result"
     }
 
-    $revision = Invoke-A12Api -Name "M4 artifact revision" -Method "POST" -Path "/api/v1/projects/$projectId/artifacts/$($pptArtifact.id)/revisions" -Body @{
-        instruction = "Simplify slide 3 and add one observable classroom example without changing the learning objective."
+    $revision = Invoke-A12Api -Name "M4 artifact revision" -Method "POST" -Path "/api/v1/projects/$projectId/artifacts/$($docArtifact.id)/revisions" -Body @{
+        instruction = "Simplify the lesson-plan content and add one observable classroom example without changing the learning objective."
     } -TimeoutSec $aiTimeoutSeconds
     Assert-A12KimiActive -Stage "artifact revision"
     if ($revision.activeProvider -ne "KIMI" -and $requireKimi) {
         throw "Strict Kimi smoke detected an artifact-revision fallback to $($revision.activeProvider)"
     }
-    if ($revision.version.versionNumber -le 1 -or @($revision.artifacts).Count -ne 3) {
+    if ($revision.version.versionNumber -le 1 -or @($revision.artifacts).Count -ne 2) {
         throw "Artifact revision did not create a complete new version"
     }
     if ([string]::IsNullOrWhiteSpace($revision.changeSummary) -or @($revision.changedSections).Count -lt 1) {

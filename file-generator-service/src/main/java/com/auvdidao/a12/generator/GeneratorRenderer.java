@@ -5,14 +5,6 @@ import com.auvdidao.a12.generator.GeneratorDtos.PackageRequest;
 import com.auvdidao.a12.generator.GeneratorDtos.RenderRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.poi.sl.usermodel.ShapeType;
-import org.apache.poi.sl.usermodel.TextParagraph;
-import org.apache.poi.xslf.usermodel.XMLSlideShow;
-import org.apache.poi.xslf.usermodel.XSLFAutoShape;
-import org.apache.poi.xslf.usermodel.XSLFSlide;
-import org.apache.poi.xslf.usermodel.XSLFTextBox;
-import org.apache.poi.xslf.usermodel.XSLFTextParagraph;
-import org.apache.poi.xslf.usermodel.XSLFTextRun;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -20,13 +12,9 @@ import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.geom.Rectangle2D;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.zip.ZipEntry;
@@ -41,20 +29,6 @@ class GeneratorRenderer {
     GeneratorRenderer(ObjectMapper objectMapper, @Value("${a12.generator.max-content-json-bytes:1048576}") int maxContentBytes) {
         this.objectMapper = objectMapper;
         this.maxContentBytes = maxContentBytes;
-    }
-
-    byte[] pptx(RenderRequest request) {
-        require(request, "PPT", "PPTX");
-        JsonNode root = content(request);
-        JsonNode slides = root.path("slides");
-        if (!slides.isArray() || slides.isEmpty()) throw fail("INVALID_CONTENT", "PPTX slides must not be empty.");
-        try (XMLSlideShow show = new XMLSlideShow(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            show.setPageSize(new Dimension(960, 540));
-            int total = slides.size();
-            for (int i = 0; i < total; i++) addSlide(show, slides.get(i), i + 1, total, request, root);
-            show.write(out);
-            return out.toByteArray();
-        } catch (IOException exception) { throw fail("RENDER_FAILED", "PPTX generation failed."); }
     }
 
     byte[] docx(RenderRequest request) {
@@ -99,7 +73,6 @@ class GeneratorRenderer {
             for (PackageEntry entry : request.entries()) {
                 String format = entry.format().trim().toUpperCase(Locale.ROOT);
                 byte[] bytes = switch (format) {
-                    case "PPTX" -> pptx(entry.request());
                     case "DOCX" -> docx(entry.request());
                     case "INTERACTION_HTML", "HTML" -> interactiveHtml(entry.request());
                     default -> throw fail("UNSUPPORTED_FORMAT", "Package format is unsupported: " + entry.format());
@@ -111,22 +84,6 @@ class GeneratorRenderer {
         } catch (IOException exception) { throw fail("PACKAGE_FAILED", "Artifact package generation failed."); }
     }
 
-    private void addSlide(XMLSlideShow show, JsonNode slideData, int position, int total, RenderRequest request, JsonNode content) {
-        XSLFSlide slide = show.createSlide(); slide.getBackground().setFillColor(new Color(247, 249, 252));
-        XSLFAutoShape accent = slide.createAutoShape(); accent.setShapeType(ShapeType.RECT); accent.setAnchor(new Rectangle2D.Double(0, 0, 16, 540)); accent.setFillColor(new Color(36, 87, 214)); accent.setLineColor(new Color(36, 87, 214));
-        String title = text(slideData, "title", text(content, "deckTitle", first(request.title(), request.projectName(), "Teaching presentation")));
-        textBox(slide, 58, 48, 844, 72, title, 27, true, new Color(23, 32, 51), false);
-        JsonNode points = slideData.path("points"); if (points.isArray() && !points.isEmpty()) {
-            XSLFTextBox box = slide.createTextBox(); box.setAnchor(new Rectangle2D.Double(72, 140, 806, 290)); box.clearText();
-            for (JsonNode point : points) { XSLFTextParagraph p = box.addNewTextParagraph(); p.setBullet(true); p.setLeftMargin(28d); p.setIndent(-14d); p.setSpaceAfter(10d); p.setTextAlign(TextParagraph.TextAlign.LEFT); XSLFTextRun run = p.addNewTextRun(); run.setText(point.asText()); style(run, 18, false, new Color(23,32,51)); }
-        }
-        textBox(slide, 58, 492, 844, 22, position + " / " + total, 10, false, new Color(83,97,116), true);
-    }
-
-    private static void textBox(XSLFSlide slide, double x, double y, double w, double h, String value, double size, boolean bold, Color color, boolean right) {
-        XSLFTextBox box = slide.createTextBox(); box.setAnchor(new Rectangle2D.Double(x, y, w, h)); box.setWordWrap(true); XSLFTextRun run = box.setText(value); style(run, size, bold, color); if (right) box.getTextParagraphs().get(0).setTextAlign(TextParagraph.TextAlign.RIGHT);
-    }
-    private static void style(XSLFTextRun run, double size, boolean bold, Color color) { run.setFontFamily(FONT); run.setFontSize(size); run.setBold(bold); run.setFontColor(color); }
     private static void heading(XWPFDocument d, String value, int size, boolean bold, ParagraphAlignment alignment) { XWPFParagraph p = d.createParagraph(); p.setAlignment(alignment); XWPFRun r = p.createRun(); r.setText(value); r.setFontFamily(FONT); r.setFontSize(size); r.setBold(bold); r.setColor("172033"); }
     private static void addParagraph(XWPFDocument d, String value, boolean bullet) { if (value == null || value.isBlank()) return; XWPFParagraph p=d.createParagraph(); XWPFRun r=p.createRun(); r.setText((bullet ? "- " : "") + value.trim()); r.setFontFamily(FONT); r.setFontSize(11); }
     private static void addSection(XWPFDocument d, String title, JsonNode paragraphs) { heading(d, title, 15, true, ParagraphAlignment.LEFT); if (paragraphs.isArray()) for (JsonNode p : paragraphs) addParagraph(d, p.asText(), true); }

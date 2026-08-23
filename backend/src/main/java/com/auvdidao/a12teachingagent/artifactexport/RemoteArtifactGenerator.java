@@ -32,11 +32,6 @@ class RemoteArtifactGenerator implements ArtifactGenerator {
     }
 
     @Override
-    public byte[] renderPptx(Project project, GeneratedArtifact artifact) {
-        return render("/internal/file-generator/pptx", project, artifact);
-    }
-
-    @Override
     public byte[] renderDocx(Project project, GeneratedArtifact artifact) {
         return render("/internal/file-generator/docx", project, artifact);
     }

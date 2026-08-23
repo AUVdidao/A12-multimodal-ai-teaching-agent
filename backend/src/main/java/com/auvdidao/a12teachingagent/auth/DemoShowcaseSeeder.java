@@ -533,8 +533,6 @@ public class DemoShowcaseSeeder implements ApplicationRunner {
                 plan.getId(), project.getId(), "MOCK", pptOutline, docOutline, interactions,
                 true, plan.getCreatedAt(), plan.getUpdatedAt()
         );
-        upsertArtifact(project, plan, version, ArtifactType.PPT, project.getProjectName() + "教学课件",
-                artifactContentFactory.buildPpt(project, intent, response), timestamp.plusMinutes(12));
         upsertArtifact(project, plan, version, ArtifactType.DOCX, project.getProjectName() + "教案",
                 artifactContentFactory.buildLessonPlan(project, intent, response), timestamp.plusMinutes(13));
         upsertArtifact(project, plan, version, ArtifactType.INTERACTION, project.getProjectName() + "课堂互动",
@@ -549,7 +547,6 @@ public class DemoShowcaseSeeder implements ApplicationRunner {
             editRecordRepository.save(edit);
         }
         if (finalVersion) {
-            upsertExport(project.getId(), ExportType.PPTX, project.getProjectName() + "-教学课件.pptx", timestamp.plusMinutes(25));
             upsertExport(project.getId(), ExportType.DOCX, project.getProjectName() + "-教案.docx", timestamp.plusMinutes(26));
             upsertExport(project.getId(), ExportType.PACKAGE, project.getProjectName() + "-成果包.zip", timestamp.plusMinutes(27));
         }

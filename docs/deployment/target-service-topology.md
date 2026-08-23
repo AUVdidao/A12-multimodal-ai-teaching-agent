@@ -2,7 +2,7 @@
 
 ## 1. Decision Source
 
-The formal overview and deployment documents define a target cloud topology with `frontend-web`, `backend-api`, `file-parser-service`, `file-generator-service`, `reverse-proxy`, and `monitor-log`, plus managed or independently deployed database, object-storage, vector-search, and Dify capabilities.
+The formal overview and deployment documents define a target cloud topology with `frontend-web`, `backend-api`, `file-parser-service`, `file-generator-service`, `reverse-proxy`, and `monitor-log`, plus managed or independently deployed database, object-storage, vector-search, and model-provider capabilities. AI workflow orchestration remains inside Spring Boot through the KIMI / MOCK gateway.
 
 The current runnable Docker baseline contains six real services: `reverse-proxy`, `frontend-web`, `backend-api`, `file-parser-service`, `file-generator-service`, and `monitor-log`. It is still a local prototype rather than the final production topology. The migration rule remains: a service becomes a separate container only when it owns a real runtime responsibility, API contract, health check, failure behavior, and integration test. Empty placeholder containers are prohibited.
 
@@ -14,10 +14,9 @@ The current runnable Docker baseline contains six real services: `reverse-proxy`
 | `frontend-web` | Built Vue assets only; no secrets and no business persistence | Internal behind proxy | Existing, renamed/split in C6 |
 | `backend-api` | Authentication, RBAC, projects, collaboration workflow, persistence, orchestration, stable public APIs | Internal behind proxy | Existing, renamed in C6 |
 | `file-parser-service` | Stateless PDF/DOCX/PPTX/TXT/MD extraction behind an internal API | Internal only | C6 |
-| `file-generator-service` | Stateless PPTX/DOCX/package generation from validated structured payloads | Internal only | C6 |
+| `file-generator-service` | Stateless DOCX/interactive HTML/package generation from validated structured payloads; PPTX branch exited | Internal only | C6 |
 | `object-storage` | Uploaded source files and generated exports; MinIO locally, cloud object storage later | Internal/admin only | C6 |
 | `database` | Relational business, identity, approval, publication, and Q&A data; PostgreSQL target | Internal only | C6 migration after P0 entities stabilize |
-| `dify-workflow` | External Dify Cloud by default; optional self-host profile, never called by the browser | Outbound backend dependency | Existing adapter; real credentials later |
 | `vector-search` | Real embeddings/vector retrieval; local deterministic search remains clearly labelled until enabled | Internal/managed | P1, not falsely enabled in P0 |
 | `monitor-log` | Aggregated logs and health dashboards; container logs remain the C0-C5 evidence source | Internal/admin only | C6 optional profile |
 | `redis` | Async job state and transient coordination if required by parser/generator workloads | Internal only | P1, not required for synchronous P0 |
@@ -33,11 +32,11 @@ Browser
         -> object-storage
         -> file-parser-service (internal parsing API)
         -> file-generator-service (internal generation API)
-        -> Dify Cloud (server-side HTTPS, mock fallback)
+        -> KIMI / MOCK through Spring Boot AIWorkflowGateway
         -> vector-search (only when the real provider is enabled)
 ```
 
-The browser never receives database, object-storage, Dify, or internal-service credentials. Parser and generator endpoints are not published on host ports in the final Compose topology.
+The browser never receives database, object-storage, model-provider, or internal-service credentials. Parser and generator endpoints are not published on host ports in the final Compose topology.
 
 ## 4. Current C6 Internal Service Contracts
 
@@ -53,7 +52,6 @@ The parser currently accepts a size-limited multipart file stream plus file-type
 ### Generator
 
 ```http
-POST /internal/file-generator/pptx
 POST /internal/file-generator/docx
 POST /internal/file-generator/interactive-html
 POST /internal/file-generator/package
@@ -67,7 +65,7 @@ Input is backend-validated structured content. The current synchronous prototype
 1. Completed: finish P0 collaboration entities and public backend contracts in `backend-api`.
 2. Completed: replace invalid/placeholder frontend views with real contracts or explicit honest empty states.
 3. Completed: move parsing behind an adapter and extract the remote implementation to `file-parser-service` without changing public material APIs.
-4. Completed: move PPTX/DOCX/HTML/package generation behind an adapter and extract it to `file-generator-service` without changing public export APIs.
+4. Completed: move DOCX/HTML/package generation behind an adapter and extract it to `file-generator-service`; the old PPTX production branch is now exited and the new PPT Engine remains deferred.
 5. Introduce local object storage and migrate file references from container paths to object keys.
 6. Add a separate `reverse-proxy`, keep `frontend-web` private, and expose one browser port.
 7. Migrate H2 to PostgreSQL only after schema and migration scripts cover the complete P0 model.

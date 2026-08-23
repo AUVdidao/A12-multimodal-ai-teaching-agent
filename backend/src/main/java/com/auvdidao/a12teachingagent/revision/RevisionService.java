@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos;
 import com.auvdidao.a12teachingagent.ai.gateway.AIWorkflowGateway;
+import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.common.exception.ForbiddenException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
@@ -68,6 +69,9 @@ public class RevisionService {
         Project project = requireOwnerProject(projectId);
         GeneratedArtifact sourceArtifact = generatedArtifactRepository.findByIdAndProjectId(artifactId, projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Artifact not found for project: " + projectId));
+        if (sourceArtifact.getArtifactType() == ArtifactType.PPT) {
+            throw new BadRequestException("新 PPT Engine 尚未接入，历史 PPT 不可修订");
+        }
         String instruction = request.instruction().trim();
 
         ArtifactVersion sourceVersion = sourceArtifact.getVersionId() == null
@@ -205,7 +209,6 @@ public class RevisionService {
 
         try {
             switch (source.getArtifactType()) {
-                case PPT -> appendPptRevision(content, instruction, changeSummary, versionNumber);
                 case DOCX -> appendDocxRevision(content, instruction, changeSummary);
                 case INTERACTION -> appendInteractionRevision(content, instruction, changeSummary, versionNumber);
                 default -> throw new ConflictException("Unsupported artifact type for revision");
@@ -214,19 +217,6 @@ public class RevisionService {
         } catch (JsonProcessingException | IllegalArgumentException exception) {
             throw new ConflictException("Source artifact content does not match its JSON schema");
         }
-    }
-
-    private void appendPptRevision(ObjectNode content, String instruction, String changeSummary, int versionNumber) {
-        ArrayNode slides = requiredArray(content, "slides");
-        ObjectNode slide = slides.addObject();
-        slide.put("index", slides.size());
-        slide.put("kind", "REVISION");
-        slide.put("title", "Revision notes");
-        slide.put("layout", "CONTENT_WITH_SIDEBAR");
-        ArrayNode points = slide.putArray("points");
-        points.add("Revision v" + versionNumber + ": " + instruction);
-        points.add("Change summary: " + changeSummary);
-        slide.put("speakerNotes", "This slide records the structured revision instruction.");
     }
 
     private void appendDocxRevision(ObjectNode content, String instruction, String changeSummary) {

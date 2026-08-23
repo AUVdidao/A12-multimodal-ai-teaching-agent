@@ -154,8 +154,8 @@ export async function confirmGenerationPlan(
 }
 
 /**
- * Synchronous generic generation for the non-PPT artifacts only.
- * PPT generation belongs to the dedicated pptHarness client.
+ * Synchronous generation for the currently supported non-PPT artifacts.
+ * PPT generation is intentionally unavailable until the new PPT Engine is integrated.
  */
 export async function generateNonPptArtifacts(projectId: number | string, planId: number | string) {
   const response = await http.post<ApiResponse<Artifact[]>>(

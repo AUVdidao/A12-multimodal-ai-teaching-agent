@@ -27,15 +27,6 @@
           </div>
         </div>
         <div class="preview-hero__actions">
-          <el-button
-            v-if="pptExportOption"
-            type="primary"
-            :icon="Download"
-            :loading="pptDownloading"
-            @click="downloadPpt"
-          >
-            下载 PPTX
-          </el-button>
           <el-button :icon="Back" @click="router.push(`/projects/${projectId}/plan`)">返回内容生成</el-button>
         </div>
       </header>
@@ -99,6 +90,16 @@
                 description="本次生成未返回此类型成果。"
               />
 
+              <div v-else-if="tab.type === 'PPT'" class="ppt-engine-placeholder">
+                <el-alert
+                  title="新 PPT Engine 尚未接入"
+                  description="当前页面仅保留 PPT 成果页面壳，不展示或执行旧 PPT 生成任务。"
+                  type="info"
+                  show-icon
+                  :closable="false"
+                />
+              </div>
+
               <div v-else class="artifact-preview-body" v-loading="activeDetailLoading">
                 <div v-if="activeDetailError" class="preview-notice preview-notice--detail">
                   <el-alert :title="activeDetailError" type="error" show-icon :closable="false" />
@@ -117,9 +118,10 @@
                   title="成果详情没有可预览内容"
                   description="请返回生成页重新生成内容。"
                 />
-                <PptArtifactPreview v-else-if="tab.type === 'PPT'" :artifact="activeArtifact" />
-                <DocxArtifactPreview v-else-if="tab.type === 'DOCX'" :artifact="activeArtifact" />
-                <InteractionArtifactPreview v-else :artifact="activeArtifact" />
+                <template v-else-if="activeArtifact && hasRenderableContent(activeArtifact)">
+                  <DocxArtifactPreview v-if="tab.type === 'DOCX'" :artifact="activeArtifact" />
+                  <InteractionArtifactPreview v-else :artifact="activeArtifact" />
+                </template>
               </div>
             </el-tab-pane>
           </el-tabs>
@@ -134,38 +136,48 @@
             </div>
           </div>
           <el-alert
-            v-if="revisionError"
-            :title="revisionError"
-            type="error"
+            v-if="!activeCanRevise"
+            title="历史 PPT 仅支持只读查看"
+            description="新 PPT Engine 尚未接入，历史 PPT 不可修订。"
+            type="info"
             show-icon
             :closable="false"
           />
-          <el-alert
-            v-if="revisionSuccess"
-            :title="revisionSuccess"
-            type="success"
-            show-icon
-            :closable="false"
-          />
-          <el-input
-            v-model="revisionInstruction"
-            type="textarea"
-            :rows="3"
-            maxlength="4000"
-            show-word-limit
-            :disabled="revisionSubmitting || !activeSummary || gatewayPresentation.unavailable"
-            placeholder="请输入需要调整的教学内容或表达方式"
-            aria-label="版本修改意见"
-          />
-          <div class="revision-panel__footer">
-            <el-button
-              type="primary"
-              :icon="EditPen"
-              :loading="revisionSubmitting"
-              :disabled="!activeSummary || !revisionInstruction.trim() || gatewayPresentation.unavailable"
-              @click="submitRevision"
-            >提交修改</el-button>
-          </div>
+          <template v-else>
+            <el-alert
+              v-if="revisionError"
+              :title="revisionError"
+              type="error"
+              show-icon
+              :closable="false"
+            />
+            <el-alert
+              v-if="revisionSuccess"
+              :title="revisionSuccess"
+              type="success"
+              show-icon
+              :closable="false"
+            />
+            <el-input
+              v-model="revisionInstruction"
+              type="textarea"
+              :rows="3"
+              maxlength="4000"
+              show-word-limit
+              :disabled="revisionSubmitting || !activeSummary || gatewayPresentation.unavailable"
+              placeholder="请输入需要调整的教学内容或表达方式"
+              aria-label="版本修改意见"
+            />
+            <div class="revision-panel__footer">
+              <el-button
+                type="primary"
+                :icon="EditPen"
+                :loading="revisionSubmitting"
+                :disabled="!activeSummary || !revisionInstruction.trim() || gatewayPresentation.unavailable"
+                @click="submitRevision"
+              >提交修改</el-button>
+            </div>
+          </template>
         </section>
       </template>
     </template>
@@ -173,11 +185,6 @@
 </template>
 
 <script setup lang="ts">
-import {
-  downloadProjectExport,
-  getProjectExportCatalog,
-  type ExportOption,
-} from '@/api/exports';
 import {
   getArtifact,
   getArtifacts,
@@ -190,14 +197,14 @@ import {
 import { getProjectWorkspaceOverview, type ProjectBrief } from '@/api/workspace';
 import DocxArtifactPreview from '@/components/generation/DocxArtifactPreview.vue';
 import InteractionArtifactPreview from '@/components/generation/InteractionArtifactPreview.vue';
-import PptArtifactPreview from '@/components/generation/PptArtifactPreview.vue';
 import ProjectContextHeader from '@/components/ProjectContextHeader.vue';
 import ProjectWorkspaceNav from '@/components/ProjectWorkspaceNav.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
+import { canReviseArtifact } from '@/utils/artifactCapabilities';
 import { formatDateTime } from '@/utils/presentation';
 import { ElMessage } from 'element-plus';
-import { Back, ChatDotRound, DataBoard, Document, Download, EditPen, Files, Refresh, View } from '@element-plus/icons-vue';
+import { Back, ChatDotRound, DataBoard, Document, EditPen, Files, Refresh, View } from '@element-plus/icons-vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -219,8 +226,6 @@ const revisionInstruction = ref('');
 const revisionSubmitting = ref(false);
 const revisionError = ref('');
 const revisionSuccess = ref('');
-const pptExportOption = ref<ExportOption>();
-const pptDownloading = ref(false);
 const {
   presentation: gatewayPresentation,
   refresh: loadGatewayStatus,
@@ -254,6 +259,7 @@ const activeArtifact = computed(() => {
 const activeDetailLoading = computed(() => Boolean(activeSummary.value && detailLoading[activeSummary.value.id]));
 const activeDetailError = computed(() => activeSummary.value ? detailErrors[activeSummary.value.id] || '' : '');
 const activeTabLabel = computed(() => artifactTabs.find((tab) => tab.type === activeType.value)?.label || '教学成果');
+const activeCanRevise = computed(() => canReviseArtifact(activeSummary.value?.type || activeType.value));
 
 function artifactForType(type: ArtifactType) {
   return artifactsByType.value[type][0];
@@ -308,31 +314,13 @@ async function loadArtifactList() {
   }
 }
 
-async function loadPptExportOption() {
-  try {
-    const catalog = await getProjectExportCatalog(projectId.value);
-    pptExportOption.value = catalog.formats?.find((option) => option.format === 'PPTX');
-  } catch {
-    pptExportOption.value = undefined;
-  }
-}
-
-async function downloadPpt() {
-  if (!pptExportOption.value || pptDownloading.value) return;
-  pptDownloading.value = true;
-  try {
-    await downloadProjectExport(projectId.value, pptExportOption.value);
-    ElMessage.success('PPTX 文件已开始下载');
-  } catch (error) {
-    ElMessage.error(resolveError(error, 'PPTX 下载失败，请稍后重试。'));
-  } finally {
-    pptDownloading.value = false;
-  }
-}
-
 async function submitRevision() {
   const source = activeSummary.value;
   const instruction = revisionInstruction.value.trim();
+  if (!activeCanRevise.value) {
+    revisionError.value = '新 PPT Engine 尚未接入，历史 PPT 不可修订。';
+    return;
+  }
   if (gatewayPresentation.value.unavailable) {
     revisionError.value = 'AI 工作流当前不可用，请先检查 Kimi 或 Mock 配置。';
     return;
@@ -361,6 +349,7 @@ async function submitRevision() {
 }
 
 async function loadArtifactDetail(type: ArtifactType, force = false) {
+  if (type === 'PPT') return;
   const summary = artifactForType(type);
   if (!summary || detailLoading[summary.id] || (!force && details[summary.id])) return;
   detailLoading[summary.id] = true;
@@ -377,7 +366,7 @@ async function loadArtifactDetail(type: ArtifactType, force = false) {
 async function loadPreview() {
   loading.value = true;
   await Promise.all([loadWorkspace(), loadGatewayStatus()]);
-  await Promise.all([loadArtifactList(), loadPptExportOption()]);
+  await loadArtifactList();
   loading.value = false;
 }
 
@@ -496,6 +485,11 @@ onMounted(loadPreview);
 .preview-notice :deep(.el-alert) {
   min-width: 0;
   flex: 1;
+}
+
+.ppt-engine-placeholder {
+  min-height: 260px;
+  padding: 18px;
 }
 
 .preview-empty {

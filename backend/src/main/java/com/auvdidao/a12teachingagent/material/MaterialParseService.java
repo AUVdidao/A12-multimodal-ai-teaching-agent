@@ -184,15 +184,17 @@ public class MaterialParseService {
                     startedAt
             ));
         } catch (MaterialParsingException exception) {
+            LOGGER.warn("Material parsing failed (exceptionType={})", exception.getClass().getSimpleName());
             return transactionService.fail(new MaterialParseTransactionService.ParseFailure(
                     preparation.projectId(),
                     preparation.materialId(),
                     material,
                     result,
                     startedAt,
-                    exception.getMessage()
+                    null
             ));
         } catch (RuntimeException exception) {
+            LOGGER.error("Unexpected material parsing failure (exceptionType={})", exception.getClass().getSimpleName());
             try {
                 transactionService.fail(new MaterialParseTransactionService.ParseFailure(
                         preparation.projectId(),
@@ -200,7 +202,7 @@ public class MaterialParseService {
                         material,
                         result,
                         startedAt,
-                        exception.getMessage()
+                        null
                 ));
             } catch (RuntimeException failureException) {
                 exception.addSuppressed(failureException);

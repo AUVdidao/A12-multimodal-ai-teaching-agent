@@ -1,5 +1,7 @@
 # TA-006 Project Flow Contract
 
+> 本文是 TA-006 阶段历史记录，不代表当前运行架构。Dify 仅是当时规划；当前系统不依赖 Dify，由 Spring Boot AIWorkflowGateway 编排 KIMI/MOCK。
+
 This document records the MVP entry flow completed by TA-006.
 
 ## Frontend Flow

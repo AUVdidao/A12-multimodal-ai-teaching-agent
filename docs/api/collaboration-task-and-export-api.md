@@ -307,13 +307,15 @@ Role: TEACHER
 
 The teacher must own the project or be the assignee of a teaching task linked to the project. The response lists only formats backed by existing generated artifacts.
 
-### 6.2 Download PPTX
+### 6.2 PPTX status
 
 ```http
 GET /api/v1/projects/{projectId}/exports/pptx
 Role: TEACHER
-Response: application/vnd.openxmlformats-officedocument.presentationml.presentation
+Response: 400 Bad Request
 ```
+
+PPTX export is intentionally unavailable. The endpoint does not call the old Renderer; the new PPT Engine has not been integrated yet.
 
 ### 6.3 Download DOCX
 

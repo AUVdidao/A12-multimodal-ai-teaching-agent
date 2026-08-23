@@ -115,7 +115,8 @@ class AIWorkflowGatewayRouterTest {
 
         assertThat(router.clarifyRequirement(request)).isSameAs(mockResponse);
         assertThat(router.status().activeProvider()).isEqualTo("MOCK");
-        assertThat(router.status().message()).contains("Last fallback reason: WF-01: Kimi returned HTTP 500.");
+        assertThat(router.status().message()).contains("Last fallback reason: AI workflow unavailable");
+        assertThat(router.status().message()).doesNotContain("Kimi returned HTTP 500");
     }
 
     private AIWorkflowGatewayRouter router(

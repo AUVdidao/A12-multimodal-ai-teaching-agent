@@ -18,13 +18,11 @@ import com.auvdidao.a12teachingagent.domain.generation.repository.GeneratedArtif
 import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
 import com.auvdidao.a12teachingagent.domain.teachingtask.repository.TeachingTaskRepository;
-import com.auvdidao.a12teachingagent.pptskill.PptSkillFileStore;
 import com.auvdidao.a12teachingagent.security.AuthenticatedUser;
 import com.auvdidao.a12teachingagent.security.CurrentUserService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -35,10 +33,9 @@ import java.util.Map;
 @Service
 public class ArtifactExportService {
 
-    static final String PPTX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
     static final String DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-    private static final List<ExportType> SUPPORTED_FORMATS = List.of(ExportType.PPTX, ExportType.DOCX);
+    private static final List<ExportType> SUPPORTED_FORMATS = List.of(ExportType.DOCX);
     private static final int MAX_FILENAME_STEM_LENGTH = 80;
 
     private final CurrentUserService currentUserService;
@@ -48,7 +45,6 @@ public class ArtifactExportService {
     private final ArtifactVersionRepository versionRepository;
     private final ExportRecordRepository exportRecordRepository;
     private final ArtifactGenerator renderer;
-    private final PptSkillFileStore pptSkillFileStore;
 
     public ArtifactExportService(
             CurrentUserService currentUserService,
@@ -57,8 +53,7 @@ public class ArtifactExportService {
             GeneratedArtifactRepository artifactRepository,
             ArtifactVersionRepository versionRepository,
             ExportRecordRepository exportRecordRepository,
-            ArtifactGenerator renderer,
-            PptSkillFileStore pptSkillFileStore
+            ArtifactGenerator renderer
     ) {
         this.currentUserService = currentUserService;
         this.projectRepository = projectRepository;
@@ -67,7 +62,6 @@ public class ArtifactExportService {
         this.versionRepository = versionRepository;
         this.exportRecordRepository = exportRecordRepository;
         this.renderer = renderer;
-        this.pptSkillFileStore = pptSkillFileStore;
     }
 
     @Transactional(readOnly = true)
@@ -102,9 +96,6 @@ public class ArtifactExportService {
 
         String filename = filename(project, format);
         byte[] content = switch (format) {
-            case PPTX -> artifact.getFilePath() == null
-                    ? renderer.renderPptx(project, artifact)
-                    : pptSkillFileStore.readManaged(artifact.getFilePath());
             case DOCX -> renderer.renderDocx(project, artifact);
             default -> throw unsupportedFormat(requestedFormat);
         };
@@ -188,8 +179,8 @@ public class ArtifactExportService {
     ) {
         return new ExportOption(
                 format,
-                format == ExportType.PPTX ? "PPTX 课件" : "DOCX 教案",
-                format == ExportType.PPTX ? "可编辑的 PowerPoint 教学课件" : "可编辑的 Word 课程教案",
+                "DOCX 教案",
+                "可编辑的 Word 课程教案",
                 mediaType(format),
                 format.name().toLowerCase(Locale.ROOT),
                 artifact.getId(),
@@ -216,15 +207,15 @@ public class ArtifactExportService {
     }
 
     private static BadRequestException unsupportedFormat(String value) {
+        if (value != null && ExportType.PPTX.name().equalsIgnoreCase(value.trim())) {
+            return new BadRequestException("PPTX export is unavailable until the new PPT Engine is integrated");
+        }
         return new BadRequestException(
-                "Unsupported export format: " + (value == null ? "null" : value) + ". Supported formats: PPTX, DOCX"
+                "Unsupported export format: " + (value == null ? "null" : value) + ". Supported formats: DOCX"
         );
     }
 
     private static ExportType exportFormat(ArtifactType type) {
-        if (type == ArtifactType.PPT) {
-            return ExportType.PPTX;
-        }
         if (type == ArtifactType.DOCX) {
             return ExportType.DOCX;
         }
@@ -232,7 +223,7 @@ public class ArtifactExportService {
     }
 
     private static String mediaType(ExportType format) {
-        return format == ExportType.PPTX ? PPTX_MEDIA_TYPE : DOCX_MEDIA_TYPE;
+        return DOCX_MEDIA_TYPE;
     }
 
     private static String filename(Project project, ExportType format) {

@@ -96,13 +96,12 @@ try {
     $env:A12_AI_PROVIDER = 'KIMI'
     $env:A12_AI_FALLBACK_TO_MOCK = 'false'
     $env:MOONSHOT_API_KEY = $activeKey
-    $env:PPT_HARNESS_GENERATION_SOURCE = 'KIMI'
 
     Push-Location $repoRoot
     try {
-        & docker compose up -d --build --force-recreate backend-api ppt-harness
+        & docker compose up -d --build --force-recreate backend-api
         if ($LASTEXITCODE -ne 0) {
-            throw 'Docker Compose failed to recreate backend-api and ppt-harness.'
+            throw 'Docker Compose failed to recreate backend-api.'
         }
 
         & docker compose up -d frontend-web reverse-proxy
@@ -111,7 +110,7 @@ try {
         }
 
         $deadline = [DateTime]::UtcNow.AddSeconds($HealthTimeoutSeconds)
-        foreach ($service in @('backend-api', 'ppt-harness', 'frontend-web', 'reverse-proxy')) {
+        foreach ($service in @('backend-api', 'frontend-web', 'reverse-proxy')) {
             Wait-ServiceReady -ServiceName $service -Deadline $deadline
         }
     }

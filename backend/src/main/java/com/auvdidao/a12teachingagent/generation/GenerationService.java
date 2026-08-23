@@ -29,8 +29,6 @@ import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.GenerationWor
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.PlanSection;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.TeachingIntentSummary;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
-import com.auvdidao.a12teachingagent.pptskill.PptGenerationDtos;
-import com.auvdidao.a12teachingagent.pptskill.PptGenerationOrchestrator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -70,7 +68,6 @@ public class GenerationService {
     private final MockArtifactContentFactory contentFactory;
     private final ObjectMapper objectMapper;
     private final ProjectAccessService projectAccessService;
-    private final PptGenerationOrchestrator pptGenerationOrchestrator;
 
     public GenerationService(
             ProjectRepository projectRepository,
@@ -81,8 +78,7 @@ public class GenerationService {
             AIWorkflowGateway aiWorkflowGateway,
             MockArtifactContentFactory contentFactory,
             ObjectMapper objectMapper,
-            ProjectAccessService projectAccessService,
-            PptGenerationOrchestrator pptGenerationOrchestrator
+            ProjectAccessService projectAccessService
     ) {
         this.projectRepository = projectRepository;
         this.intentRepository = intentRepository;
@@ -93,11 +89,6 @@ public class GenerationService {
         this.contentFactory = contentFactory;
         this.objectMapper = objectMapper;
         this.projectAccessService = projectAccessService;
-        this.pptGenerationOrchestrator = pptGenerationOrchestrator;
-    }
-
-    public PptGenerationDtos.GenerationResponse generatePresentationSkillPpt(Long projectId) {
-        return pptGenerationOrchestrator.generate(projectId);
     }
 
     @Transactional
@@ -217,7 +208,7 @@ public class GenerationService {
         boolean hasMissingRequestedType = requestedTypes.stream().anyMatch(type -> !existingTypes.contains(type));
         Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> structuredDrafts = !hasMissingRequestedType
                 ? Map.of()
-                : structuredDrafts(projectId, intent, plan);
+                : structuredDrafts(projectId, intent, plan, requestedTypes);
         for (ArtifactType type : requestedTypes) {
             if (!existingTypes.contains(type)) {
                 newArtifacts.add(createArtifact(project, intent, plan, version, type, structuredDrafts.get(type)));
@@ -269,13 +260,9 @@ public class GenerationService {
         GenerationPlanResponse planResponse = plan == null ? null : toPlanResponse(plan);
         List<ArtifactResponse> artifactResponses = toArtifactResponses(artifacts);
         boolean planConfirmed = plan != null && Boolean.TRUE.equals(plan.getConfirmed());
-        EnumSet<ArtifactType> existingTypes = artifacts.stream()
-                .map(GeneratedArtifact::getArtifactType)
-                .filter(Objects::nonNull)
-                .collect(() -> EnumSet.noneOf(ArtifactType.class), EnumSet::add, EnumSet::addAll);
-        boolean hasMissingExpectedArtifact = ARTIFACT_TYPES.stream()
-                .anyMatch(type -> !existingTypes.contains(type));
-        boolean canGenerate = planConfirmed && hasMissingExpectedArtifact;
+        // A confirmed plan can be submitted again because the non-PPT generation endpoint is idempotent.
+        // PPT is intentionally not treated as a missing prerequisite while the new PPT Engine is absent.
+        boolean canGenerate = planConfirmed;
         GenerationCapabilities capabilities = new GenerationCapabilities(
                 intent != null,
                 plan != null && !planConfirmed,
@@ -348,7 +335,7 @@ public class GenerationService {
         GenerationPlanResponse planResponse = toPlanResponse(plan);
         Object content = draft == null
                 ? switch (type) {
-                    case PPT -> contentFactory.buildPpt(project, intent, planResponse);
+                    case PPT -> throw new BadRequestException("PPT generation is unavailable until the new PPT Engine is integrated");
                     case DOCX -> contentFactory.buildLessonPlan(project, intent, planResponse);
                     case INTERACTION -> contentFactory.buildInteraction(project);
                 }
@@ -369,7 +356,8 @@ public class GenerationService {
     private Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> structuredDrafts(
             Long projectId,
             TeachingIntent intent,
-            GenerationPlan plan
+            GenerationPlan plan,
+            List<ArtifactType> requestedTypes
     ) {
         GenerationPlanResponse planResponse = toPlanResponse(plan);
         AiWorkflowDtos.StructuredContentResponse generated = aiWorkflowGateway.generateStructuredContent(
@@ -382,7 +370,7 @@ public class GenerationService {
                                 planResponse.interactionPlan()
                         ),
                         referenceContext(intent),
-                        artifactTypeNames()
+                        requestedTypes.stream().map(Enum::name).toList()
                 )
         );
         if (generated == null || generated.fallbackToBackendDrafts()) {
@@ -390,9 +378,12 @@ public class GenerationService {
         }
 
         Map<ArtifactType, AiWorkflowDtos.StructuredArtifactDraft> drafts = new LinkedHashMap<>();
-        putDraft(drafts, ArtifactType.PPT, generated.pptContent());
-        putDraft(drafts, ArtifactType.DOCX, generated.docContent());
-        putDraft(drafts, ArtifactType.INTERACTION, generated.interactionContent());
+        for (ArtifactType type : requestedTypes) {
+            AiWorkflowDtos.StructuredArtifactDraft draft = type == ArtifactType.DOCX
+                    ? generated.docContent()
+                    : generated.interactionContent();
+            putDraft(drafts, type, draft);
+        }
         return Map.copyOf(drafts);
     }
 
@@ -517,7 +508,10 @@ public class GenerationService {
             throw new BadRequestException("artifactTypes must not contain null values");
         }
         if (requestedTypes.contains(ArtifactType.PPT)) {
-            throw new BadRequestException("PPT generation must use the PPT Harness job endpoint");
+            throw new BadRequestException("PPT generation is unavailable until the new PPT Engine is integrated");
+        }
+        if (requestedTypes.stream().anyMatch(type -> type != ArtifactType.DOCX && type != ArtifactType.INTERACTION)) {
+            throw new BadRequestException("Only DOCX and INTERACTION generation is currently supported");
         }
         return List.copyOf(new LinkedHashSet<>(requestedTypes));
     }

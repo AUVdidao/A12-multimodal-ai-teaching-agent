@@ -21,14 +21,9 @@ import com.auvdidao.a12teachingagent.domain.teachingtask.repository.TeachingTask
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.CourseInfo;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.DocSection;
 import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.LessonPlanContent;
-import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.PptContent;
-import com.auvdidao.a12teachingagent.generation.dto.GenerationDtos.PptSlide;
 import com.auvdidao.a12teachingagent.security.AuthenticatedUser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.poi.xslf.usermodel.XMLSlideShow;
-import org.apache.poi.xslf.usermodel.XSLFTextParagraph;
-import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayInputStream;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -93,7 +89,7 @@ class ArtifactExportControllerTest {
     private ExportRecordRepository exportRecordRepository;
 
     @Test
-    void catalogRequiresTeacherAndListsOnlyProjectArtifacts() throws Exception {
+    void catalogRequiresTeacherAndListsOnlyDocxArtifacts() throws Exception {
         Fixture fixture = createExportableProject("人工智能基础");
 
         mockMvc.perform(get("/api/v1/projects/{projectId}/exports", fixture.project().getId()))
@@ -113,45 +109,20 @@ class ArtifactExportControllerTest {
                         .with(user(UserRole.TEACHER, 10L)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.projectId", is(fixture.project().getId().intValue())))
-                .andExpect(jsonPath("$.data.formats", hasSize(2)))
-                .andExpect(jsonPath("$.data.formats[0].format", is("PPTX")))
-                .andExpect(jsonPath("$.data.formats[0].artifactId", is(fixture.ppt().getId().intValue())))
-                .andExpect(jsonPath("$.data.formats[0].versionNumber", is(2)))
-                .andExpect(jsonPath("$.data.formats[0].downloadUrl", is(
-                        "/api/v1/projects/" + fixture.project().getId() + "/exports/pptx"
-                )))
-                .andExpect(jsonPath("$.data.formats[1].format", is("DOCX")))
-                .andExpect(jsonPath("$.data.formats[1].artifactId", is(fixture.docx().getId().intValue())));
+                .andExpect(jsonPath("$.data.formats", hasSize(1)))
+                .andExpect(jsonPath("$.data.formats[0].format", is("DOCX")))
+                .andExpect(jsonPath("$.data.formats[0].artifactId", is(fixture.docx().getId().intValue())))
+                .andExpect(jsonPath("$.data.formats[0].versionNumber", is(2)));
     }
 
     @Test
-    void downloadsParseablePptxAndDocxAndRecordsSuccessfulExports() throws Exception {
+    void rejectsHistoricalPptxExportAndDownloadsParseableDocx() throws Exception {
         Fixture fixture = createExportableProject("人工智能基础");
 
-        MvcResult pptxResult = mockMvc.perform(get("/api/v1/projects/{projectId}/exports/pptx", fixture.project().getId())
+        mockMvc.perform(get("/api/v1/projects/{projectId}/exports/pptx", fixture.project().getId())
                         .with(user(UserRole.TEACHER, 10L)))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(ArtifactExportService.PPTX_MEDIA_TYPE))
-                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString(".pptx")))
-                .andReturn();
-
-        byte[] pptxBytes = pptxResult.getResponse().getContentAsByteArray();
-        assertThat(pptxBytes).startsWith((byte) 'P', (byte) 'K');
-        try (XMLSlideShow presentation = new XMLSlideShow(new ByteArrayInputStream(pptxBytes))) {
-            assertThat(presentation.getSlides()).hasSize(2);
-            String text = presentation.getSlides().stream()
-                    .flatMap(slide -> slide.getShapes().stream())
-                    .filter(XSLFTextShape.class::isInstance)
-                    .map(XSLFTextShape.class::cast)
-                    .map(XSLFTextShape::getText)
-                    .collect(Collectors.joining("\n"));
-            assertThat(text).contains("人工智能基础", "Machine learning and deep learning");
-            String notes = presentation.getNotesSlide(presentation.getSlides().get(1)).getTextParagraphs().stream()
-                    .flatMap(List::stream)
-                    .map(XSLFTextParagraph::getText)
-                    .collect(Collectors.joining("\n"));
-            assertThat(notes).contains("Compare the concepts");
-        }
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("new PPT Engine is integrated")));
 
         MvcResult docxResult = mockMvc.perform(get("/api/v1/projects/{projectId}/exports/DOCX", fixture.project().getId())
                         .with(user(UserRole.TEACHER, 10L)))
@@ -177,7 +148,7 @@ class ArtifactExportControllerTest {
 
         assertThat(exportRecordRepository.findByProjectIdOrderByCreatedAtAsc(fixture.project().getId()))
                 .extracting(record -> record.getExportType())
-                .containsExactly(ExportType.PPTX, ExportType.DOCX);
+                .containsExactly(ExportType.DOCX);
     }
 
     @Test
@@ -193,13 +164,13 @@ class ArtifactExportControllerTest {
 
         mockMvc.perform(get("/api/v1/projects/{projectId}/exports/pptx", emptyProject.getId())
                         .with(user(UserRole.TEACHER, 10L)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message", containsString("PPTX artifact not found")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("new PPT Engine is integrated")));
 
         mockMvc.perform(get("/api/v1/projects/{projectId}/exports/pdf", emptyProject.getId())
                         .with(user(UserRole.TEACHER, 10L)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("Supported formats: PPTX, DOCX")));
+                .andExpect(jsonPath("$.message", containsString("Supported formats: DOCX")));
 
         mockMvc.perform(get("/api/v1/projects/{projectId}/exports", 999999L)
                         .with(user(UserRole.TEACHER, 10L)))
@@ -213,7 +184,7 @@ class ArtifactExportControllerTest {
     }
 
     @Test
-    void malformedPersistedArtifactContentReturnsValidationErrorWithoutExportRecord() throws Exception {
+    void historicalPptxExportDoesNotReadContentOrCreateExportRecord() throws Exception {
         Project project = createProject("Malformed content");
         assignProject(project, 10L);
         GeneratedArtifact artifact = new GeneratedArtifact();
@@ -225,14 +196,14 @@ class ArtifactExportControllerTest {
         artifactRepository.save(artifact);
 
         mockMvc.perform(get("/api/v1/projects/{projectId}/exports/pptx", project.getId())
-                        .with(user(UserRole.TEACHER, 10L)))
+                .with(user(UserRole.TEACHER, 10L)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("content JSON does not match schema version 1")));
+                .andExpect(jsonPath("$.message", containsString("new PPT Engine is integrated")));
 
         assertThat(exportRecordRepository.findByProjectIdOrderByCreatedAtAsc(project.getId())).isEmpty();
     }
 
-    private Fixture createExportableProject(String name) throws JsonProcessingException {
+    private Fixture createExportableProject(String name) throws Exception {
         Project project = createProject(name);
         assignProject(project, 10L);
 
@@ -253,16 +224,10 @@ class ArtifactExportControllerTest {
         version.setFinalVersion(false);
         version = versionRepository.save(version);
 
-        PptContent pptContent = new PptContent(
-                name,
-                "Clear classroom theme",
-                List.of(
-                        new PptSlide(1, "COVER", name, "TITLE", List.of("AI foundations"), "Introduce the course"),
-                        new PptSlide(2, "CONTENT", "Core concepts", "BULLETS",
-                                List.of("Machine learning and deep learning", "Classroom case"), "Compare the concepts")
-                )
-        );
-        GeneratedArtifact ppt = artifact(project, plan, version, ArtifactType.PPT, name + "课件", pptContent);
+        GeneratedArtifact ppt = artifact(project, plan, version, ArtifactType.PPT, name + "课件", Map.of(
+                "deckTitle", name,
+                "slides", List.of(Map.of("title", "Core concepts", "points", List.of("Historical PPT content")))
+        ));
 
         LessonPlanContent docxContent = new LessonPlanContent(
                 name + "教案",
