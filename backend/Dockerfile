@@ -14,6 +14,12 @@ WORKDIR /app
 
 ENV SPRING_PROFILES_ACTIVE=dev
 
+# The template-processing contract requires a real Office-compatible renderer
+# for production-style preview verification. Keep the binary in the image and
+# enable it only through the explicit runtime property in compose; the Java
+# adapter still fails closed when that property is empty or the process fails.
+RUN apk add --no-cache libreoffice font-noto-cjk
+
 COPY --from=build /workspace/target/*.jar /app/app.jar
 
 RUN addgroup -S spring \

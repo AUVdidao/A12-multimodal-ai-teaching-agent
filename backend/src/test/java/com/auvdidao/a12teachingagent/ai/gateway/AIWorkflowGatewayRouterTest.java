@@ -63,6 +63,7 @@ class AIWorkflowGatewayRouterTest {
     @Test
     void mockProviderRequiresExplicitDevelopmentFlag() {
         AiWorkflowProperties workflowProperties = workflowProperties(AiProvider.MOCK, false);
+        workflowProperties.setDevelopmentMockEnabled(false);
         AIWorkflowGatewayRouter router = router(workflowProperties, new KimiAssistantProperties());
 
         assertThatThrownBy(() -> router.clarifyRequirement(request))

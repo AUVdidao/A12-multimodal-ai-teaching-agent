@@ -1,8 +1,15 @@
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('node:path');
 
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+}
+
+let mainWindow;
+
 function createWindow() {
-  const window = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1100,
@@ -17,18 +24,27 @@ function createWindow() {
   });
 
   const devUrl = process.env.LESSONFORGE_DEV_URL;
-  if (devUrl) void window.loadURL(devUrl);
-  else void window.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  if (devUrl) void mainWindow.loadURL(devUrl);
+  else void mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
 
-  window.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url);
     return { action: 'deny' };
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-});
+if (singleInstanceLock) {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  app.whenReady().then(() => {
+    createWindow();
+    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  });
+}
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

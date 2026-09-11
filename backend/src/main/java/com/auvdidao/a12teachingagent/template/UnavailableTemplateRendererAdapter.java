@@ -134,7 +134,12 @@ public class UnavailableTemplateRendererAdapter implements TemplateRenderer {
     private RenderResult renderWithConfiguredOffice(Resource source) {
         Path work = null;
         try {
-            work = Files.createTempDirectory("a12-template-render-");
+            // The source and published preview live on the shared storage
+            // volume. Creating the conversion workspace below that same root
+            // keeps the final atomic move on one filesystem; a JVM temp
+            // directory may be a different mount inside the container.
+            Files.createDirectories(outputRoot);
+            work = Files.createTempDirectory(outputRoot, ".a12-template-render-");
             Path input = work.resolve("source.pptx");
             try (InputStream stream = source.getInputStream()) {
                 Files.copy(stream, input, StandardCopyOption.REPLACE_EXISTING);
@@ -162,7 +167,6 @@ public class UnavailableTemplateRendererAdapter implements TemplateRenderer {
             if (slideCount <= 0) {
                 return RenderResult.notImplemented("renderer-page-count-invalid", "Configured PPTX renderer produced an empty preview.");
             }
-            Files.createDirectories(outputRoot);
             String filename = UUID.randomUUID() + ".pdf";
             Path published = outputRoot.resolve(filename).normalize();
             if (!published.startsWith(outputRoot)) {

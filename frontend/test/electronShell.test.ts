@@ -13,6 +13,13 @@ describe('Electron desktop shell contract', () => {
     assert.match(source, /loadFile\(path\.join\(__dirname, '..', 'dist', 'index\.html'\)\)/);
   });
 
+  it('prevents duplicate desktop launches and focuses the existing window', () => {
+    const source = readFileSync(resolve(root, 'electron/main.cjs'), 'utf8');
+    assert.match(source, /requestSingleInstanceLock\(\)/);
+    assert.match(source, /second-instance/);
+    assert.match(source, /mainWindow\.focus\(\)/);
+  });
+
   it('exposes only a non-secret desktop capability', () => {
     const source = readFileSync(resolve(root, 'electron/preload.cjs'), 'utf8');
     assert.match(source, /isDesktop:\s*true/);

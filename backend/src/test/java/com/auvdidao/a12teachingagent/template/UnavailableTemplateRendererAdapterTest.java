@@ -22,7 +22,6 @@ class UnavailableTemplateRendererAdapterTest {
         try {
             UnavailableTemplateRendererAdapter adapter = adapter(root, Files::move);
             TemplateRenderer.RenderResult result = adapter.render(source());
-
             assertTrue(result.implemented());
             assertEquals(2, result.slideCount());
             assertTrue(result.previewReference().startsWith("template-renders/"));
@@ -103,7 +102,7 @@ class UnavailableTemplateRendererAdapterTest {
 
     private StorageProperties properties(Path root) {
         StorageProperties properties = new StorageProperties();
-        properties.setUploadDir(root.resolve("uploads").toString());
+        properties.setUploadDir(root.toString());
         return properties;
     }
 
