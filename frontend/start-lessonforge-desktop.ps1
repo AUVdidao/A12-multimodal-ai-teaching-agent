@@ -2,9 +2,10 @@ $ErrorActionPreference = 'Stop'
 
 $frontendRoot = $PSScriptRoot
 $devUrl = 'http://127.0.0.1:5173/'
-$lessonForgeRoot = 'D:\pri_work\lessonforge'
+$lessonForgeRoot = 'D:\pri_work\A12-ppt-stage34-integration'
+$goComposeProject = Join-Path $lessonForgeRoot 'deploy\lessonforge'
 $goHealthUrl = 'http://127.0.0.1:8090/healthz'
-$goComposeFile = Join-Path $lessonForgeRoot 'compose.yaml'
+$goComposeFile = Join-Path $goComposeProject 'compose.yaml'
 $goComposeEnvFile = 'D:\pri_work\LessonForge-go-backend\.env.lessonforge-desktop'
 
 function Test-LessonForgeService {
@@ -22,7 +23,7 @@ if (-not (Test-LessonForgeService $goHealthUrl)) {
         throw 'LessonForge Go backend startup configuration is missing.'
     }
     $dockerCommand = (Get-Command docker.exe -ErrorAction Stop).Source
-    & $dockerCommand compose --project-directory $lessonForgeRoot --project-name lessonforge --file $goComposeFile --env-file $goComposeEnvFile up -d postgres server | Out-Null
+    & $dockerCommand compose --project-directory $goComposeProject --project-name lessonforge --file $goComposeFile --env-file $goComposeEnvFile up -d postgres server | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw 'LessonForge Go backend containers could not be started.'
     }
