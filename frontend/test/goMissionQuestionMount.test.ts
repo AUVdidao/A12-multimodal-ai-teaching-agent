@@ -312,6 +312,31 @@ test('Plan draft approval calls the real endpoint and renders the persisted Lock
   await wrapper.unmount();
 });
 
+test('identity-only template binding blocks generation before the request is posted', async () => {
+  const notReadySpec = { ...lockedSpecification, templateBinding: { ...readyTemplateBinding, executionReady: false, engineNativeProfilePresent: false } };
+  httpMock.reset();
+  httpMock.onGet('/api/missions/7').reply(200, { ...baseDetail, files: [readyTemplateFile], lockedSpecification: notReadySpec });
+  httpMock.onGet('/api/model-connections').reply(200, []);
+  httpMock.onGet('/api/missions/7/questions').reply(200, []);
+  httpMock.onGet('/api/missions/7/agent-runs').reply(200, []);
+
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  useAuthStore(pinia).applySession('go-generation-profile-gate', teacher as any);
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/lessonforge/missions/:missionId', component: GoMissionWorkspaceView }] });
+  await router.push('/lessonforge/missions/7');
+  await router.isReady();
+  const wrapper = mount(GoMissionWorkspaceView, { global: { plugins: [pinia, router], stubs: stubs() } });
+  await settle();
+
+  const button = wrapper.get('[data-test="request-generation"]');
+  assert.equal(button.attributes('disabled'), '');
+  assert.match(wrapper.get('[data-test="generation-prerequisites"]').text(), /模板尚未具备 PPT Engine 可执行配置/);
+  await button.trigger('click');
+  assert.equal(httpMock.history.post.filter((request: AnyRecord) => request.url === '/api/missions/7/generation-jobs').length, 0);
+  await wrapper.unmount();
+});
+
 test('locked specification starts real generation and polls the persisted job to an artifact', async () => {
   let reads = 0;
   let requested = false;
