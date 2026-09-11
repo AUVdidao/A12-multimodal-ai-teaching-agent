@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lessonforge.local/backend/internal/agent"
+	"lessonforge.local/backend/internal/capability"
 	"lessonforge.local/backend/internal/generation"
 	"lessonforge.local/backend/internal/model"
 	"lessonforge.local/backend/internal/parser"
@@ -80,6 +81,15 @@ func main() {
 	store := database.NewStore(pool)
 	store.ConfigureStorageRoot(cfg.StorageRoot)
 	store.ConfigureWorker("lessonforge-server", cfg.JobLeaseDuration)
+	// The Java bridge is an optional enrichment source for immutable template
+	// bindings. Its absence never prevents approval; an incomplete or missing
+	// profile simply leaves the binding identity-only until Generate is requested.
+	store.TemplateProfile = capability.NewAuthenticatedClient(
+		cfg.TemplateCapabilityURL,
+		cfg.TemplateCapabilityBearerToken,
+		cfg.ModelRequestTimeout,
+		cfg.MaxModelResponseBytes,
+	)
 
 	// 外部能力统一通过适配器注入：ModelClient 负责模型调用，JavaClient
 	// 负责 RAG/解析服务调用。这样主业务只依赖 LessonForge 的接口和契约，

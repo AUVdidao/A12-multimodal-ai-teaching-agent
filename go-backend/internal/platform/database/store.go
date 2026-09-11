@@ -26,6 +26,8 @@ type TemplateProfileResolver interface {
 	GetProfile(context.Context, int64, int64, string) (map[string]any, error)
 }
 
+const templateProfileResolveTimeout = 5 * time.Second
+
 type Store struct {
 	DB              *pgxpool.Pool
 	WorkerID        string
@@ -2406,7 +2408,107 @@ func (s *Store) templateBindingTx(ctx context.Context, tx pgx.Tx, missionID int6
 	if err != nil {
 		return nil, specification.ErrTemplateRequired
 	}
+	// Approval is allowed to freeze the teacher's plan before the downstream
+	// Engine profile exists. When the Java bridge already has one, however,
+	// persist that server-owned native profile in the immutable binding so the
+	// later explicit Generate action can use the exact same profile version.
+	// A bridge outage, missing profile, or incomplete response must not turn
+	// approval into a hidden dependency on Java; the binding stays identity-only
+	// and generation will fail closed at its own gate.
+	if s.TemplateProfile != nil {
+		profileCtx, cancel := context.WithTimeout(ctx, templateProfileResolveTimeout)
+		profile, profileErr := s.TemplateProfile.GetProfile(profileCtx, input.OwnerUserID, missionID, input.SHA256)
+		cancel()
+		if profileErr == nil {
+			mergeTemplateProfile(binding, profile, input)
+		}
+	}
 	return binding, nil
+}
+
+func mergeTemplateProfile(binding, profile map[string]any, input templatebinding.Input) bool {
+	if binding == nil || profile == nil {
+		return false
+	}
+	expectedSHA := strings.ToLower(strings.TrimSpace(input.SHA256))
+	if strings.ToLower(strings.TrimSpace(fmt.Sprint(profile["templateFileSha256"]))) != expectedSHA ||
+		numericID(profile["missionId"]) != input.MissionID ||
+		numericID(profile["ownerUserId"]) != input.OwnerUserID {
+		return false
+	}
+	native, ok := profile["engineNativeProfile"].(map[string]any)
+	if !ok || len(native) == 0 {
+		return false
+	}
+	profileChecksum := strings.ToLower(strings.TrimSpace(fmt.Sprint(profile["engineNativeProfileChecksum"])))
+	if !isSHA256Hex(profileChecksum) || !completeTemplateProfile(profile, input) {
+		return false
+	}
+	for _, key := range []string{
+		"templateId", "profileId", "templateVersion", "profileVersion", "templateFileVersion",
+		"templateProfileVersion", "projectId", "sourceVersionId", "sourceSha256", "parserSnapshotChecksum",
+		"contractVersion", "status", "executionStatus", "pageSize", "spatialProfile",
+		"templatePageReferences", "components", "preservedNativeObjects", "textFitPolicy",
+	} {
+		if value, exists := profile[key]; exists {
+			binding[key] = value
+		}
+	}
+	binding["engineNativeProfile"] = native
+	binding["engineNativeProfileChecksum"] = profileChecksum
+	binding["profileSource"] = "JAVA_ENGINE_NATIVE_PROFILE"
+	binding["executionReady"] = true
+	binding["engineNativeProfilePresent"] = true
+	return true
+}
+
+func completeTemplateProfile(profile map[string]any, input templatebinding.Input) bool {
+	for _, key := range []string{
+		"contractVersion", "profileId", "templateId", "projectId", "ownerUserId", "templateVersion",
+		"profileVersion", "templateFileVersion", "templateProfileVersion", "status", "pageSize",
+		"spatialProfile", "templatePageReferences", "components", "textFitPolicy", "executionStatus",
+		"sourceVersionId", "sourceSha256", "parserSnapshotChecksum",
+	} {
+		if _, exists := profile[key]; !exists {
+			return false
+		}
+	}
+	if strings.TrimSpace(fmt.Sprint(profile["contractVersion"])) != "1.0.0" ||
+		strings.ToUpper(strings.TrimSpace(fmt.Sprint(profile["status"]))) != "READY" ||
+		strings.ToUpper(strings.TrimSpace(fmt.Sprint(profile["executionStatus"]))) != "EXECUTION_READY" ||
+		strings.ToLower(strings.TrimSpace(fmt.Sprint(profile["sourceSha256"]))) != strings.ToLower(strings.TrimSpace(input.SHA256)) {
+		return false
+	}
+	if numericID(profile["templateVersion"]) <= 0 || numericID(profile["profileVersion"]) <= 0 || numericID(profile["sourceVersionId"]) <= 0 {
+		return false
+	}
+	if !isSHA256Hex(strings.ToLower(strings.TrimSpace(fmt.Sprint(profile["sourceSha256"])))) ||
+		!isSHA256Hex(strings.ToLower(strings.TrimSpace(fmt.Sprint(profile["parserSnapshotChecksum"])))) {
+		return false
+	}
+	for _, key := range []string{"pageSize", "spatialProfile", "textFitPolicy"} {
+		if _, ok := profile[key].(map[string]any); !ok {
+			return false
+		}
+	}
+	for _, key := range []string{"templatePageReferences", "components"} {
+		if _, ok := profile[key].([]any); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func isSHA256Hex(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, r := range value {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 func storagePath(root, key string) (string, error) {
