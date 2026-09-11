@@ -13,16 +13,17 @@ import (
 )
 
 type generationRequestFixture struct {
-	store         *Store
-	ctx           context.Context
-	owner         model.User
-	other         model.User
-	missionID     int64
-	templateID    int64
-	missionFile   int64
-	specID        string
-	otherSpecID   string
-	invalidSpecID string
+	store                 *Store
+	ctx                   context.Context
+	owner                 model.User
+	other                 model.User
+	missionID             int64
+	templateID            int64
+	missionFile           int64
+	specID                string
+	otherSpecID           string
+	invalidSpecID         string
+	profileNotReadySpecID string
 }
 
 func newGenerationRequestFixture(t *testing.T) generationRequestFixture {
@@ -61,6 +62,7 @@ func newGenerationRequestFixture(t *testing.T) generationRequestFixture {
 		"missionFileId": missionFileID, "fileObjectId": fileObjectID, "ownerUserId": owner.ID,
 		"templateStorageKey": "generation-template/" + suffix + ".pptx", "templateFileSha256": strings.Repeat("a", 64),
 		"templateOriginalName": "fixture-template.pptx", "templateMimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "templateFileSize": 147487399,
+		"executionReady": true, "engineNativeProfilePresent": true,
 	}
 	bindingJSON, err := json.Marshal(binding)
 	if err != nil {
@@ -80,6 +82,17 @@ func newGenerationRequestFixture(t *testing.T) generationRequestFixture {
 	specID := newSpec(1, bindingJSON)
 	otherSpecID := newSpec(2, bindingJSON)
 	invalidSpecID := newSpec(3, []byte(`{}`))
+	profileNotReadyBinding := map[string]any{}
+	for key, value := range binding {
+		profileNotReadyBinding[key] = value
+	}
+	profileNotReadyBinding["executionReady"] = false
+	profileNotReadyBinding["engineNativeProfilePresent"] = false
+	profileNotReadyBindingJSON, err := json.Marshal(profileNotReadyBinding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileNotReadySpecID := newSpec(4, profileNotReadyBindingJSON)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -103,7 +116,7 @@ func newGenerationRequestFixture(t *testing.T) generationRequestFixture {
 			t.Errorf("cleanup generation users: %v", err)
 		}
 	})
-	return generationRequestFixture{store: store, ctx: ctx, owner: owner, other: other, missionID: missionID, templateID: fileObjectID, missionFile: missionFileID, specID: specID, otherSpecID: otherSpecID, invalidSpecID: invalidSpecID}
+	return generationRequestFixture{store: store, ctx: ctx, owner: owner, other: other, missionID: missionID, templateID: fileObjectID, missionFile: missionFileID, specID: specID, otherSpecID: otherSpecID, invalidSpecID: invalidSpecID, profileNotReadySpecID: profileNotReadySpecID}
 }
 
 func TestCreateGenerationJobValidatesBoundaryAndAllowsTerminalRetry(t *testing.T) {
@@ -155,5 +168,8 @@ func TestCreateGenerationJobValidatesBoundaryAndAllowsTerminalRetry(t *testing.T
 	}
 	if _, err := f.store.CreateGenerationJob(f.ctx, f.owner.ID, f.missionID, f.invalidSpecID, 3); err != ErrGenerationTemplateInvalid {
 		t.Fatalf("template validation = %v, want %v", err, ErrGenerationTemplateInvalid)
+	}
+	if _, err := f.store.CreateGenerationJob(f.ctx, f.owner.ID, f.missionID, f.profileNotReadySpecID, 4); err != ErrGenerationTemplateProfileNotReady {
+		t.Fatalf("template profile readiness = %v, want %v", err, ErrGenerationTemplateProfileNotReady)
 	}
 }

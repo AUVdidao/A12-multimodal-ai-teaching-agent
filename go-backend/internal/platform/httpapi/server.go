@@ -966,7 +966,7 @@ func (s *Server) createGenerationJob(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, database.ErrGenerationMissionNotFound), errors.Is(err, database.ErrGenerationSpecificationNotFound):
 			writeNotFound(w, err.Error())
-		case errors.Is(err, database.ErrGenerationVersionMismatch), errors.Is(err, database.ErrGenerationTemplateInvalid), errors.Is(err, database.ErrGenerationMaterialsNotReady), errors.Is(err, database.ErrGenerationActiveConflict):
+		case errors.Is(err, database.ErrGenerationVersionMismatch), errors.Is(err, database.ErrGenerationTemplateInvalid), errors.Is(err, database.ErrGenerationTemplateProfileNotReady), errors.Is(err, database.ErrGenerationMaterialsNotReady), errors.Is(err, database.ErrGenerationActiveConflict):
 			writeError(w, http.StatusConflict, err.Error())
 		default:
 			writeError(w, http.StatusInternalServerError, "GENERATION_REQUEST_FAILED")

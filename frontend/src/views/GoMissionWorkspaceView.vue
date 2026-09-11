@@ -97,7 +97,7 @@
             <p v-else-if="currentGenerationJob?.status === 'FAILED'">上次生成失败：{{ generationFeedbackLabel(currentGenerationJob) }}。修正输入或服务后，可以针对同一锁定规格重试。</p>
             <p v-else-if="currentGenerationJob?.status === 'CANCELLED'">上次生成已取消，可以针对同一锁定规格重新发起。</p>
             <p v-else-if="currentGenerationJob?.status === 'SUCCEEDED'">上次生成已完成。历史 Artifact 保留在下方，满足条件后仍可再次生成同一锁定规格。</p>
-            <p v-else>方案已批准。满足模板和材料就绪条件后，教师可单独启动 PPT 生成。</p>
+            <p v-else>方案已批准。模板具备 Engine 可执行配置且材料就绪后，教师可单独启动 PPT 生成。</p>
             <div v-if="generationBlockers.length" class="go-generation-card__requirements" data-test="generation-prerequisites"><span>开始前还需要：</span><ul><li v-for="blocker in generationBlockers" :key="blocker">{{ blocker }}</li></ul></div>
             <button v-if="generationButtonVisible" class="lf-primary-button" type="button" data-test="request-generation" :disabled="!generationCanRequest" @click="requestGeneration">{{ generationRequesting ? '提交生成请求…' : generationIsActive ? '生成中…' : currentGenerationJob ? '再次生成 PPT' : '生成 PPT' }}</button>
             <div v-else class="go-generation-card__track" aria-hidden="true"><span /></div>
@@ -193,6 +193,7 @@ const generationBlockers = computed(() => {
   const blockers: string[] = [];
   const binding = renderedLockedSpecification.value?.templateBinding;
   if (!bindingIsUsable(binding)) blockers.push('锁定规格的模板绑定无效，请重新准备模板并锁定新规格。');
+  else if (!engineProfileIsUsable(binding)) blockers.push('模板尚未具备 PPT Engine 可执行配置，暂不能生成 PPT。');
   const files = detail.value?.files || [];
   if (!files.length || files.some((file) => file.parseStatus !== 'READY')) blockers.push('所有已绑定材料都必须先完成解析。');
   if (!files.some((file) => file.role === 'TEMPLATE' && file.parseStatus === 'READY')) blockers.push('需要一份已解析完成的 PPTX 模板。');
@@ -264,6 +265,7 @@ function fileStatusLabel(status: string) { return ({ PENDING: '等待解析', PA
 function shortHash(value: string) { return value ? `${value.slice(0, 12)}…` : '—'; }
 function templateBindingLabel(value: unknown) { if (!bindingIsUsable(value)) return '未完成'; const record = value as Record<string, unknown>; return typeof record.templateOriginalName === 'string' ? record.templateOriginalName : '已绑定模板'; }
 function bindingIsUsable(value: unknown) { if (!value || typeof value !== 'object' || Array.isArray(value)) return false; const record = value as Record<string, unknown>; return record.bindingKind === 'LESSONFORGE_UPSTREAM_TEMPLATE_BINDING' && typeof record.templateStorageKey === 'string' && record.templateStorageKey.length > 0 && typeof record.templateFileSha256 === 'string' && record.templateFileSha256.length === 64 && Number(record.missionFileId) > 0 && Number(record.fileObjectId) > 0; }
+function engineProfileIsUsable(value: unknown) { if (!value || typeof value !== 'object' || Array.isArray(value)) return false; const record = value as Record<string, unknown>; return record.executionReady === true && record.engineNativeProfilePresent === true; }
 function generationFeedbackLabel(job: GoGenerationJob) { const feedback = job.generationFeedback; if (!feedback || typeof feedback !== 'object' || Array.isArray(feedback)) return '服务端未返回详细原因'; const code = (feedback as Record<string, unknown>).code; return typeof code === 'string' ? code : '服务端未返回详细原因'; }
 function useStarterPrompt(prompt: string) { draft.value = prompt; }
 function focusComposer() { document.querySelector<HTMLTextAreaElement>('[data-test="composer"] textarea')?.focus(); }

@@ -78,11 +78,31 @@ func TestCreateGenerationJobHTTPIsExplicitAndOwnerBound(t *testing.T) {
 		"missionFileId": missionFileID, "fileObjectId": fileObjectID, "ownerUserId": owner.ID,
 		"templateStorageKey": storageKey, "templateFileSha256": strings.Repeat("b", 64),
 		"templateOriginalName": "fixture.pptx", "templateMimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "templateFileSize": 12,
+		"executionReady": true, "engineNativeProfilePresent": true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO locked_specifications(id,mission_id,source_draft_id,version,specification_json,template_binding_json,content_hash) VALUES($1,$2,$3,1,'{"slides":[{"title":"fixture"}]}'::jsonb,$4,$5)`, specID, missionID, draftID, binding, strings.Repeat("c", 64)); err != nil {
+		t.Fatal(err)
+	}
+	profileNotReadySpecID := uuid.NewString()
+	profileNotReadyDraftID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO planning_drafts(id,mission_id,version,markdown,structured_plan_json,created_by_agent_run_id) VALUES($1,$2,2,'fixture','{"slides":[{"title":"fixture"}]}'::jsonb,$3)`, profileNotReadyDraftID, missionID, runID); err != nil {
+		t.Fatal(err)
+	}
+	profileNotReadyBindingMap := map[string]any{
+		"bindingKind": "LESSONFORGE_UPSTREAM_TEMPLATE_BINDING", "contractVersion": "lessonforge-upstream-template-v1", "missionId": missionID,
+		"missionFileId": missionFileID, "fileObjectId": fileObjectID, "ownerUserId": owner.ID,
+		"templateStorageKey": storageKey, "templateFileSha256": strings.Repeat("b", 64),
+		"templateOriginalName": "fixture.pptx", "templateMimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "templateFileSize": 12,
+		"executionReady": false, "engineNativeProfilePresent": false,
+	}
+	profileNotReadyBinding, err := json.Marshal(profileNotReadyBindingMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO locked_specifications(id,mission_id,source_draft_id,version,specification_json,template_binding_json,content_hash) VALUES($1,$2,$3,2,'{"slides":[{"title":"fixture"}]}'::jsonb,$4,$5)`, profileNotReadySpecID, missionID, profileNotReadyDraftID, profileNotReadyBinding, strings.Repeat("d", 64)); err != nil {
 		t.Fatal(err)
 	}
 	ownerToken, err := auth.NewToken()
@@ -117,9 +137,9 @@ func TestCreateGenerationJobHTTPIsExplicitAndOwnerBound(t *testing.T) {
 
 	server := httptest.NewServer(NewServer(Config{SessionCookie: "session"}, pool, store, nil, nil, nil, nil).Router())
 	t.Cleanup(server.Close)
-	post := func(token string, version int) (int, map[string]any) {
+	post := func(token, specificationID string, version int) (int, map[string]any) {
 		t.Helper()
-		body, err := json.Marshal(map[string]any{"specificationId": specID, "specificationVersion": version})
+		body, err := json.Marshal(map[string]any{"specificationId": specificationID, "specificationVersion": version})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,7 +161,11 @@ func TestCreateGenerationJobHTTPIsExplicitAndOwnerBound(t *testing.T) {
 		}
 		return response.StatusCode, payload
 	}
-	status, payload := post(ownerToken, 1)
+	status, payload := post(ownerToken, profileNotReadySpecID, 2)
+	if status != http.StatusConflict || payload["error"].(map[string]any)["code"] != "GENERATION_TEMPLATE_PROFILE_NOT_READY" {
+		t.Fatalf("profile readiness response = %d/%v", status, payload)
+	}
+	status, payload = post(ownerToken, specID, 1)
 	if status != http.StatusCreated || payload["created"] != true {
 		t.Fatalf("first generation response = %d/%v", status, payload)
 	}
@@ -149,22 +173,22 @@ func TestCreateGenerationJobHTTPIsExplicitAndOwnerBound(t *testing.T) {
 	if job["id"] == "" || job["specificationId"] != specID || job["specificationVersion"] != float64(1) || job["status"] != "QUEUED" {
 		t.Fatalf("first generation job = %v", job)
 	}
-	status, payload = post(ownerToken, 1)
+	status, payload = post(ownerToken, specID, 1)
 	if status != http.StatusOK || payload["created"] != false || payload["generationJob"].(map[string]any)["id"] != job["id"] {
 		t.Fatalf("duplicate generation response = %d/%v", status, payload)
 	}
-	status, payload = post(ownerToken, 2)
+	status, payload = post(ownerToken, specID, 2)
 	if status != http.StatusConflict || payload["error"].(map[string]any)["code"] != "GENERATION_SPECIFICATION_VERSION_MISMATCH" {
 		t.Fatalf("version response = %d/%v", status, payload)
 	}
-	status, payload = post(otherToken, 1)
+	status, payload = post(otherToken, specID, 1)
 	if status != http.StatusNotFound || payload["error"].(map[string]any)["code"] != "GENERATION_MISSION_NOT_FOUND" {
 		t.Fatalf("cross-owner response = %d/%v", status, payload)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE generation_jobs SET status='FAILED',finished_at=now() WHERE id=$1`, job["id"]); err != nil {
 		t.Fatal(err)
 	}
-	status, payload = post(ownerToken, 1)
+	status, payload = post(ownerToken, specID, 1)
 	if status != http.StatusCreated || payload["created"] != true || payload["generationJob"].(map[string]any)["id"] == job["id"] {
 		t.Fatalf("terminal retry response = %d/%v", status, payload)
 	}

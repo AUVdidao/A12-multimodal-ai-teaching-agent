@@ -49,12 +49,13 @@ type Store struct {
 var ErrCommitAmbiguous = model.ErrCommitAmbiguous
 
 var (
-	ErrGenerationMissionNotFound       = errors.New("GENERATION_MISSION_NOT_FOUND")
-	ErrGenerationSpecificationNotFound = errors.New("GENERATION_SPECIFICATION_NOT_FOUND")
-	ErrGenerationVersionMismatch       = errors.New("GENERATION_SPECIFICATION_VERSION_MISMATCH")
-	ErrGenerationTemplateInvalid       = errors.New("GENERATION_TEMPLATE_BINDING_INVALID")
-	ErrGenerationMaterialsNotReady     = errors.New("GENERATION_MATERIALS_NOT_READY")
-	ErrGenerationActiveConflict        = errors.New("GENERATION_ACTIVE_JOB_CONFLICT")
+	ErrGenerationMissionNotFound         = errors.New("GENERATION_MISSION_NOT_FOUND")
+	ErrGenerationSpecificationNotFound   = errors.New("GENERATION_SPECIFICATION_NOT_FOUND")
+	ErrGenerationVersionMismatch         = errors.New("GENERATION_SPECIFICATION_VERSION_MISMATCH")
+	ErrGenerationTemplateInvalid         = errors.New("GENERATION_TEMPLATE_BINDING_INVALID")
+	ErrGenerationTemplateProfileNotReady = errors.New("GENERATION_TEMPLATE_PROFILE_NOT_READY")
+	ErrGenerationMaterialsNotReady       = errors.New("GENERATION_MATERIALS_NOT_READY")
+	ErrGenerationActiveConflict          = errors.New("GENERATION_ACTIVE_JOB_CONFLICT")
 )
 
 type GenerationJobRequestResult struct {
@@ -2386,6 +2387,11 @@ func (s *Store) validateGenerationTemplateBindingTx(ctx context.Context, tx pgx.
 		if fmt.Sprint(binding[key]) != fmt.Sprint(expected[key]) {
 			return ErrGenerationTemplateInvalid
 		}
+	}
+	executionReady, executionReadyOK := binding["executionReady"].(bool)
+	engineNativeProfilePresent, engineNativeProfilePresentOK := binding["engineNativeProfilePresent"].(bool)
+	if !executionReadyOK || !executionReady || !engineNativeProfilePresentOK || !engineNativeProfilePresent {
+		return ErrGenerationTemplateProfileNotReady
 	}
 	return nil
 }
