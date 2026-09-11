@@ -17,11 +17,44 @@ import (
 )
 
 type ChatMessage struct {
-	Role             string     `json:"role"`
-	Content          string     `json:"content,omitempty"`
-	ReasoningContent string     `json:"reasoning_content,omitempty"`
-	ToolCallID       string     `json:"tool_call_id,omitempty"`
-	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	Role             string      `json:"role"`
+	Content          string      `json:"content,omitempty"`
+	Images           []ChatImage `json:"-"`
+	ReasoningContent string      `json:"reasoning_content,omitempty"`
+	ToolCallID       string      `json:"tool_call_id,omitempty"`
+	ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+}
+
+// ChatImage is an explicitly supplied OpenAI-compatible image part. The
+// verification path uses a bounded data URL so the provider never needs to
+// fetch an internal LessonForge URL. Normal text turns keep the historical
+// string content shape; image turns are encoded as the provider's content
+// parts array by MarshalJSON.
+type ChatImage struct {
+	URL       string
+	MediaType string
+}
+
+func (m ChatMessage) MarshalJSON() ([]byte, error) {
+	type wireMessage struct {
+		Role             string     `json:"role"`
+		Content          any        `json:"content,omitempty"`
+		ReasoningContent string     `json:"reasoning_content,omitempty"`
+		ToolCallID       string     `json:"tool_call_id,omitempty"`
+		ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	}
+	if len(m.Images) == 0 {
+		return json.Marshal(wireMessage{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ToolCallID: m.ToolCallID, ToolCalls: m.ToolCalls})
+	}
+	parts := make([]map[string]any, 0, 1+len(m.Images))
+	if m.Content != "" {
+		parts = append(parts, map[string]any{"type": "text", "text": m.Content})
+	}
+	for _, image := range m.Images {
+		imageURL := map[string]any{"url": image.URL}
+		parts = append(parts, map[string]any{"type": "image_url", "image_url": imageURL})
+	}
+	return json.Marshal(wireMessage{Role: m.Role, Content: parts, ReasoningContent: m.ReasoningContent, ToolCallID: m.ToolCallID, ToolCalls: m.ToolCalls})
 }
 
 type ToolDefinition struct {
@@ -61,10 +94,12 @@ type ChatResponse struct {
 }
 
 type CapabilityCheckResult struct {
-	NormalChat  bool
-	ToolCalling bool
-	JSONMode    bool
-	HTTPStatus  int
+	NormalChat   bool
+	ToolCalling  bool
+	JSONMode     bool
+	Vision       bool
+	VisionProbed bool
+	HTTPStatus   int
 }
 
 type ResolvedConnection struct {
@@ -264,6 +299,20 @@ func (c *Client) VerifyConnection(ctx context.Context, connection ResolvedConnec
 		result.HTTPStatus = jsonResponse.RawStatus
 	}
 	result.JSONMode = jsonErr == nil && json.Valid([]byte(strings.TrimSpace(jsonResponse.Content)))
+	if connection.Capabilities.SupportsVision {
+		result.VisionProbed = true
+		visionResponse, visionErr := c.Chat(ctx, connection, ChatRequest{
+			Messages: []ChatMessage{{Role: "user", Content: "Describe the supplied image in one word.", Images: []ChatImage{{
+				URL:       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+				MediaType: "image/png",
+			}}}},
+			MaxTokens: 8,
+		})
+		if visionResponse.RawStatus != 0 {
+			result.HTTPStatus = visionResponse.RawStatus
+		}
+		result.Vision = visionErr == nil && strings.TrimSpace(visionResponse.Content) != ""
+	}
 	return result, nil
 }
 

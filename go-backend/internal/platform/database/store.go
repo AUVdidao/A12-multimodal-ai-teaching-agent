@@ -476,6 +476,9 @@ func (s *Store) MarkConnectionCapabilityVerification(ctx context.Context, owner,
 	}
 	capabilities.SupportsTools = checks.ToolCalling
 	capabilities.SupportsJSONMode = checks.JSONMode
+	if checks.VisionProbed {
+		capabilities.SupportsVision = checks.Vision
+	}
 	encodedCapabilities, err := json.Marshal(capabilities)
 	if err != nil {
 		return err
@@ -490,6 +493,13 @@ func (s *Store) MarkConnectionCapabilityVerification(ctx context.Context, owner,
 		verification.SupportsJSONMode = model.CapabilityVerified
 	} else {
 		verification.SupportsJSONMode = model.CapabilityUnsupported
+	}
+	if checks.VisionProbed {
+		if checks.Vision {
+			verification.SupportsVision = model.CapabilityVerified
+		} else {
+			verification.SupportsVision = model.CapabilityUnsupported
+		}
 	}
 	encodedVerification, err := json.Marshal(verification)
 	if err != nil {

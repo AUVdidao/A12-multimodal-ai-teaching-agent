@@ -87,6 +87,75 @@ func TestChatBuildsOpenAICompatibleRequest(t *testing.T) {
 	}
 }
 
+func TestChatSerializesVisionMessageAsContentParts(t *testing.T) {
+	var body struct {
+		Messages []struct {
+			Content []struct {
+				Type     string `json:"type"`
+				Text     string `json:"text"`
+				ImageURL struct {
+					URL string `json:"url"`
+				} `json:"image_url"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+	client := &Client{
+		httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			data, err := io.ReadAll(request.Body)
+			if err != nil {
+				return nil, err
+			}
+			if err := json.Unmarshal(data, &body); err != nil {
+				return nil, err
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok"}}]}`)), Header: make(http.Header)}, nil
+		})},
+		maxResponseBytes: 4096,
+	}
+	_, err := client.Chat(context.Background(), ResolvedConnection{Protocol: "OPENAI_COMPATIBLE", BaseURL: "https://8.8.8.8", ModelID: "vision-model", APIKey: "secret"}, ChatRequest{
+		Messages: []ChatMessage{{Role: "user", Content: "describe", Images: []ChatImage{{URL: "data:image/png;base64,AAAA", MediaType: "image/png"}}}},
+	})
+	if err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+	if len(body.Messages) != 1 || len(body.Messages[0].Content) != 2 {
+		t.Fatalf("vision content parts = %#v", body.Messages)
+	}
+	if body.Messages[0].Content[0].Type != "text" || body.Messages[0].Content[0].Text != "describe" {
+		t.Fatalf("text part = %#v", body.Messages[0].Content[0])
+	}
+	if body.Messages[0].Content[1].Type != "image_url" || body.Messages[0].Content[1].ImageURL.URL != "data:image/png;base64,AAAA" {
+		t.Fatalf("image part = %#v", body.Messages[0].Content[1])
+	}
+}
+
+func TestVerifyConnectionProbesVisionOnlyWhenDeclared(t *testing.T) {
+	var imageProbeSeen bool
+	client := &Client{
+		httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			data, err := io.ReadAll(request.Body)
+			if err != nil {
+				return nil, err
+			}
+			if strings.Contains(string(data), `"image_url"`) {
+				imageProbeSeen = true
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok"}}]}`)), Header: make(http.Header)}, nil
+		})},
+		maxResponseBytes: 4096,
+	}
+	checks, err := client.VerifyConnection(context.Background(), ResolvedConnection{
+		Protocol: "OPENAI_COMPATIBLE", BaseURL: "https://8.8.8.8", ModelID: "vision-model", APIKey: "secret",
+		Capabilities: ModelCapabilities{SupportsVision: true},
+	})
+	if err != nil {
+		t.Fatalf("VerifyConnection() error = %v", err)
+	}
+	if !checks.VisionProbed || !checks.Vision || !imageProbeSeen {
+		t.Fatalf("vision check = %#v, imageProbeSeen=%v", checks, imageProbeSeen)
+	}
+}
+
 func TestChatClassifiesProviderTimeout(t *testing.T) {
 	client := NewClientWithTransport(time.Second, 1024, roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return nil, context.DeadlineExceeded
