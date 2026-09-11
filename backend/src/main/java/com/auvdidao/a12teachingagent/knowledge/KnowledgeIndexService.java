@@ -40,6 +40,27 @@ public class KnowledgeIndexService {
 
     @Transactional
     public List<KnowledgeChunkResponse> index(UploadedMaterial material) {
+        List<PurposeType> usages = purposeRepository.findByMaterialIdOrderByIdAsc(material.getId()).stream()
+                .map(MaterialPurpose::getPurposeType)
+                .distinct()
+                .toList();
+        if (usages.isEmpty()) {
+            throw new ConflictException("Material purpose is required before indexing");
+        }
+        return indexWithUsages(material, usages);
+    }
+
+    /**
+     * LessonForge's internal material contract owns purpose/context on the Go
+     * side. It must not manufacture a legacy MaterialPurpose row merely to
+     * pass the old public indexing gate.
+     */
+    @Transactional
+    public List<KnowledgeChunkResponse> indexLessonForge(UploadedMaterial material) {
+        return indexWithUsages(material, List.of());
+    }
+
+    private List<KnowledgeChunkResponse> indexWithUsages(UploadedMaterial material, List<PurposeType> usages) {
         ParseResult parseResult = parseResultRepository
                 .findFirstByMaterialIdOrderByCreatedAtDescIdDesc(material.getId())
                 .filter(result -> result.getParseStatus() == MaterialParseStatus.SUCCEEDED)
@@ -48,14 +69,6 @@ public class KnowledgeIndexService {
         String extractedText = parseResult.getExtractedText();
         if (extractedText == null || extractedText.isBlank()) {
             throw new ConflictException("Parsed material has no extracted text");
-        }
-
-        List<PurposeType> usages = purposeRepository.findByMaterialIdOrderByIdAsc(material.getId()).stream()
-                .map(MaterialPurpose::getPurposeType)
-                .distinct()
-                .toList();
-        if (usages.isEmpty()) {
-            throw new ConflictException("Material purpose is required before indexing");
         }
 
         List<String> contents = chunkContents(parseResult.getSections(), extractedText);

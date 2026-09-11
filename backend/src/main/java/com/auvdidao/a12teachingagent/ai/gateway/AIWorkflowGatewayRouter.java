@@ -27,6 +27,7 @@ import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -43,6 +44,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
     private final MockAIWorkflowGateway mockGateway;
     private final KimiAIWorkflowGateway kimiGateway;
     private final AiApiCredentialService credentialService;
+    private final Environment environment;
     private final AtomicReference<String> lastActiveProvider = new AtomicReference<>();
     private final AtomicReference<String> lastFallbackReason = new AtomicReference<>();
 
@@ -52,7 +54,17 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             MockAIWorkflowGateway mockGateway,
             KimiAIWorkflowGateway kimiGateway
     ) {
-        this(properties, kimiProperties, mockGateway, kimiGateway, null);
+        this(properties, kimiProperties, mockGateway, kimiGateway, null, null);
+    }
+
+    public AIWorkflowGatewayRouter(
+            AiWorkflowProperties properties,
+            KimiAssistantProperties kimiProperties,
+            MockAIWorkflowGateway mockGateway,
+            KimiAIWorkflowGateway kimiGateway,
+            AiApiCredentialService credentialService
+    ) {
+        this(properties, kimiProperties, mockGateway, kimiGateway, credentialService, null);
     }
 
     @Autowired
@@ -61,19 +73,21 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             KimiAssistantProperties kimiProperties,
             MockAIWorkflowGateway mockGateway,
             KimiAIWorkflowGateway kimiGateway,
-            AiApiCredentialService credentialService
+            AiApiCredentialService credentialService,
+            Environment environment
     ) {
         this.properties = properties;
         this.kimiProperties = kimiProperties;
         this.mockGateway = mockGateway;
         this.kimiGateway = kimiGateway;
         this.credentialService = credentialService;
+        this.environment = environment;
     }
 
     @Override
     public AiGatewayStatus status() {
         AiProvider requestedProvider = provider();
-        String activeProvider = requestedProvider == AiProvider.MOCK
+        String activeProvider = requestedProvider == AiProvider.MOCK && mockAllowed()
                 ? AiProvider.MOCK.name()
                 : lastActiveProvider.get();
         if (!StringUtils.hasText(activeProvider)) {
@@ -82,9 +96,9 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
         return new AiGatewayStatus(
                 requestedProvider.name(),
                 activeProvider,
-                requestedProvider == AiProvider.MOCK || properties.isFallbackToMock(),
+                mockAllowed(),
                 kimiConfigured(),
-                properties.isFallbackToMock(),
+                properties.isFallbackToMock() && mockAllowed(),
                 statusMessage(requestedProvider)
         );
     }
@@ -149,11 +163,27 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
             WorkflowCode workflowCode,
             String operation,
             Supplier<T> kimiCall,
-            Supplier<T> mockCall
+        Supplier<T> mockCall
     ) {
         if (provider() == AiProvider.MOCK) {
+            if (!mockAllowed()) {
+                lastActiveProvider.set("UNAVAILABLE");
+                throw new AiWorkflowUnavailableException(
+                        workflowCode.code() + ": Development Mock is not enabled for the active profile.",
+                        "MOCK_NOT_ALLOWED",
+                        503,
+                        AiFailureKind.NOT_CONFIGURED
+                );
+            }
             lastActiveProvider.set(AiProvider.MOCK.name());
             return mockCall.get();
+        }
+
+        if (provider() != AiProvider.KIMI) {
+            lastActiveProvider.set("UNAVAILABLE");
+            throw new AiWorkflowUnavailableException(
+                    workflowCode.code() + ": the selected provider requires an explicit modelConnectionId.",
+                    "MODEL_CONNECTION_REQUIRED", 400, AiFailureKind.INVALID_REQUEST);
         }
 
         if (!kimiConfigured()) {
@@ -188,7 +218,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
     ) {
         String reason = sanitizeReason(exception);
         lastFallbackReason.set(reason);
-        if (!properties.isFallbackToMock()) {
+        if (!properties.isFallbackToMock() || !mockAllowed()) {
             lastActiveProvider.set("UNAVAILABLE");
             throw exception;
         }
@@ -210,7 +240,7 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
         if (kimiConfigured()) {
             return AiProvider.KIMI.name();
         }
-        return properties.isFallbackToMock() ? AiProvider.MOCK.name() : "UNAVAILABLE";
+        return properties.isFallbackToMock() && mockAllowed() ? AiProvider.MOCK.name() : "UNAVAILABLE";
     }
 
     private String statusMessage(AiProvider requestedProvider) {
@@ -228,6 +258,8 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
                         : "not configured")
                 .append("; fallback to Mock: ")
                 .append(properties.isFallbackToMock())
+                .append("; development Mock enabled: ")
+                .append(mockAllowed())
                 .append('.');
 
         String fallbackReason = lastFallbackReason.get();
@@ -240,6 +272,17 @@ public class AIWorkflowGatewayRouter implements AIWorkflowGateway {
     private boolean kimiConfigured() {
         return kimiProperties.isWorkflowConfigured()
                 || (credentialService != null && credentialService.hasActiveCredential());
+    }
+
+    private boolean mockAllowed() {
+        if (!properties.isDevelopmentMockEnabled()) {
+            return false;
+        }
+        if (environment == null) {
+            // Direct unit tests use the constructor seam without a Spring Environment.
+            return true;
+        }
+        return environment.acceptsProfiles("dev") || environment.acceptsProfiles("test");
     }
 
     private String sanitizeReason(AiWorkflowUnavailableException exception) {

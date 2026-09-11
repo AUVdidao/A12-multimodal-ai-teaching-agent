@@ -46,6 +46,7 @@ public class SecurityConfiguration {
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers("/api/health", "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
                     .requestMatchers("/h2-console/**").denyAll()
+                    .requestMatchers("/api/v1/internal/**").hasRole("INTERNAL_SERVICE")
                     .requestMatchers("/api/v1/auth/**").authenticated()
                     .requestMatchers("/api/v1/**").authenticated()
                     .requestMatchers("/api/**").hasRole("TEACHER")

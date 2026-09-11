@@ -63,4 +63,13 @@ public final class KnowledgeDtos {
             String algorithm
     ) {
     }
+
+    public record KnowledgeMaterialReadResponse(
+            Long projectId,
+            Long materialId,
+            String sourceFilename,
+            String locator,
+            String content
+    ) {
+    }
 }

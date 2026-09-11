@@ -7,6 +7,7 @@ import 'element-plus/dist/index.css';
 import App from './App.vue';
 import router from './router';
 import './styles/global.css';
+import './styles/lessonForge.css';
 
 createApp(App)
   .use(createPinia())

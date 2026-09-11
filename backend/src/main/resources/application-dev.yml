@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/a12-teaching-agent
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  flyway:
+    locations: classpath:db/migration

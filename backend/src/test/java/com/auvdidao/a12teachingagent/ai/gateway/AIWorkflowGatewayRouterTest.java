@@ -8,6 +8,7 @@ import com.auvdidao.a12teachingagent.ai.dto.AiWorkflowDtos.ClarificationResponse
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.domain.common.GenerationMode;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,30 @@ class AIWorkflowGatewayRouterTest {
         verify(mockGateway).clarifyRequirement(request);
         verifyNoInteractions(kimiGateway);
         assertThat(router.status().activeProvider()).isEqualTo("MOCK");
+    }
+
+    @Test
+    void mockProviderRequiresExplicitDevelopmentFlag() {
+        AiWorkflowProperties workflowProperties = workflowProperties(AiProvider.MOCK, false);
+        AIWorkflowGatewayRouter router = router(workflowProperties, new KimiAssistantProperties());
+
+        assertThatThrownBy(() -> router.clarifyRequirement(request))
+                .isInstanceOf(AiWorkflowUnavailableException.class)
+                .hasMessageContaining("Development Mock is not enabled");
+        verifyNoInteractions(mockGateway, kimiGateway);
+    }
+
+    @Test
+    void mockProviderIsRejectedOutsideDevAndTestProfiles() {
+        AiWorkflowProperties workflowProperties = workflowProperties(AiProvider.MOCK, false);
+        MockEnvironment production = new MockEnvironment();
+        production.setActiveProfiles("prod");
+        AIWorkflowGatewayRouter router = router(workflowProperties, new KimiAssistantProperties(), production);
+
+        assertThatThrownBy(() -> router.clarifyRequirement(request))
+                .isInstanceOf(AiWorkflowUnavailableException.class)
+                .hasMessageContaining("Development Mock is not enabled");
+        verifyNoInteractions(mockGateway, kimiGateway);
     }
 
     @Test
@@ -130,7 +155,23 @@ class AIWorkflowGatewayRouterTest {
         AiWorkflowProperties properties = new AiWorkflowProperties();
         properties.setProvider(provider);
         properties.setFallbackToMock(fallbackToMock);
+        properties.setDevelopmentMockEnabled(true);
         return properties;
+    }
+
+    private AIWorkflowGatewayRouter router(
+            AiWorkflowProperties workflowProperties,
+            KimiAssistantProperties kimiProperties,
+            MockEnvironment environment
+    ) {
+        return new AIWorkflowGatewayRouter(
+                workflowProperties,
+                kimiProperties,
+                mockGateway,
+                kimiGateway,
+                null,
+                environment
+        );
     }
 
     private KimiAssistantProperties configuredKimi() {

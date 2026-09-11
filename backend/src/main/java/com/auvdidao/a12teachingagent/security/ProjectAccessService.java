@@ -2,6 +2,7 @@ package com.auvdidao.a12teachingagent.security;
 
 import com.auvdidao.a12teachingagent.common.exception.ForbiddenException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
+import com.auvdidao.a12teachingagent.common.exception.UnauthorizedException;
 import com.auvdidao.a12teachingagent.domain.common.UserRole;
 import com.auvdidao.a12teachingagent.domain.project.Project;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
@@ -36,6 +37,20 @@ public class ProjectAccessService {
 
     public void requireAccess(Project project) {
         currentUserService.currentUser().ifPresent(user -> requireAccess(user, project));
+    }
+
+    /** Strict boundary for PPT Specification and Template/Profile APIs. */
+    public AuthenticatedUser requireAuthenticatedTeacherAccess(Long projectId) {
+        AuthenticatedUser teacher = currentUserService.currentUser()
+                .orElseThrow(() -> new UnauthorizedException("Authentication is required"));
+        if (teacher.activeRole() != UserRole.TEACHER) {
+            throw new ForbiddenException("The active role is not allowed to access teacher projects");
+        }
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        requireActive(project);
+        requireOwner(teacher, project);
+        return teacher;
     }
 
     public List<Project> filterAccessibleProjects(List<Project> projects) {

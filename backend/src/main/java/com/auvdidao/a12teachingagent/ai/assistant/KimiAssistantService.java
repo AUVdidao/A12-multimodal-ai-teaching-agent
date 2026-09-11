@@ -20,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** LEGACY: assistant entry point awaiting migration to ModelGateway; do not add new direct Kimi calls here. */
+@Deprecated
 @Service
 public class KimiAssistantService {
 

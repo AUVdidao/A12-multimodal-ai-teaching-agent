@@ -1,5 +1,6 @@
 package com.auvdidao.a12teachingagent.ai.kimi;
 
+import com.auvdidao.a12teachingagent.agent.model.ResolvedModelCredential;
 import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantProperties;
 import com.auvdidao.a12teachingagent.ai.credential.AiApiCredentialService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,6 +19,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** LEGACY: retained only for un-migrated assistant/material paths; new Planning never uses this client. */
+@Deprecated
 @Component
 public class KimiChatClient {
 
@@ -60,10 +63,15 @@ public class KimiChatClient {
     }
 
     public KimiChatResponse complete(KimiChatRequest chatRequest) {
+        return complete(chatRequest, chatRequest == null ? null : chatRequest.credential());
+    }
+
+    /** Uses only the credential explicitly bound by the upstream resolver; no HTTP-user or env fallback. */
+    public KimiChatResponse complete(KimiChatRequest chatRequest, ResolvedModelCredential resolvedCredential) {
         if (chatRequest == null) {
             throw new KimiClientException("KIMI_INVALID_CONFIGURATION", "Kimi request is required", 503);
         }
-        String apiKey = resolveApiKey();
+        String apiKey = resolvedCredential == null ? resolveApiKey() : resolvedCredential.value();
         requireConfiguration(chatRequest.model(), apiKey);
         int attempts = Math.max(1, properties.getRequestAttempts());
         KimiClientException lastFailure = null;
@@ -153,13 +161,12 @@ public class KimiChatClient {
     }
 
     private String resolveApiKey() {
-        if (credentialService != null) {
-            String stored = credentialService.activeApiKey();
-            if (StringUtils.hasText(stored)) {
-                return stored;
-            }
+        if (credentialService == null) {
+            // Constructor retained for isolated legacy tests only. Spring production wiring always binds a user credential.
+            return properties.getApiKey();
         }
-        return properties.getApiKey();
+        String stored = credentialService.activeApiKey();
+        return StringUtils.hasText(stored) ? stored : "";
     }
 
     private void requireConfiguration(String model, String apiKey) {

@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class AiWorkflowProperties {
 
     private AiProvider provider = AiProvider.KIMI;
-    private boolean fallbackToMock = true;
+    private boolean fallbackToMock = false;
+    private boolean developmentMockEnabled = false;
 
     public AiProvider getProvider() {
         return provider;
@@ -22,5 +23,13 @@ public class AiWorkflowProperties {
 
     public void setFallbackToMock(boolean fallbackToMock) {
         this.fallbackToMock = fallbackToMock;
+    }
+
+    public boolean isDevelopmentMockEnabled() {
+        return developmentMockEnabled;
+    }
+
+    public void setDevelopmentMockEnabled(boolean developmentMockEnabled) {
+        this.developmentMockEnabled = developmentMockEnabled;
     }
 }

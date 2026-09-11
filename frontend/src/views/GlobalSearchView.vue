@@ -107,11 +107,13 @@ const emptyPrompt = computed(() => ({
   TEACHER: '可搜索教学项目、教学任务与项目问题。',
   LEADER: '可搜索教学任务、审批、发布与问答。',
   STUDENT: '可搜索已发布学习任务与自己的问答。',
+  RESEARCHER: '可搜索教研任务与审核内容。',
 }[auth.activeRole || 'TEACHER']));
 const roleLabel = computed(() => ({
   TEACHER: '教师',
   LEADER: '教研负责人',
   STUDENT: '学生',
+  RESEARCHER: '教研人员',
 }[auth.activeRole || 'TEACHER']));
 
 watch(

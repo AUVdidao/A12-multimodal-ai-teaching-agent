@@ -12,89 +12,132 @@
     </StatePanel>
 
     <div v-else class="assistant-shell">
-      <AssistantProjectContext
-        :empty="empty"
-        :loading="loading"
-        :projects="projects"
-        :selected-project-id="selectedProjectId"
-        :project-name="selectedProject?.projectName"
-        :course-name="selectedProject?.courseName"
-        :chapter-title="selectedProject?.chapterTitle"
-        :target-students="selectedProject?.targetStudents"
-        :lesson-duration="lessonDurationLabel"
-        :stage-label="stageLabel"
-        @create-project="goToCreateProject"
-        @view-projects="goToProjects"
-        @select-project="selectProject"
-        @open-switch="goToProjects"
-        @overview="goToProjectRoute('project-overview')"
+      <ConversationWorkspaceSidebar
+        :sessions="conversationWorkspace.sessions"
+        :active-session-id="conversationWorkspace.activeSessionId"
+        :current-project-name="selectedProject?.projectName"
+        :current-session-title="conversationWorkspace.activeSession?.title"
+        @new-session="startNewDialogue"
+        @select-session="selectSession"
       />
 
-      <section v-if="contextFailureMessage" class="assistant-context-error" role="alert">
-        <el-icon><WarningFilled /></el-icon>
-        <div>
-          <strong>部分项目上下文读取失败</strong>
-          <span>{{ contextFailureMessage }}</span>
-        </div>
-        <el-button :icon="Refresh" :loading="contextLoading" @click="retryProjectContext">重新同步</el-button>
-      </section>
-
-      <main class="assistant-workspace">
-        <AssistantConversation
-          v-model="composerText"
-          :messages="messages"
-          :quick-prompts="quickPrompts"
-          :loading="loading"
+      <div class="assistant-shell__content">
+        <AssistantProjectContext
           :empty="empty"
-          :sending="sending"
-          :teacher-initial="teacherInitial"
-          @send="sendComposerMessage"
-          @quick-prompt="sendQuickPrompt"
-          @action="handleAction"
-          @new-dialogue="startNewDialogue"
-          @history="openHistory"
+          :loading="loading"
+          :projects="projects"
+          :selected-project-id="selectedProjectId"
+          :project-name="selectedProject?.projectName"
+          :course-name="selectedProject?.courseName"
+          :chapter-title="selectedProject?.chapterTitle"
+          :target-students="selectedProject?.targetStudents"
+          :lesson-duration="lessonDurationLabel"
+          :stage-label="stageLabel"
           @create-project="goToCreateProject"
           @view-projects="goToProjects"
+          @select-project="selectProject"
+          @open-switch="goToProjects"
+          @overview="goToProjectRoute('project-overview')"
         />
 
-        <AssistantSidePanel
-          :progress-items="progressItems"
-          :sources="sourceStatuses"
-          :recent-work="recentWork"
-          :loading="loading"
-          :syncing="contextLoading"
-          :project-synced="projectSynced"
-          :student-mode="activeScenario === 'student-questions'"
-          :service-state="serviceState"
-          :service-label="providerPresentation.label"
-          @navigate="router.push"
-          @show-service-detail="showServiceDetail"
-        />
-      </main>
+        <section v-if="contextFailureMessage" class="assistant-context-error" role="alert">
+          <el-icon><WarningFilled /></el-icon>
+          <div>
+            <strong>部分项目上下文读取失败</strong>
+            <span>{{ contextFailureMessage }}</span>
+          </div>
+          <el-button :icon="Refresh" :loading="contextLoading" @click="retryProjectContext">重新同步</el-button>
+        </section>
+
+        <main class="assistant-workspace">
+          <AssistantConversation
+            v-model="composerText"
+            :messages="messages"
+            :quick-prompts="quickPrompts"
+            :loading="loading"
+            :empty="empty"
+            :sending="sending"
+            :teacher-initial="teacherInitial"
+            :files="materials"
+            :uploading="uploading"
+            :upload-progress="uploadProgress"
+            @send="sendComposerMessage"
+            @quick-prompt="sendQuickPrompt"
+            @action="handleAction"
+            @new-dialogue="startNewDialogue"
+            @history="openHistory"
+            @create-project="goToCreateProject"
+            @view-projects="goToProjects"
+            @file-select="handleFileSelected"
+          />
+
+          <AssistantSidePanel
+            :progress-items="progressItems"
+            :sources="sourceStatuses"
+            :recent-work="recentWork"
+            :loading="loading"
+            :syncing="contextLoading"
+            :project-synced="projectSynced"
+            :student-mode="activeScenario === 'student-questions'"
+            :service-state="serviceState"
+            :service-label="workspaceServiceLabel"
+            :selected-connection="selectedConnection"
+            :generation-status="generationStatus"
+            :generation-tone="generationTone"
+            :generation-intent-label="generationIntentLabel"
+            :current-version="currentVersion"
+            :artifacts="currentArtifacts"
+            @navigate="router.push"
+            @show-service-detail="showServiceDetail"
+            @open-connections="connectionDrawerOpen = true"
+            @open-artifact="goToProjectRoute('project-ppt')"
+          />
+        </main>
+      </div>
+
+      <ModelConnectionDrawer
+        v-model="connectionDrawerOpen"
+        :selected-connection="selectedConnection"
+        :selected-connection-id="conversationWorkspace.selectedConnectionId"
+        @connections-loaded="handleConnectionsLoaded"
+        @update:connection="handleConnectionSelected"
+      />
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { runClarification, runGenerationPlan, runKimiAssistantChat, type GenerationMode } from '@/api/aiAssistant';
 import { listProjectDialogues, saveDialogueMessage, type DialogueMessage, type DialogueSender } from '@/api/dialogues';
 import { getGenerationWorkspace, type GenerationWorkspace } from '@/api/generation';
 import { getKnowledgeOverview, type KnowledgeOverview } from '@/api/knowledge';
-import { listMaterials, type MaterialRecord } from '@/api/materials';
+import { listMaterials, uploadMaterial, type MaterialRecord } from '@/api/materials';
+import { createPlanningProposal, getPlanningConfirmedContext } from '@/api/planning';
 import { listProjects, listRecentProjects, type RecentProject, type TeachingProject } from '@/api/projects';
 import { listQuestions, type Question } from '@/api/questions';
 import { getLatestTeachingRequirement, type TeachingRequirement } from '@/api/requirements';
+import { getLatestTeachingIntent } from '@/api/teachingIntents';
+import { getTemplate, listTemplates } from '@/api/templates';
 import AssistantConversation from '@/components/assistant/AssistantConversation.vue';
 import AssistantProjectContext from '@/components/assistant/AssistantProjectContext.vue';
 import AssistantSidePanel from '@/components/assistant/AssistantSidePanel.vue';
+import ConversationWorkspaceSidebar from '@/components/assistant/ConversationWorkspaceSidebar.vue';
+import ModelConnectionDrawer from '@/components/assistant/ModelConnectionDrawer.vue';
 import StatePanel from '@/components/StatePanel.vue';
 import { useAiGatewayStatus } from '@/composables/useAiGatewayStatus';
 import { useAuthStore } from '@/stores/auth';
+import { useConversationWorkspaceStore } from '@/stores/conversationWorkspace';
+import { findSelectableConnection, modelConnectionVerificationLabel, safeConnectionErrorMessage } from '@/utils/conversationWorkspaceConnection';
+import {
+  findExecutableConnection,
+  type ConversationPlanningRequestSnapshot,
+} from '@/utils/conversationWorkspacePlanning';
+import { executeConversationPlanning } from '@/utils/conversationWorkspacePlanningFlow';
+import { generationStatusFor, generationToneFor } from '@/utils/generationPresentation';
+import type { ModelConnection } from '@/api/aiCredentials';
 import type {
   AssistantMessage,
   AssistantProgressItem,
   AssistantRecentWorkItem,
-  AssistantResponseSection,
   AssistantSourceStatus,
   AssistantWorkspaceAction,
 } from '@/types/assistant';
@@ -108,6 +151,7 @@ const ASSISTANT_PROJECT_STORAGE_KEY = 'a12-assistant-project-id';
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
+const conversationWorkspace = useConversationWorkspaceStore();
 const projects = ref<TeachingProject[]>([]);
 const recentProjects = ref<RecentProject[]>([]);
 const selectedProjectId = ref<number>();
@@ -124,6 +168,10 @@ const projectsError = ref('');
 const composerText = ref('');
 const messages = ref<AssistantMessage[]>([]);
 const sending = ref(false);
+const uploading = ref(false);
+const uploadProgress = ref(0);
+const connectionDrawerOpen = ref(false);
+const knownConnections = ref<ModelConnection[]>([]);
 const activeScenario = ref('overview');
 const sessionId = ref(createSessionId());
 let contextRequestId = 0;
@@ -151,7 +199,27 @@ const empty = computed(() => !loading.value && projects.value.length === 0);
 const lessonDurationLabel = computed(() => selectedProject.value?.lessonDuration ? `${selectedProject.value.lessonDuration} 分钟` : undefined);
 const stageLabel = computed(() => statusLabel(selectedProject.value?.status));
 const projectSynced = computed(() => Boolean(selectedProject.value && !contextLoading.value && Object.values(sourceState.value).every((state) => state !== 'error')));
-const providerUnavailable = computed(() => providerPresentation.value.unavailable);
+const generationStatus = computed(() => {
+  return generationStatusFor({
+    contextLoading: contextLoading.value,
+    sourceState: sourceState.value.generation,
+    hasWorkspace: Boolean(generationWorkspace.value),
+    hasArtifacts: currentArtifacts.value.length > 0,
+    hasPlan: Boolean(generationWorkspace.value?.latestPlan),
+    planConfirmed: Boolean(generationWorkspace.value?.latestPlan?.confirmed),
+  });
+});
+const generationTone = computed(() => generationToneFor({
+  contextLoading: contextLoading.value,
+  sourceState: sourceState.value.generation,
+  hasWorkspace: Boolean(generationWorkspace.value),
+  hasArtifacts: currentArtifacts.value.length > 0,
+  hasPlan: Boolean(generationWorkspace.value?.latestPlan),
+  planConfirmed: Boolean(generationWorkspace.value?.latestPlan?.confirmed),
+}));
+const generationIntentLabel = computed(() => generationWorkspace.value?.teachingIntent?.status === 'CONFIRMED' ? '已确认' : generationWorkspace.value?.teachingIntent ? '待确认' : '未生成');
+const selectedConnection = computed(() => knownConnections.value.find((item) => item.id === conversationWorkspace.selectedConnectionId) || null);
+const workspaceServiceLabel = computed(() => selectedConnection.value ? modelConnectionVerificationLabel(selectedConnection.value.verificationStatus) : '未选择 Model Connection');
 const serviceState = computed<'ok' | 'error' | 'unknown'>(() => {
   if (providerPresentation.value.tone === 'danger' || statusError.value) return 'error';
   if (!gatewayStatus.value) return 'unknown';
@@ -190,21 +258,21 @@ const progressItems = computed<AssistantProgressItem[]>(() => [
     label: '知识切片',
     value: `${knowledgeOverview.value?.chunkCount ?? 0} 条`,
     tone: (knowledgeOverview.value?.chunkCount ?? 0) > 0 ? 'purple' : 'gray',
-    route: projectRoute('project-knowledge'),
+    route: projectRoute('project-materials'),
   },
   {
     id: 'intent',
     label: '教学意图',
     value: generationWorkspace.value?.teachingIntent?.status === 'CONFIRMED' ? '已确认' : generationWorkspace.value?.teachingIntent ? '待确认' : '未生成',
     tone: generationWorkspace.value?.teachingIntent?.status === 'CONFIRMED' ? 'green' : 'orange',
-    route: projectRoute('project-intent'),
+    route: projectRoute('project-outline'),
   },
   {
     id: 'artifact',
     label: '成果版本',
     value: currentVersion.value ? `V${currentVersion.value}` : '未生成',
     tone: currentVersion.value ? 'purple' : 'gray',
-    route: projectRoute(currentVersion.value ? 'project-preview' : 'project-plan'),
+    route: projectRoute(currentVersion.value ? 'project-ppt' : 'project-lesson-plan'),
   },
   {
     id: 'question',
@@ -261,7 +329,7 @@ const recentWork = computed<AssistantRecentWorkItem[]>(() => {
       id: `version-${currentVersion.value}`,
       title: `成果版本 V${currentVersion.value}`,
       time: generationWorkspace.value?.latestPlan ? formatTime(generationWorkspace.value.latestPlan.updatedAt) : '刚刚',
-      route: projectRoute('project-preview'),
+      route: projectRoute('project-ppt'),
       icon: 'layers',
     });
   }
@@ -288,7 +356,10 @@ const recentWork = computed<AssistantRecentWorkItem[]>(() => {
   return items.slice(0, 4);
 });
 
-onMounted(loadPage);
+onMounted(() => {
+  conversationWorkspace.hydrate(authStore.user?.id);
+  loadPage();
+});
 
 async function loadPage() {
   await waitForPendingDialogueSaves();
@@ -397,6 +468,7 @@ async function loadProjectContext(projectId: number) {
   }
 
   restoreMessagesFromDialogues();
+  syncSessionIndex();
   contextLoading.value = false;
 }
 
@@ -410,9 +482,9 @@ function resetContext() {
   sourceState.value = {};
 }
 
-function restoreMessagesFromDialogues() {
-  const latestSessionId = latestDialogueSessionId(dialogues.value);
-  if (!latestSessionId) {
+function restoreMessagesFromDialogues(preferredSessionId = '') {
+  const latestSessionId = preferredSessionId || latestDialogueSessionId(dialogues.value);
+  if (!latestSessionId || !dialogues.value.some((item) => item.sessionId === latestSessionId)) {
     messages.value = [buildWelcomeMessage()];
     return;
   }
@@ -443,51 +515,13 @@ async function handleTeacherIntent(intent: string, content: string) {
   activeScenario.value = intent;
   try {
     if (intent === 'progress') addAssistantMessage(buildProgressMessage());
-    else if (intent === 'requirement') await runRequirementWorkflow(content);
+    else if (intent === 'requirement') addAssistantMessage(buildConnectionPendingMessage('需求澄清'));
     else if (intent === 'intent') addAssistantMessage(buildIntentMessage());
-    else if (intent === 'generation') await runGenerationWorkflow(content);
+    else if (intent === 'generation') await sendPlanningProposal(content);
     else if (intent === 'student-questions') addAssistantMessage(buildQuestionMessage());
-    else await runKimiTeachingAssistant(content);
+    else addAssistantMessage(buildConnectionPendingMessage('自由对话'));
   } finally {
     sending.value = false;
-  }
-}
-
-async function runKimiTeachingAssistant(teacherInput: string) {
-  if (!selectedProject.value) return;
-  const conversation = messages.value
-    .slice(0, -1)
-    .filter((message) => message.role === 'teacher' || message.role === 'assistant')
-    .slice(-8)
-    .map((message) => ({
-      role: message.role === 'teacher' ? 'teacher' as const : 'assistant' as const,
-      content: message.content,
-    }));
-
-  try {
-    const response = await runKimiAssistantChat(selectedProject.value.id, {
-      message: teacherInput,
-      conversation,
-    });
-    addAssistantMessage({
-      id: createMessageId(),
-      role: 'assistant',
-      content: response.content,
-      createdAt: new Date().toISOString(),
-      status: 'success',
-      evidence: buildEvidence(),
-      sections: [{
-        id: 'kimi-assistant',
-        title: `Kimi ${response.model}`,
-        content: '已结合当前教学项目上下文生成建议。',
-        tone: 'purple',
-      }],
-    });
-  } catch (error) {
-    addAssistantMessage(buildErrorMessage(
-      resolveError(error, 'Kimi 教学助手暂时不可用，请稍后重试。'),
-      'kimi-assistant',
-    ));
   }
 }
 
@@ -514,6 +548,131 @@ function handleAction(action: AssistantWorkspaceAction) {
 function startNewDialogue() {
   sessionId.value = createSessionId();
   messages.value = selectedProject.value ? [buildWelcomeMessage()] : [];
+  if (selectedProject.value) {
+    conversationWorkspace.touchSession({
+      id: sessionId.value,
+      projectId: selectedProject.value.id,
+      title: selectedProject.value.projectName,
+      updatedAt: new Date().toISOString(),
+      status: 'active',
+      connectionId: null,
+    });
+  }
+}
+
+async function selectSession(id: string) {
+  const target = conversationWorkspace.sessions.find((item) => item.id === id);
+  if (!target) return;
+  conversationWorkspace.selectSession(id);
+  sessionId.value = id;
+  if (target.projectId && target.projectId !== selectedProjectId.value) {
+    selectedProjectId.value = target.projectId;
+    localStorage.setItem(ASSISTANT_PROJECT_STORAGE_KEY, String(target.projectId));
+    await loadProjectContext(target.projectId);
+  }
+  restoreMessagesFromDialogues(id);
+  syncSessionIndex();
+}
+
+function syncSessionIndex() {
+  if (!selectedProject.value) return;
+  conversationWorkspace.touchSession({
+    id: sessionId.value,
+    projectId: selectedProject.value.id,
+    title: selectedProject.value.projectName,
+    updatedAt: new Date().toISOString(),
+    status: 'active',
+    connectionId: conversationWorkspace.selectedConnectionId,
+  });
+}
+
+function handleConnectionSelected(connection: ModelConnection | null) {
+  if (connection && !knownConnections.value.some((item) => item.id === connection.id)) {
+    knownConnections.value = [connection, ...knownConnections.value];
+  } else if (connection) {
+    knownConnections.value = knownConnections.value.map((item) => item.id === connection.id ? connection : item);
+  }
+  conversationWorkspace.setConnection(connection?.id || null);
+  syncSessionIndex();
+}
+
+async function sendPlanningProposal(teacherInstruction: string) {
+  const project = selectedProject.value;
+  const selectedConnection = findExecutableConnection(knownConnections.value, conversationWorkspace.selectedConnectionId);
+  if (!project) {
+    addAssistantMessage(buildPlanningBlockedMessage('当前没有可用项目上下文，未发送 Planning 请求。'));
+    return;
+  }
+  if (!selectedConnection) {
+    addAssistantMessage(buildPlanningBlockedMessage('当前会话没有已验证且启用的 Model Connection，未发送 Planning 请求。'));
+    return;
+  }
+
+  const requestSnapshot: ConversationPlanningRequestSnapshot = {
+    userId: authStore.user?.id ?? null,
+    sessionId: sessionId.value,
+    projectId: project.id,
+    modelConnectionId: selectedConnection.id,
+  };
+  try {
+    const response = await executeConversationPlanning({
+      project,
+      requirement: requirement.value,
+      requestSnapshot,
+      teacherInstruction,
+      currentState: () => ({
+        userId: authStore.user?.id ?? null,
+        sessionId: sessionId.value,
+        projectId: selectedProjectId.value,
+        selectedConnectionId: conversationWorkspace.selectedConnectionId,
+        connections: knownConnections.value,
+      }),
+      getPlanningConfirmedContext: (projectId) => getPlanningConfirmedContext(projectId),
+      getLatestTeachingIntent: (projectId) => getLatestTeachingIntent(projectId),
+      listTemplates: (projectId) => listTemplates(projectId),
+      getTemplate: (projectId, templateId) => getTemplate(projectId, templateId),
+      createPlanningProposal: (projectId, payload) => createPlanningProposal(projectId, payload),
+      onBlocked: (message) => addAssistantMessage(buildPlanningBlockedMessage(message)),
+      onStale: (message) => addAssistantMessage(buildPlanningBlockedMessage(message)),
+    });
+    if (!response) return;
+    if (response.executionStatus !== 'COMPLETED' || response.usedProvider === 'MOCK') {
+      addAssistantMessage(buildPlanningBlockedMessage(`后端未返回可验证的真实 Planning 成功（状态：${response.executionStatus}）；未将其展示为成功。`));
+      return;
+    }
+    addAssistantMessage(buildPlanningResponseMessage(response.executionStatus));
+  } catch (error) {
+    const planningError = resolveError(error, '后端未返回可验证结果。');
+    addAssistantMessage(buildPlanningBlockedMessage(`Planning 请求未完成：${safeConnectionErrorMessage(new Error(planningError), '后端未返回可验证结果。')}`));
+  }
+}
+
+function handleConnectionsLoaded(connections: ModelConnection[]) {
+  knownConnections.value = connections;
+  const safeSelection = findSelectableConnection(connections, conversationWorkspace.selectedConnectionId);
+  if (safeSelection?.id !== conversationWorkspace.selectedConnectionId) {
+    conversationWorkspace.setConnection(null);
+    syncSessionIndex();
+  }
+}
+
+async function handleFileSelected(file: File) {
+  if (!selectedProject.value || uploading.value) return;
+  uploading.value = true;
+  uploadProgress.value = 0;
+  try {
+    const uploaded = await uploadMaterial(selectedProject.value.id, file, '', (value) => {
+      uploadProgress.value = value;
+    });
+    materials.value = [uploaded, ...materials.value.filter((item) => item.id !== uploaded.id)];
+    sourceState.value.materials = 'loaded';
+    ElMessage.success('文件已添加到当前 Context Files。');
+    syncSessionIndex();
+  } catch (error) {
+    ElMessage.error(resolveError(error, '文件上传失败，请稍后重试。'));
+  } finally {
+    uploading.value = false;
+  }
 }
 
 async function openHistory() {
@@ -528,103 +687,6 @@ function showServiceDetail() {
     statusError.value,
   ].filter(Boolean).join('\n');
   void ElMessageBox.alert(detail || '当前没有更多诊断信息。', providerPresentation.value.label, { confirmButtonText: '知道了' });
-}
-
-async function runRequirementWorkflow(teacherInput: string) {
-  if (!selectedProject.value) return;
-  if (providerUnavailable.value) {
-    addAssistantMessage(buildProviderUnavailableMessage('需求澄清工作流暂时不可用。'));
-    return;
-  }
-
-  try {
-    const result = await runClarification({
-      projectId: selectedProject.value.id,
-      rawRequirement: rawRequirementText(teacherInput),
-      knownFields: knownFieldsForProject(selectedProject.value),
-      generationMode: generationMode(selectedProject.value.modelMode),
-    });
-
-    addAssistantMessage({
-      id: createMessageId(),
-      role: 'assistant',
-      content: result.missingFields.length
-        ? `我检查了当前项目需求，还有 ${result.missingFields.length} 项信息建议补齐。`
-        : '我检查了当前项目需求，现有信息已经足够进入下一步。',
-      createdAt: new Date().toISOString(),
-      status: 'success',
-      evidence: buildEvidence(),
-      sections: [
-        {
-          id: 'missing',
-          title: result.missingFields.length ? '需要补齐的信息' : '需求状态',
-          tone: result.missingFields.length ? 'orange' : 'green',
-          items: result.missingFields.length
-            ? result.missingFields.map((field) => ({ id: field, title: field, description: '建议回到教学需求页补充确认。', status: 'warning' }))
-            : [{ id: 'ready', title: '信息已足够', description: result.nextAction, status: 'done' }],
-        },
-        {
-          id: 'questions',
-          title: 'AI 建议追问',
-          content: result.questions.length ? result.questions.map((question, index) => `${index + 1}. ${question}`).join('\n') : '暂无额外追问。',
-        },
-      ],
-      actions: [
-        routeAction('open-requirement', '进入需求页补充', projectRoute('project-requirements'), 'primary'),
-        workflowAction('start-generation', '继续生成教学方案', 'success'),
-      ],
-    });
-  } catch (error) {
-    addAssistantMessage(buildErrorMessage(resolveError(error, '需求澄清工作流执行失败，请稍后重试。'), 'requirement'));
-  } finally {
-    await loadGatewayStatus();
-  }
-}
-
-async function runGenerationWorkflow(teacherInput: string) {
-  if (!selectedProject.value) return;
-  if (providerUnavailable.value) {
-    addAssistantMessage(buildProviderUnavailableMessage('生成方案工作流暂时不可用。'));
-    return;
-  }
-
-  try {
-    const result = await runGenerationPlan({
-      projectId: selectedProject.value.id,
-      courseName: selectedProject.value.courseName,
-      chapterTopic: selectedProject.value.chapterTitle,
-      targetAudience: selectedProject.value.targetStudents,
-      outputTypes: requirement.value?.outputTypes?.length ? requirement.value.outputTypes : ['PPT', 'DOCX', 'INTERACTION'],
-      generationMode: generationMode(selectedProject.value.modelMode),
-    });
-
-    addAssistantMessage({
-      id: createMessageId(),
-      role: 'assistant',
-      content: teacherInput && !isDefaultGenerationPrompt(teacherInput)
-        ? '我已调用生成方案工作流。当前接口只接收项目、课程、章节、授课对象和输出类型，因此本轮自由编辑要求不会直接写入生成请求；请进入生成流程继续细化。'
-        : '我已基于当前项目数据调用生成方案工作流，你可以进入生成流程继续编辑和确认。',
-      createdAt: new Date().toISOString(),
-      status: 'success',
-      evidence: buildEvidence(),
-      versionNotice: `本次方案建议来自当前项目数据。真正生成成果版本需在内容生成页继续确认，不会在副驾驶内覆盖当前 V${currentVersion.value || 0}。`,
-      sections: [
-        ...(teacherInput && !isDefaultGenerationPrompt(teacherInput)
-          ? [outlineSection('instruction-boundary', '本轮输入处理', [`已收到：${teacherInput}`, '生成方案接口暂不支持自由编辑指令参数，未篡改课程名或章节主题来伪装传递。'])] : []),
-        outlineSection('ppt', 'PPT 大纲', result.pptOutline.map((section) => `${section.title}：${section.points.join('、')}`)),
-        outlineSection('doc', 'Word 教案大纲', result.docOutline.map((section) => `${section.title}：${section.points.join('、')}`)),
-        outlineSection('interaction', '互动安排', result.interactionPlan),
-      ],
-      actions: [
-        routeAction('open-plan', '打开生成流程', projectRoute('project-plan'), 'primary'),
-        routeAction('open-preview', '查看已有成果', projectRoute('project-preview'), 'secondary', !currentVersion.value, '当前项目还没有已生成成果。'),
-      ],
-    });
-  } catch (error) {
-    addAssistantMessage(buildErrorMessage(resolveError(error, '生成方案工作流执行失败，请稍后重试。'), 'generation'));
-  } finally {
-    await loadGatewayStatus();
-  }
 }
 
 function buildWelcomeMessage(): AssistantMessage {
@@ -715,7 +777,7 @@ function buildIntentMessage(): AssistantMessage {
           : '先确认需求摘要与参考资料，再进入教学意图页生成并确认。',
       },
     ],
-    actions: [routeAction('open-intent', '打开教学意图', projectRoute('project-intent'), 'primary')],
+    actions: [routeAction('open-intent', '打开教学意图', projectRoute('project-outline'), 'primary')],
   };
 }
 
@@ -764,32 +826,39 @@ function buildUnsupportedMessage(): AssistantMessage {
   };
 }
 
-function buildProviderUnavailableMessage(content: string): AssistantMessage {
+function buildConnectionPendingMessage(action: string): AssistantMessage {
   return {
     id: createMessageId(),
     role: 'assistant',
-    content: `${content}\n${providerPresentation.value.summary}`,
+    content: `${action}暂未发送。当前前端没有支持 modelConnectionId 的真实后端调用契约，已安全阻断旧 Kimi/Workflow 旁路。`,
     createdAt: new Date().toISOString(),
-    status: 'error',
+    status: 'pending',
     evidence: buildEvidence(),
-    actions: [retryAction()],
+    versionNotice: 'LIVE_VERIFICATION_PENDING：请等待后端接入 modelConnectionId 调用契约后再执行。',
   };
 }
 
-function buildErrorMessage(content: string, intent: string): AssistantMessage {
+function buildPlanningBlockedMessage(content: string): AssistantMessage {
   return {
     id: createMessageId(),
     role: 'assistant',
     content,
     createdAt: new Date().toISOString(),
-    status: 'error',
+    status: 'pending',
     evidence: buildEvidence(),
-    actions: [
-      {
-        ...retryAction(),
-        id: `retry-${intent}`,
-      },
-    ],
+    versionNotice: 'LIVE_VERIFICATION_PENDING：未生成 Job、Specification 或 PPTX 成功记录。',
+  };
+}
+
+function buildPlanningResponseMessage(executionStatus: string): AssistantMessage {
+  return {
+    id: createMessageId(),
+    role: 'assistant',
+    content: `服务端 Planning 请求已返回（${executionStatus}）。本次只接通当前会话的 Model Connection，不代表 PPTX 已生成。`,
+    createdAt: new Date().toISOString(),
+    status: 'success',
+    evidence: buildEvidence(),
+    versionNotice: 'LIVE_VERIFICATION_PENDING：真实 Provider、PPTX、Renderer 和 Office 仍需独立验证。',
   };
 }
 
@@ -924,15 +993,6 @@ function retryAction(): AssistantWorkspaceAction {
   return { id: 'retry', label: '重新读取上下文', tone: 'primary', actionType: 'RETRY' };
 }
 
-function outlineSection(id: string, title: string, rows: string[]): AssistantResponseSection {
-  return {
-    id,
-    title,
-    tone: rows.length ? 'purple' : 'gray',
-    content: rows.length ? rows.map((row, index) => `${index + 1}. ${row}`).join('\n') : '本次工作流没有返回该部分内容。',
-  };
-}
-
 function inferIntent(content: string) {
   if (/问题|答疑|学生|提问/.test(content)) return 'student-questions';
   if (/生成|方案|PPT|教案|课件|互动/.test(content)) return 'generation';
@@ -940,42 +1000,6 @@ function inferIntent(content: string) {
   if (/意图|目标|依据/.test(content)) return 'intent';
   if (/进度|状态|下一步|现在/.test(content)) return 'progress';
   return 'unknown';
-}
-
-function rawRequirementText(teacherInput = '') {
-  const savedParts = [
-    requirement.value?.rawRequirementText?.trim(),
-    requirement.value?.teachingGoals ? `教学目标：${requirement.value.teachingGoals}` : '',
-    requirement.value?.keyPoints ? `重点：${requirement.value.keyPoints}` : '',
-    requirement.value?.difficultPoints ? `难点：${requirement.value.difficultPoints}` : '',
-    selectedProject.value?.description?.trim(),
-  ].filter(Boolean);
-  const base = savedParts.length
-    ? savedParts.join('\n')
-    : selectedProject.value
-      ? `${selectedProject.value.courseName}，章节主题：${selectedProject.value.chapterTitle}，面向${selectedProject.value.targetStudents || '目标学生'}。`
-      : '';
-  const currentInput = teacherInput.trim();
-  return currentInput ? `${base}\n\n本轮教师补充：${currentInput}` : base;
-}
-
-function knownFieldsForProject(project: TeachingProject) {
-  return [
-    'courseName',
-    'chapterTopic',
-    ...(project.targetStudents ? ['targetAudience'] : []),
-    ...(project.lessonDuration ? ['lessonDurationMinutes'] : []),
-    ...(requirement.value?.teachingGoals ? ['teachingGoals'] : []),
-    ...(requirement.value?.outputTypes?.length ? ['outputTypes'] : []),
-  ];
-}
-
-function generationMode(value?: string): GenerationMode {
-  return value === 'QUALITY' || value === 'HIGH_QUALITY' || value === 'ECONOMY' || value === 'MOCK' ? value : 'STANDARD';
-}
-
-function isDefaultGenerationPrompt(value: string) {
-  return value.trim() === '生成教学方案';
 }
 
 function projectRoute(name: string): RouteLocationRaw | undefined {
@@ -1067,9 +1091,17 @@ function createMessageId() {
 
 .assistant-shell {
   display: grid;
+  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   gap: 16px;
+}
+
+.assistant-shell__content {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  gap: 14px;
 }
 
 .assistant-context-error {
@@ -1109,11 +1141,19 @@ function createMessageId() {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   min-width: 0;
-  min-height: min(720px, calc(100vh - 268px));
+  min-height: min(720px, calc(100vh - 330px));
   gap: 16px;
 }
 
 @media (max-width: 1180px) {
+  .assistant-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .conversation-sidebar {
+    max-height: 260px;
+  }
+
   .assistant-workspace {
     grid-template-columns: 1fr;
   }

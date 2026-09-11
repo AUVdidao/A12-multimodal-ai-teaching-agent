@@ -1,7 +1,7 @@
 <template>
   <aside class="app-sidebar">
     <RouterLink
-      v-if="scene !== 'STUDENT_SPACE'"
+      v-if="scene !== 'STUDENT_SPACE' && route.name !== 'ai-assistant'"
       class="sidebar-nav__item sidebar-nav__item--return app-sidebar__home-link"
       :to="{ name: 'home' }"
     >
@@ -26,7 +26,7 @@
       </template>
     </nav>
     <RouterLink
-      v-if="scene !== 'STUDENT_SPACE'"
+      v-if="scene !== 'STUDENT_SPACE' && route.name !== 'ai-assistant'"
       class="sidebar-nav__item app-sidebar__credentials-link"
       :class="{ 'is-active': route.name === 'ai-credentials' }"
       :to="{ name: 'ai-credentials' }"
@@ -74,6 +74,17 @@ const scene = computed<WorkspaceScene>(() => {
 });
 
 const navGroups = computed<Array<{ label: string; items: SidebarNavItem[] }>>(() => {
+  if (route.name === 'ai-assistant') {
+    return [{
+      label: '教师工作区',
+      items: [
+        { key: 'ai-assistant', label: '单会话工作区', to: { name: 'ai-assistant' }, icon: 'sparkle', activeRouteNames: ['ai-assistant'] },
+        { key: 'projects', label: '教学项目', to: { name: 'projects' }, icon: 'folder', activeRouteNames: ['projects', 'project-create', 'project-overview'] },
+        { key: 'recent-projects', label: '最近访问', to: { name: 'recent-projects' }, icon: 'clock', activeRouteNames: ['recent-projects'] },
+      ],
+    }];
+  }
+
   if (scene.value === 'STUDENT_SPACE') {
     return [{
       label: '学习空间',

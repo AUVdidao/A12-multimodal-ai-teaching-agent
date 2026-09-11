@@ -3,6 +3,9 @@ package com.auvdidao.a12teachingagent.ai.kimi;
 import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.auvdidao.a12teachingagent.agent.model.CredentialSource;
+import com.auvdidao.a12teachingagent.agent.model.ModelProvider;
+import com.auvdidao.a12teachingagent.agent.model.ResolvedModelCredential;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -23,6 +26,7 @@ class KimiChatClientTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private HttpServer server;
+    private AtomicReference<String> authorization;
 
     @AfterEach
     void stopServer() {
@@ -59,6 +63,17 @@ class KimiChatClientTest {
         assertThat(requestBody.get().path("max_completion_tokens").asInt()).isEqualTo(456);
         assertThat(requestBody.get().has("max_tokens")).isFalse();
         assertThat(requestBody.get().path("response_format")).isEqualTo(responseFormat);
+    }
+
+    @Test
+    void explicitResolvedCredentialWinsOverClientFallbackKey() throws Exception {
+        AtomicReference<JsonNode> requestBody = respond(200, success("ok", "stop"));
+        KimiChatResponse response = client(1).complete(
+                new KimiChatRequest(messages(), "kimi-k2.6", 456, 5, null),
+                new ResolvedModelCredential(ModelProvider.KIMI, CredentialSource.ACTIVE_USER_CREDENTIAL, "resolver-key"));
+
+        assertThat(response.content()).isEqualTo("ok");
+        assertThat(authorization.get()).isEqualTo("Bearer resolver-key");
     }
 
     @Test
@@ -132,8 +147,10 @@ class KimiChatClientTest {
     private AtomicReference<JsonNode> respond(int status, String responseBody) throws IOException {
         AtomicReference<JsonNode> requestBody = new AtomicReference<>();
         server = HttpServer.create(new InetSocketAddress(0), 0);
+        authorization = new AtomicReference<>();
         server.createContext("/v1/chat/completions", exchange -> {
             requestBody.set(objectMapper.readTree(exchange.getRequestBody()));
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             writeResponse(exchange, status, responseBody);
         });
         server.start();

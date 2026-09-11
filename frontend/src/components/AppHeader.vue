@@ -26,7 +26,7 @@
         ref="searchInput"
         v-model="searchQuery"
         aria-label="全局搜索"
-        placeholder="搜索项目、任务、问答..."
+        placeholder="搜索 Mission 或会话..."
       />
       <kbd>Ctrl K</kbd>
       <button class="header-search-submit" type="submit" aria-label="提交搜索" title="搜索">
@@ -129,7 +129,7 @@ onMounted(() => window.addEventListener('keydown', handleSearchShortcut));
 onBeforeUnmount(() => window.removeEventListener('keydown', handleSearchShortcut));
 
 function roleName(role: UserRole) {
-  return ({ TEACHER: '教师', LEADER: '教研负责人', STUDENT: '学生' })[role];
+  return ({ TEACHER: '教师', LEADER: '教研负责人', STUDENT: '学生', RESEARCHER: '教研人员' })[role];
 }
 
 function submitSearch() {

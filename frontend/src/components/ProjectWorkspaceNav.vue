@@ -12,8 +12,11 @@
 <script setup lang="ts">
 import {
   Aim,
+  Collection,
+  DocumentChecked,
   Files,
   Finished,
+  MagicStick,
   Reading,
   View,
 } from '@element-plus/icons-vue';
@@ -29,8 +32,11 @@ const navItems = computed(() => {
   return [
     { label: '教学需求', path: `${root}/requirements`, icon: Reading },
     { label: '资料中心', path: `${root}/materials`, icon: Files },
+    { label: '真实模板', path: `${root}/templates`, icon: Collection },
     { label: '课程大纲', path: `${root}/outline`, icon: Aim },
     { label: '教案设计', path: `${root}/lesson-plan`, icon: Finished },
+    { label: 'Planning Agent', path: `${root}/planning`, icon: MagicStick },
+    { label: 'PPT Specification', path: `${root}/specification`, icon: DocumentChecked },
     { label: 'PPT成果', path: `${root}/ppt`, icon: View },
   ];
 });

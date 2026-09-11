@@ -3,10 +3,10 @@ FROM maven:3.9.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 
 COPY pom.xml .
-RUN mvn -B -ntp dependency:go-offline
 
 COPY src ./src
-RUN mvn -B -ntp -DskipTests package
+RUN --mount=type=cache,id=a12-stage34-backend-m2,target=/root/.m2/repository,sharing=locked \
+    mvn -B -ntp -DskipTests package
 
 FROM eclipse-temurin:17-jre-alpine
 

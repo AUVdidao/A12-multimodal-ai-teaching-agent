@@ -10,6 +10,7 @@ import com.auvdidao.a12teachingagent.security.AuthenticatedUser;
 import com.auvdidao.a12teachingagent.security.CurrentUserService;
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
 import com.auvdidao.a12teachingagent.domain.common.UserRole;
+import com.auvdidao.a12teachingagent.agent.model.ModelProvider;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -39,8 +40,14 @@ public class AiApiCredentialService {
 
     @Transactional(readOnly = true)
     public CredentialsView view() {
+        return view(ModelProvider.KIMI);
+    }
+
+    @Transactional(readOnly = true)
+    public CredentialsView view(ModelProvider provider) {
         AuthenticatedUser user = requireManageableUser();
-        List<AiApiCredentialEntity> stored = repository.findAllByOwnerUserIdAndProviderOrderByKeySlotAsc(user.userId(), PROVIDER);
+        String providerName = providerName(provider);
+        List<AiApiCredentialEntity> stored = repository.findAllByOwnerUserIdAndProviderOrderByKeySlotAsc(user.userId(), providerName);
         List<CredentialView> views = new ArrayList<>();
         for (int slot = 1; slot <= 3; slot++) {
             int keySlot = slot;
@@ -52,12 +59,18 @@ public class AiApiCredentialService {
                     ? new CredentialView(slot, false, false, null, null)
                     : new CredentialView(slot, true, entity.isActive(), entity.getKeyHint(), entity.getUpdatedAt()));
         }
-        return new CredentialsView(PROVIDER, views);
+        return new CredentialsView(providerName, views);
     }
 
     @Transactional
     public CredentialsView save(SaveCredentialsRequest request) {
+        return save(ModelProvider.KIMI, request);
+    }
+
+    @Transactional
+    public CredentialsView save(ModelProvider provider, SaveCredentialsRequest request) {
         AuthenticatedUser user = requireManageableUser();
+        String providerName = providerName(provider);
         if (request.keys() == null || request.keys().size() != 3 || request.activeSlot() < 1 || request.activeSlot() > 3) {
             throw new BadRequestException("Exactly three credential slots and an active slot from 1 to 3 are required");
         }
@@ -67,27 +80,28 @@ public class AiApiCredentialService {
                 .toList();
         if (normalizedKeys.stream().anyMatch(value -> !StringUtils.hasText(value))
                 || normalizedKeys.size() != new HashSet<>(normalizedKeys).size()) {
-            throw new BadRequestException("All three Kimi credentials are required and must be different");
+            throw new BadRequestException("All three " + providerName + " credentials are required and must be different");
         }
 
         List<AiApiCredentialEntity> entities = new ArrayList<>();
         for (int index = 0; index < request.keys().size(); index++) {
             int slot = index + 1;
             String normalized = normalizedKeys.get(index);
-            AiApiCredentialEntity entity = repository.findByOwnerUserIdAndProviderAndKeySlot(user.userId(), PROVIDER, slot)
+            AiApiCredentialEntity entity = repository.findByOwnerUserIdAndProviderAndKeySlot(user.userId(), providerName, slot)
                     .orElseGet(() -> newEntity(user.userId(), slot));
+            entity.setProvider(providerName);
             entity.setEncryptedValue(cryptoService.encrypt(normalized));
             entity.setKeyHint(cryptoService.hint(normalized));
             entities.add(entity);
         }
 
         repository.saveAll(entities);
-        List<AiApiCredentialEntity> locked = repository.lockAllByOwnerUserIdAndProvider(user.userId(), PROVIDER);
+        List<AiApiCredentialEntity> locked = repository.lockAllByOwnerUserIdAndProvider(user.userId(), providerName);
         locked.forEach(entity -> {
             entity.setActive(entity.getKeySlot() == request.activeSlot());
         });
         repository.saveAll(locked);
-        return view();
+        return view(provider);
     }
 
     @Transactional
@@ -97,7 +111,13 @@ public class AiApiCredentialService {
 
     @Transactional
     public String activeApiKey(Long userId) {
-        return repository.findByOwnerUserIdAndProviderAndActiveTrue(userId, PROVIDER)
+        return activeApiKey(userId, ModelProvider.KIMI);
+    }
+
+    @Transactional
+    public String activeApiKey(Long userId, ModelProvider provider) {
+        String providerName = providerName(provider);
+        return repository.findByOwnerUserIdAndProviderAndActiveTrue(userId, providerName)
                 .map(entity -> {
                     entity.setLastUsedAt(LocalDateTime.now());
                     String value = cryptoService.decrypt(entity.getEncryptedValue());
@@ -126,6 +146,13 @@ public class AiApiCredentialService {
         entity.setKeyVersion(1);
         entity.setActive(false);
         return entity;
+    }
+
+    private String providerName(ModelProvider provider) {
+        if (provider == null || provider == ModelProvider.MOCK) {
+            throw new BadRequestException("Mock is not a persistent BYOK provider");
+        }
+        return provider.name();
     }
 
     public record CredentialView(int slot, boolean configured, boolean active, String maskedKey, LocalDateTime updatedAt) {

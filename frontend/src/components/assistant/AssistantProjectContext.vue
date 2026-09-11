@@ -5,7 +5,7 @@
         <A12AssetIcon :name="empty ? 'plus-circle' : 'folder'" :size="30" />
       </div>
       <div class="assistant-project-context__copy">
-        <span>{{ empty ? '当前没有可分析项目' : '当前项目' }}</span>
+        <span>{{ empty ? '当前没有可分析项目' : 'Conversation Workspace · 当前 Task' }}</span>
         <h2>{{ empty ? '创建项目并填写基本信息后，AI 将自动读取项目上下文' : projectName }}</h2>
         <p v-if="!empty && !loading">
           <strong>课程：</strong>{{ courseName || '未提供' }}

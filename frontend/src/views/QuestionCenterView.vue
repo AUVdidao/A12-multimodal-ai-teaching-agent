@@ -327,6 +327,7 @@ const roleLabels = {
   STUDENT: '学生',
   TEACHER: '教师',
   LEADER: '教研负责人',
+  RESEARCHER: '教研人员',
 } as const;
 const roleLabel = computed(() => auth.activeRole ? roleLabels[auth.activeRole] : '未登录');
 const pageTitle = computed(() => {

@@ -23,6 +23,17 @@ import java.util.List;
 public class ParseResult extends BaseAuditableEntity {
 
     private Long materialId;
+    /** Server-owned parser attempt identity; never accepted from the client. */
+    @Column(name = "analysis_run_id", length = 128)
+    private String analysisRunId;
+
+    /** Current material model uses the immutable uploaded-material id as source version. */
+    @Column(name = "source_version_id")
+    private Long sourceVersionId;
+
+    /** SHA-256 of the deterministic parser output snapshot, not AI/client input. */
+    @Column(name = "parser_snapshot_checksum", length = 64)
+    private String parserSnapshotChecksum;
 
     @Lob
     @Column(columnDefinition = "TEXT")
@@ -67,6 +78,30 @@ public class ParseResult extends BaseAuditableEntity {
 
     public void setMaterialId(Long materialId) {
         this.materialId = materialId;
+    }
+
+    public String getAnalysisRunId() {
+        return analysisRunId;
+    }
+
+    public void setAnalysisRunId(String analysisRunId) {
+        this.analysisRunId = analysisRunId;
+    }
+
+    public Long getSourceVersionId() {
+        return sourceVersionId;
+    }
+
+    public void setSourceVersionId(Long sourceVersionId) {
+        this.sourceVersionId = sourceVersionId;
+    }
+
+    public String getParserSnapshotChecksum() {
+        return parserSnapshotChecksum;
+    }
+
+    public void setParserSnapshotChecksum(String parserSnapshotChecksum) {
+        this.parserSnapshotChecksum = parserSnapshotChecksum;
     }
 
     public String getSummary() {

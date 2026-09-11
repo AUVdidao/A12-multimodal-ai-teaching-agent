@@ -43,6 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+/** LEGACY: old workflow adapter retained for existing non-Planning flows. */
+@Deprecated
 @Component
 public class KimiAIWorkflowGateway {
 

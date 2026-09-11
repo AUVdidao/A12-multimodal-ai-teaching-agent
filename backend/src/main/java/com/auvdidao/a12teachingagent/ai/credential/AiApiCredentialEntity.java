@@ -31,7 +31,7 @@ public class AiApiCredentialEntity extends BaseAuditableEntity {
     private int keyVersion = 1;
 
     @Lob
-    @Column(name = "encrypted_value", nullable = false)
+    @Column(name = "encrypted_value", nullable = false, columnDefinition = "TEXT")
     private String encryptedValue;
 
     @Column(name = "key_hint", nullable = false, length = 4)

@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.ai.credential;
 
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
+import com.auvdidao.a12teachingagent.agent.model.ModelProvider;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,5 +29,18 @@ public class AiCredentialController {
             @Valid @RequestBody AiApiCredentialService.SaveCredentialsRequest request
     ) {
         return ApiResponse.success(service.save(request));
+    }
+
+    @GetMapping("/{provider}")
+    public ApiResponse<AiApiCredentialService.CredentialsView> getProvider(@org.springframework.web.bind.annotation.PathVariable ModelProvider provider) {
+        return ApiResponse.success(service.view(provider));
+    }
+
+    @PostMapping("/{provider}")
+    public ApiResponse<AiApiCredentialService.CredentialsView> saveProvider(
+            @org.springframework.web.bind.annotation.PathVariable ModelProvider provider,
+            @Valid @RequestBody AiApiCredentialService.SaveCredentialsRequest request
+    ) {
+        return ApiResponse.success(service.save(provider, request));
     }
 }

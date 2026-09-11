@@ -3,6 +3,7 @@ package com.auvdidao.a12teachingagent.common.exception;
 import com.auvdidao.a12teachingagent.ai.exception.AiWorkflowUnavailableException;
 import com.auvdidao.a12teachingagent.ai.assistant.KimiAssistantException;
 import com.auvdidao.a12teachingagent.common.api.ApiResponse;
+import com.auvdidao.a12teachingagent.pptengine.PptEngineException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -142,6 +143,20 @@ public class GlobalExceptionHandler {
                         HttpStatus.INTERNAL_SERVER_ERROR.value(),
                         "Material storage operation failed. Please retry."
                 ));
+    }
+
+    @ExceptionHandler(PptEngineException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePptEngine(PptEngineException exception) {
+        HttpStatus status = HttpStatus.resolve(exception.statusCode());
+        if (status == null || status.is2xxSuccessful()) status = HttpStatus.BAD_GATEWAY;
+        return ResponseEntity.status(status)
+                .body(ApiResponse.failure(status.value(), exception.safeCode()));
+    }
+
+    @ExceptionHandler(StorageIntegrityException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStorageIntegrity(StorageIntegrityException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.failure(HttpStatus.CONFLICT.value(), "INTEGRITY_MISMATCH: stored file integrity verification failed"));
     }
 
     @ExceptionHandler(Exception.class)

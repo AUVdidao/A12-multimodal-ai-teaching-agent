@@ -1,16 +1,16 @@
 server:
   port: 8080
   tomcat:
-    max-swallow-size: 21MB
+    max-swallow-size: 206MB
 
 spring:
   application:
     name: a12-file-parser-service
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 21MB
+      max-file-size: 205MB
+      max-request-size: 206MB
 
 parser:
-  max-input-bytes: 20971520
+  max-input-bytes: 214958080
   max-extracted-characters: 1000000

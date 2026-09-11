@@ -16,6 +16,8 @@ spring:
       ddl-auto: create-drop
     show-sql: false
     open-in-view: false
+  flyway:
+    enabled: false
 
 app:
   storage:
@@ -29,3 +31,4 @@ a12:
   ai:
     provider: MOCK
     fallback-to-mock: true
+    development-mock-enabled: true

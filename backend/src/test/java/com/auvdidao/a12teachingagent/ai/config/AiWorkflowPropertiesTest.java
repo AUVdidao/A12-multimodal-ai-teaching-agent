@@ -7,11 +7,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AiWorkflowPropertiesTest {
 
     @Test
-    void defaultsToKimiWithMockFallback() {
+    void defaultsToKimiWithMockFallbackDisabled() {
         AiWorkflowProperties properties = new AiWorkflowProperties();
 
         assertThat(properties.getProvider()).isEqualTo(AiProvider.KIMI);
-        assertThat(properties.isFallbackToMock()).isTrue();
+        assertThat(properties.isFallbackToMock()).isFalse();
+        assertThat(properties.isDevelopmentMockEnabled()).isFalse();
     }
 
     @Test
@@ -19,8 +20,10 @@ class AiWorkflowPropertiesTest {
         AiWorkflowProperties properties = new AiWorkflowProperties();
         properties.setProvider(AiProvider.MOCK);
         properties.setFallbackToMock(false);
+        properties.setDevelopmentMockEnabled(true);
 
         assertThat(properties.getProvider()).isEqualTo(AiProvider.MOCK);
         assertThat(properties.isFallbackToMock()).isFalse();
+        assertThat(properties.isDevelopmentMockEnabled()).isTrue();
     }
 }

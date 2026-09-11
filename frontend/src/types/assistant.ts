@@ -2,6 +2,13 @@ import type { RouteLocationRaw } from 'vue-router';
 
 export type AssistantMessageRole = 'assistant' | 'teacher' | 'system';
 export type AssistantMessageStatus = 'pending' | 'streaming' | 'success' | 'error';
+export interface AssistantContextFile {
+  id: string | number;
+  originalFilename: string;
+  fileType?: string;
+  parseStatus?: string;
+  displayStatus?: string;
+}
 export type AssistantEvidenceSource =
   | 'PROJECT'
   | 'REQUIREMENT'

@@ -35,6 +35,47 @@
       </div>
     </section>
 
+    <section class="assistant-side-card assistant-connection-card">
+      <div class="assistant-side-card__title-row">
+        <h2>Model Connection</h2>
+        <span :class="['assistant-status-tag', selectedConnection ? 'is-selected' : 'is-pending']">{{ selectedConnection ? '已选择' : '待选择' }}</span>
+      </div>
+      <div v-if="selectedConnection" class="assistant-connection-summary">
+        <strong>{{ selectedConnection.name }}</strong>
+        <span>{{ selectedConnection.modelId }}</span>
+        <small>{{ modelConnectionVerificationLabel(selectedConnection.verificationStatus) }}</small>
+      </div>
+      <div v-else class="assistant-side-empty">当前会话尚未选择模型连接。</div>
+      <el-button class="assistant-side-action" plain @click="$emit('open-connections')">选择或添加连接</el-button>
+    </section>
+
+    <section class="assistant-side-card">
+      <div class="assistant-side-card__title-row">
+        <h2>Generation Status</h2>
+        <span :class="['assistant-status-tag', `is-${generationTone}`]">{{ generationStatus }}</span>
+      </div>
+      <p class="assistant-boundary">状态来自现有 Generation Workspace；未生成时不会创建 Job 或成功记录。</p>
+      <div class="assistant-generation-summary">
+        <span>教学意图</span><strong>{{ generationIntentLabel }}</strong>
+        <span>成果版本</span><strong>{{ currentVersion ? `V${currentVersion}` : '暂无' }}</strong>
+      </div>
+    </section>
+
+    <section class="assistant-side-card">
+      <div class="assistant-side-card__title-row">
+        <h2>PPT Artifact</h2>
+        <span class="assistant-status-tag is-pending">仅显示已收到结果</span>
+      </div>
+      <div v-if="artifacts?.length" class="assistant-artifact-list">
+        <article v-for="artifact in (artifacts || []).slice(0, 3)" :key="artifact.id" class="assistant-artifact-card">
+          <A12AssetIcon name="layers" :size="21" />
+          <div><strong>{{ artifact.title }}</strong><span>{{ artifact.type }} · V{{ artifact.versionNumber }}</span></div>
+        </article>
+        <el-button class="assistant-side-action" plain @click="$emit('open-artifact')">查看成果与历史版本</el-button>
+      </div>
+      <div v-else class="assistant-side-empty">当前会话没有已收到的 Artifact。</div>
+    </section>
+
     <section class="assistant-side-card">
       <h2>最近工作</h2>
       <div v-if="loading" class="assistant-recent-skeleton">
@@ -60,6 +101,9 @@
 </template>
 
 <script setup lang="ts">
+import type { ModelConnection } from '@/api/aiCredentials';
+import type { Artifact } from '@/api/generation';
+import { modelConnectionVerificationLabel } from '@/utils/conversationWorkspaceConnection';
 import type { RouteLocationRaw } from 'vue-router';
 import type { AssistantProgressItem, AssistantRecentWorkItem, AssistantSourceStatus } from '@/types/assistant';
 import A12AssetIcon, { type A12AssetIconName } from '@/components/ui/A12AssetIcon.vue';
@@ -67,6 +111,8 @@ import A12AssetIcon, { type A12AssetIconName } from '@/components/ui/A12AssetIco
 defineEmits<{
   navigate: [route: RouteLocationRaw];
   'show-service-detail': [];
+  'open-connections': [];
+  'open-artifact': [];
 }>();
 
 defineProps<{
@@ -79,6 +125,12 @@ defineProps<{
   studentMode?: boolean;
   serviceState?: 'ok' | 'error' | 'unknown';
   serviceLabel: string;
+  selectedConnection?: ModelConnection | null;
+  generationStatus?: string;
+  generationTone?: 'pending' | 'ready' | 'error';
+  generationIntentLabel?: string;
+  currentVersion?: number;
+  artifacts?: Artifact[];
 }>();
 
 function iconFor(id: string): A12AssetIconName {
@@ -115,6 +167,119 @@ function iconFor(id: string): A12AssetIconName {
   color: #101827;
   font-size: 19px;
   line-height: 1.3;
+}
+
+.assistant-side-card__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.assistant-side-card__title-row h2 {
+  margin-bottom: 10px;
+}
+
+.assistant-status-tag {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #fff3e4;
+  color: var(--ui-warning);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.assistant-status-tag.is-selected,
+.assistant-status-tag.is-ready {
+  background: var(--color-success-soft);
+  color: var(--ui-success);
+}
+
+.assistant-status-tag.is-error {
+  background: var(--color-danger-soft);
+  color: var(--ui-danger);
+}
+
+.assistant-connection-summary,
+.assistant-generation-summary {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 11px;
+}
+
+.assistant-connection-summary strong,
+.assistant-artifact-card strong {
+  color: var(--ui-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.assistant-connection-summary span,
+.assistant-connection-summary small,
+.assistant-artifact-card span {
+  color: var(--ui-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.assistant-connection-summary small {
+  color: var(--ui-warning);
+}
+
+.assistant-side-action {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.assistant-boundary {
+  margin: -2px 0 13px;
+  color: var(--ui-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.assistant-generation-summary {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.assistant-generation-summary span {
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.assistant-generation-summary strong {
+  color: var(--ui-text);
+  font-size: 12px;
+  text-align: right;
+}
+
+.assistant-artifact-list {
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-artifact-card {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.assistant-artifact-card > .a12-asset-icon {
+  justify-self: center;
+}
+
+.assistant-artifact-card div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
 }
 
 .assistant-progress-list,

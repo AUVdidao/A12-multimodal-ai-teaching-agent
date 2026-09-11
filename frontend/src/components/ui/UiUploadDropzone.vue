@@ -1,6 +1,6 @@
 <template>
   <button
-    class="ui-upload-dropzone"
+    :class="['ui-upload-dropzone', { 'is-compact': compact }]"
     type="button"
     :disabled="disabled"
     @click="openPicker"
@@ -33,12 +33,14 @@ withDefaults(
     description?: string;
     accept?: string;
     disabled?: boolean;
+    compact?: boolean;
   }>(),
   {
     title: '拖拽文件到此处，或点击上传',
     description: '支持 PDF、PPT、DOCX、XLSX、TXT、MD、PNG、JPG、MP4 等格式',
     accept: '',
     disabled: false,
+    compact: false,
   },
 );
 
@@ -85,6 +87,41 @@ function handleDrop(event: DragEvent) {
 .ui-upload-dropzone:disabled {
   cursor: not-allowed;
   opacity: 0.65;
+}
+
+.ui-upload-dropzone.is-compact {
+  display: inline-flex;
+  width: auto;
+  min-height: 30px;
+  flex-direction: row;
+  gap: 7px;
+  padding: 5px 10px;
+  border-style: solid;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ui-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ui-upload-dropzone.is-compact .ui-upload-dropzone__icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: transparent;
+}
+
+.ui-upload-dropzone.is-compact .ui-upload-dropzone__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ui-upload-dropzone.is-compact strong {
+  font-size: 12px;
+}
+
+.ui-upload-dropzone.is-compact span:last-child {
+  display: none;
 }
 
 .ui-upload-dropzone__input {

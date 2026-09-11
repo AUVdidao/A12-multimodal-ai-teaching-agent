@@ -8,6 +8,7 @@ dist/
 
 .env
 .env.local
+frontend/.env.desktop
 
 .idea/
 .vscode/
@@ -24,6 +25,8 @@ tmp/
 .playwright-cli/
 output/playwright/
 output/kimi-ppt/
+frontend/output/
+/output/
 
 data/
 backend/data/

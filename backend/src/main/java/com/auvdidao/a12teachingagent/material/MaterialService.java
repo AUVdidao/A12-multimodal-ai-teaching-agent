@@ -39,7 +39,7 @@ import java.util.Set;
 @Service
 public class MaterialService {
 
-    private static final Map<String, FileRule> FILE_RULES = Map.ofEntries(
+    static final Map<String, FileRule> FILE_RULES = Map.ofEntries(
             Map.entry("pdf", new FileRule(MaterialFileType.PDF, Set.of("application/pdf"))),
             Map.entry("docx", new FileRule(MaterialFileType.DOCX, Set.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))),
             Map.entry("pptx", new FileRule(MaterialFileType.PPTX, Set.of("application/vnd.openxmlformats-officedocument.presentationml.presentation"))),
@@ -239,7 +239,7 @@ public class MaterialService {
         );
     }
 
-    private ValidatedFile validateFile(MultipartFile file) {
+    public ValidatedFile validateFile(MultipartFile file) {
         if (file == null || file.isEmpty() || file.getSize() <= 0) {
             throw new BadRequestException("The uploaded file must not be empty");
         }
@@ -266,7 +266,7 @@ public class MaterialService {
         return new ValidatedFile(original, extension, contentType, rule);
     }
 
-    private static String sanitizeOriginalFilename(String filename) {
+    static String sanitizeOriginalFilename(String filename) {
         if (filename == null) {
             throw new BadRequestException("The uploaded file must have a filename");
         }
@@ -279,7 +279,7 @@ public class MaterialService {
         return basename;
     }
 
-    private static String trimToNull(String value) {
+    public static String trimToNull(String value) {
         if (value == null) {
             return null;
         }
@@ -290,9 +290,9 @@ public class MaterialService {
     public record MaterialDownload(Resource resource, String originalFilename, String contentType, Long fileSize) {
     }
 
-    private record FileRule(MaterialFileType fileType, Set<String> contentTypes) {
+    public record FileRule(MaterialFileType fileType, Set<String> contentTypes) {
     }
 
-    private record ValidatedFile(String originalFilename, String extension, String contentType, FileRule rule) {
+    public record ValidatedFile(String originalFilename, String extension, String contentType, FileRule rule) {
     }
 }

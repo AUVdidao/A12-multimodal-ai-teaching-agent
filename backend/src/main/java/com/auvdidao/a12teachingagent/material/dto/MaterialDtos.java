@@ -55,6 +55,9 @@ public final class MaterialDtos {
     public record ParseResultResponse(
             Long id,
             Long materialId,
+            String analysisRunId,
+            Long sourceVersionId,
+            String parserSnapshotChecksum,
             MaterialParseStatus parseStatus,
             String summary,
             List<String> keywords,
@@ -68,5 +71,26 @@ public final class MaterialDtos {
             Integer chunkCount,
             Long parseDurationMs
     ) {
+        /** Compatibility constructor for callers that only model legacy parse fields. */
+        public ParseResultResponse(
+                Long id,
+                Long materialId,
+                MaterialParseStatus parseStatus,
+                String summary,
+                List<String> keywords,
+                List<String> applicableTeachingStages,
+                String failureReason,
+                LocalDateTime parsedAt,
+                boolean prototype,
+                String extractedTextPreview,
+                Integer pageCount,
+                List<String> sections,
+                Integer chunkCount,
+                Long parseDurationMs
+        ) {
+            this(id, materialId, null, null, null, parseStatus, summary, keywords,
+                    applicableTeachingStages, failureReason, parsedAt, prototype,
+                    extractedTextPreview, pageCount, sections, chunkCount, parseDurationMs);
+        }
     }
 }

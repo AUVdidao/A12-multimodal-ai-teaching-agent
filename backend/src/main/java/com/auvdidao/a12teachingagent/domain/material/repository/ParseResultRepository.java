@@ -15,6 +15,23 @@ public interface ParseResultRepository extends JpaRepository<ParseResult, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ParseResult> findFirstByMaterialIdOrderByCreatedAtDescIdDesc(Long materialId);
 
+    /**
+     * Read-only callers must not inherit the write lock used by parse state
+     * transitions.  Keeping this as an explicit query prevents a future
+     * repository method rename from silently reintroducing SELECT FOR UPDATE
+     * into the GET parse-result path.
+     */
+    @Query("""
+            select result
+            from ParseResult result
+            where result.materialId = :materialId
+            order by result.createdAt desc, result.id desc
+            """)
+    Optional<ParseResult> findLatestForRead(@Param("materialId") Long materialId);
+
+    Optional<ParseResult> findByMaterialIdAndAnalysisRunIdAndSourceVersionIdAndParserSnapshotChecksum(
+            Long materialId, String analysisRunId, Long sourceVersionId, String parserSnapshotChecksum);
+
     @Query(value = """
             select count(*)
             from parse_result_sections

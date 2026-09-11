@@ -7,11 +7,11 @@
     </header>
 
     <div class="scene-home__grid" aria-label="工作场景入口">
-      <button v-if="!isLeader" class="scene-card" type="button" @click="go('projects')">
+      <button v-if="!isLeader" class="scene-card" type="button" @click="go('assistant')">
         <span class="scene-card__icon scene-card__icon--purple"><A12AssetIcon name="folder" :size="30" /></span>
         <span class="scene-card__content">
-          <strong>课程开发</strong>
-          <span>从教学需求和参考资料出发，完成教学意图、课件、教案和互动内容的生成与修改。</span>
+          <strong>Mission 工作区</strong>
+          <span>查看分配给自己的 Mission，在单一 Conversation Workspace 中接受任务并继续协作。</span>
         </span>
         <span class="scene-card__action">进入工作区 <span aria-hidden="true">→</span></span>
       </button>
@@ -68,7 +68,7 @@ const resultDescription = computed(() => auth.activeRole === 'LEADER'
   ? '审核教师提交的教学成果，处理退回修改，并完成成果发布。'
   : '提交教学成果，跟踪审核进度，处理退回修改，并查看成果发布状态。');
 
-function go(name: 'projects' | 'result-collaboration' | 'student-interaction' | 'leader-teaching-tasks') {
+function go(name: 'assistant' | 'result-collaboration' | 'student-interaction' | 'leader-teaching-tasks') {
   void router.push({ name });
 }
 </script>

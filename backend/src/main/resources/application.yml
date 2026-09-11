@@ -2,6 +2,8 @@ server:
   port: 8080
 
 spring:
+  profiles:
+    default: dev
   application:
     name: a12-teaching-agent-backend
   servlet:
@@ -19,12 +21,21 @@ spring:
       path: /h2-console
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    enabled: ${A12_FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+    clean-disabled: true
+    fail-on-missing-locations: true
+    validate-on-migrate: true
+    out-of-order: false
 
 logging:
   level:
@@ -36,6 +47,27 @@ app:
     max-file-size: ${APP_MAX_UPLOAD_SIZE:209715200}
 
 a12:
+  template:
+    renderer:
+      # Empty by default: no renderer is silently substituted. Set this only to an approved
+      # local Office-compatible executable such as soffice in a controlled deployment.
+      executable: ${A12_TEMPLATE_RENDERER_EXECUTABLE:}
+      timeout-seconds: ${A12_TEMPLATE_RENDERER_TIMEOUT_SECONDS:120}
+      # Disabled by default. This creates a synthetic PDF solely for local
+      # development and is never a real Office/LibreOffice render.
+      fixture-enabled: ${A12_TEMPLATE_RENDERER_FIXTURE_ENABLED:false}
+    analyzer:
+      # Disabled unless a reviewed multimodal provider and a reachable rendered
+      # preview endpoint are explicitly configured in the deployment environment.
+      enabled: ${A12_TEMPLATE_ANALYZER_ENABLED:false}
+      # Development-only semantic Candidate fixture. It never runs outside the
+      # dev profile and never replaces the real Provider path by default.
+      fixture-enabled: ${A12_TEMPLATE_ANALYZER_FIXTURE_ENABLED:false}
+      preview-base-url: ${A12_TEMPLATE_ANALYZER_PREVIEW_BASE_URL:}
+      provider: ${A12_TEMPLATE_ANALYZER_PROVIDER:KIMI}
+      model: ${A12_TEMPLATE_ANALYZER_MODEL:}
+      max-completion-tokens: ${A12_TEMPLATE_ANALYZER_MAX_COMPLETION_TOKENS:1600}
+      timeout-ms: ${A12_TEMPLATE_ANALYZER_TIMEOUT_MS:90000}
   kimi:
     base-url: ${KIMI_API_BASE_URL:https://api.moonshot.cn/v1}
     api-key: ${MOONSHOT_API_KEY:}
@@ -55,14 +87,20 @@ a12:
     mode: ${A12_ARTIFACT_GENERATOR_MODE:local}
     base-url: ${A12_ARTIFACT_GENERATOR_BASE_URL:http://file-generator-service:8080}
     timeout-ms: ${A12_ARTIFACT_GENERATOR_TIMEOUT_MS:15000}
+  ppt-engine:
+    mode: ${A12_PPT_ENGINE_MODE:unavailable}
+    base-url: ${A12_PPT_ENGINE_BASE_URL:http://ppt-engine-service:8080}
+    timeout-ms: ${A12_PPT_ENGINE_TIMEOUT_MS:15000}
+    trace-file: ${A12_PPT_ENGINE_TRACE_FILE:}
   material-parser:
     mode: ${A12_MATERIAL_PARSER_MODE:local}
     base-url: ${A12_MATERIAL_PARSER_BASE_URL:http://file-parser-service:8080}
-    timeout-ms: ${A12_MATERIAL_PARSER_TIMEOUT_MS:30000}
-    max-request-bytes: ${A12_MATERIAL_PARSER_MAX_REQUEST_BYTES:20971520}
+    timeout-ms: ${A12_MATERIAL_PARSER_TIMEOUT_MS:120000}
+    max-request-bytes: ${A12_MATERIAL_PARSER_MAX_REQUEST_BYTES:214958080}
     processing-stale-after-seconds: ${A12_MATERIAL_PARSER_PROCESSING_STALE_AFTER_SECONDS:300}
   security:
     enabled: ${A12_SECURITY_ENABLED:true}
+    internal-service-token: ${A12_INTERNAL_SERVICE_TOKEN:}
     session-hours: ${A12_SESSION_HOURS:12}
     demo-seed-enabled: ${A12_DEMO_SEED_ENABLED:false}
     demo:
@@ -73,3 +111,4 @@ a12:
   ai:
     provider: ${A12_AI_PROVIDER:${AI_PROVIDER:KIMI}}
     fallback-to-mock: ${A12_AI_FALLBACK_TO_MOCK:false}
+    development-mock-enabled: ${A12_AI_DEVELOPMENT_MOCK_ENABLED:false}

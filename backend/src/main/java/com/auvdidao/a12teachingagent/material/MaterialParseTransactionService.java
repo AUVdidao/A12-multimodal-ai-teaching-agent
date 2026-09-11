@@ -136,6 +136,9 @@ public class MaterialParseTransactionService {
             result = new ParseResult();
             result.setMaterialId(materialId);
         }
+        result.setAnalysisRunId(MaterialParseIdentity.newAnalysisRunId());
+        result.setSourceVersionId(material.getId());
+        result.setParserSnapshotChecksum(null);
         result.setParseStatus(MaterialParseStatus.PROCESSING);
         result.setFailureReason(null);
         result = parseResultRepository.saveAndFlush(result);
@@ -163,6 +166,11 @@ public class MaterialParseTransactionService {
         result.setExtractedText(completion.extractedText());
         result.setPageCount(completion.pageCount());
         result.setSections(completion.sections());
+        requireIdentity(completion.result(), completion.analysisRunId(), completion.sourceVersionId(),
+                completion.parserSnapshotChecksum());
+        result.setAnalysisRunId(completion.analysisRunId());
+        result.setSourceVersionId(completion.sourceVersionId());
+        result.setParserSnapshotChecksum(completion.parserSnapshotChecksum());
         result.setParseDurationMs(elapsedMillis(completion.startedAtNanos()));
         result.setParseStatus(MaterialParseStatus.SUCCEEDED);
         result.setParsedAt(LocalDateTime.now());
@@ -191,6 +199,9 @@ public class MaterialParseTransactionService {
         result.setFailureReason(FAILURE_REASON);
         result.setParsedAt(LocalDateTime.now());
         result.setParseDurationMs(elapsedMillis(failure.startedAtNanos()));
+        result.setAnalysisRunId(failure.analysisRunId());
+        result.setSourceVersionId(failure.sourceVersionId());
+        result.setParserSnapshotChecksum(failure.parserSnapshotChecksum());
         parseResultRepository.save(result);
 
         UploadedMaterial material = failure.material();
@@ -208,6 +219,7 @@ public class MaterialParseTransactionService {
             List<PurposeType> usages,
             ParseResult result
     ) {
+        MaterialParseIdentity.requireComplete(result);
         return new ParsePreparation(
                 projectId,
                 materialId,
@@ -227,6 +239,34 @@ public class MaterialParseTransactionService {
         return (System.nanoTime() - startedAtNanos) / 1_000_000L;
     }
 
+    private static void requireIdentity(ParseResult result, String analysisRunId, Long sourceVersionId,
+                                        String parserSnapshotChecksum) {
+        if (result == null || analysisRunId == null || analysisRunId.isBlank()
+                || sourceVersionId == null || sourceVersionId <= 0
+                || parserSnapshotChecksum == null
+                || !parserSnapshotChecksum.matches("[0-9a-fA-F]{64}")) {
+            throw new com.auvdidao.a12teachingagent.common.exception.ConflictException(
+                    "PARSE_RESULT_IDENTITY_INVALID");
+        }
+        if (result.getAnalysisRunId() != null && !analysisRunId.equals(result.getAnalysisRunId())) {
+            throw new com.auvdidao.a12teachingagent.common.exception.ConflictException(
+                    "PARSE_RESULT_IDENTITY_MISMATCH");
+        }
+        if (result.getSourceVersionId() != null && !sourceVersionId.equals(result.getSourceVersionId())) {
+            throw new com.auvdidao.a12teachingagent.common.exception.ConflictException(
+                    "PARSE_RESULT_IDENTITY_MISMATCH");
+        }
+        if (result.getMaterialId() == null || !result.getMaterialId().equals(sourceVersionId)) {
+            throw new com.auvdidao.a12teachingagent.common.exception.ConflictException(
+                    "PARSE_RESULT_IDENTITY_MISMATCH");
+        }
+        if (result.getParserSnapshotChecksum() != null
+                && !parserSnapshotChecksum.equalsIgnoreCase(result.getParserSnapshotChecksum())) {
+            throw new com.auvdidao.a12teachingagent.common.exception.ConflictException(
+                    "PARSE_RESULT_IDENTITY_MISMATCH");
+        }
+    }
+
     public record ParsePreparation(
             Long projectId,
             Long materialId,
@@ -244,6 +284,14 @@ public class MaterialParseTransactionService {
         public boolean hasExistingResponse() {
             return existingResponse != null;
         }
+
+        public String analysisRunId() {
+            return result == null ? null : result.getAnalysisRunId();
+        }
+
+        public Long sourceVersionId() {
+            return result == null ? null : result.getSourceVersionId();
+        }
     }
 
     public record ParseCompletion(
@@ -257,8 +305,34 @@ public class MaterialParseTransactionService {
             String extractedText,
             Integer pageCount,
             List<String> sections,
+            String analysisRunId,
+            Long sourceVersionId,
+            String parserSnapshotChecksum,
             long startedAtNanos
     ) {
+        public ParseCompletion(
+                Long projectId,
+                Long materialId,
+                UploadedMaterial material,
+                ParseResult result,
+                String summary,
+                List<String> keywords,
+                List<String> teachingStages,
+                String extractedText,
+                Integer pageCount,
+                List<String> sections,
+                long startedAtNanos
+        ) {
+            this(projectId, materialId, material, result, summary, keywords, teachingStages,
+                    extractedText, pageCount, sections,
+                    result != null && result.getAnalysisRunId() != null
+                            ? result.getAnalysisRunId() : "legacy-test-" + materialId,
+                    material == null ? null : material.getId(),
+                    MaterialParseIdentity.sha256(String.valueOf(extractedText) + "|"
+                            + pageCount + "|" + String.valueOf(sections)),
+                    startedAtNanos);
+        }
+
         public ParseCompletion {
             keywords = keywords == null ? List.of() : List.copyOf(keywords);
             teachingStages = teachingStages == null ? List.of() : List.copyOf(teachingStages);
@@ -272,7 +346,23 @@ public class MaterialParseTransactionService {
             UploadedMaterial material,
             ParseResult result,
             long startedAtNanos,
-            String failureReason
+            String failureReason,
+            String analysisRunId,
+            Long sourceVersionId,
+            String parserSnapshotChecksum
     ) {
+        public ParseFailure(
+                Long projectId,
+                Long materialId,
+                UploadedMaterial material,
+                ParseResult result,
+                long startedAtNanos,
+                String failureReason
+        ) {
+            this(projectId, materialId, material, result, startedAtNanos, failureReason,
+                    result == null ? null : result.getAnalysisRunId(),
+                    material == null ? null : material.getId(),
+                    result == null ? null : result.getParserSnapshotChecksum());
+        }
     }
 }

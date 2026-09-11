@@ -10,16 +10,20 @@ import {
   type UserRole,
 } from '@/api/auth';
 import { AUTH_TOKEN_STORAGE_KEY } from '@/api/http';
+import { useConversationWorkspaceStore } from '@/stores/conversationWorkspace';
+import { useLessonForgeStore } from '@/stores/lessonForge';
 import { defineStore } from 'pinia';
+import { isGoBackend } from '@/config/runtime';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '',
+    token: isGoBackend ? '' : window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '',
     user: null as UserProfile | null,
     initialized: false,
+    sessionActive: false,
   }),
   getters: {
-    isAuthenticated: (state) => Boolean(state.token && state.user),
+    isAuthenticated: (state) => Boolean(state.user && (isGoBackend ? state.sessionActive : state.token)),
     activeRole: (state) => state.user?.activeRole,
   },
   actions: {
@@ -34,6 +38,17 @@ export const useAuthStore = defineStore('auth', {
       return session.user;
     },
     async loadCurrentUser() {
+      if (isGoBackend) {
+        try {
+          this.user = await getCurrentUser();
+          this.sessionActive = true;
+          this.initialized = true;
+          return this.user;
+        } catch (error) {
+          this.clearSession();
+          throw error;
+        }
+      }
       if (!this.token) {
         this.clearSession();
         return null;
@@ -48,18 +63,21 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async ensureInitialized() {
-      if (!this.initialized && this.token) {
-        await this.loadCurrentUser();
+      if (!this.initialized) {
+        if (isGoBackend || this.token) await this.loadCurrentUser();
+        else this.initialized = true;
       }
       return this.user;
     },
     async switchRole(role: UserRole) {
+      const previousRole = this.user?.activeRole;
       this.user = await switchActiveRole(role);
+      if (previousRole && previousRole !== this.user.activeRole) useLessonForgeStore().reset();
       return this.user;
     },
     async logout() {
       try {
-        if (this.token) {
+        if (isGoBackend || this.token) {
           await logoutRequest();
         }
       } finally {
@@ -67,14 +85,22 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     applySession(token: string, user: UserProfile) {
+      if (this.user?.id && this.user.id !== user.id) {
+        useConversationWorkspaceStore().reset(this.user.id);
+        useLessonForgeStore().reset();
+      }
       this.token = token;
       this.user = user;
+      this.sessionActive = true;
       this.initialized = true;
-      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+      if (!isGoBackend) window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
     },
     clearSession() {
+      useConversationWorkspaceStore().reset(this.user?.id ?? null);
+      useLessonForgeStore().reset();
       this.token = '';
       this.user = null;
+      this.sessionActive = false;
       this.initialized = true;
       window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
     },

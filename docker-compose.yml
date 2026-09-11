@@ -1,29 +1,74 @@
 services:
+  ppt-engine-service:
+    build:
+      context: ../A12-ppt-engine-layout-composer/ppt-engine-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: 8080
+      # Storage keys are relative to the shared LessonForge volume root
+      # (for example uploads/<mission>/<file>.pptx). Keeping the Engine input
+      # root at the volume root avoids duplicating the uploads/ prefix when
+      # the Go bridge forwards a server-owned storage key.
+      PPT_ENGINE_INPUT_ROOT: /engine-input
+      PPT_ENGINE_OUTPUT_ROOT: /engine-output
+      PPT_ENGINE_ALLOW_LEGACY_ABSOLUTE_PATHS: "false"
+    volumes:
+      # The Engine creates its configured input-root directory on first boot;
+      # the application itself still enforces relative, bound input paths.
+      - backend-data:/engine-input:rw
+      # backend-api and the Engine use the same non-root UID in these images.
+      # Sharing the application-owned volume keeps the Engine output root writable
+      # without running either service as root or weakening the executor gate.
+      - backend-data:/engine-output:rw
+    networks:
+      - a12-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/internal/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
   backend-api:
     build:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://database:5432/${POSTGRES_DB:-a12_teaching_agent}}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-${POSTGRES_USER:-a12_user}}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-${POSTGRES_PASSWORD:-a12_dev_password}}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:-org.postgresql.Driver}
+      SPRING_FLYWAY_LOCATIONS: ${SPRING_FLYWAY_LOCATIONS:-classpath:db/postgresql-migration}
       SERVER_PORT: 8080
       AI_PROVIDER: ${AI_PROVIDER:-KIMI}
       A12_AI_PROVIDER: ${A12_AI_PROVIDER:-KIMI}
       A12_AI_FALLBACK_TO_MOCK: ${A12_AI_FALLBACK_TO_MOCK:-false}
+      A12_AI_DEVELOPMENT_MOCK_ENABLED: ${A12_AI_DEVELOPMENT_MOCK_ENABLED:-false}
       APP_UPLOAD_DIR: ${APP_UPLOAD_DIR:-/app/data/uploads}
       APP_MAX_UPLOAD_SIZE: ${APP_MAX_UPLOAD_SIZE:-209715200}
+      A12_FLYWAY_ENABLED: ${A12_FLYWAY_ENABLED:-true}
       A12_SECURITY_ENABLED: ${A12_SECURITY_ENABLED:-true}
+      A12_INTERNAL_SERVICE_TOKEN: ${A12_INTERNAL_SERVICE_TOKEN:-}
       A12_SESSION_HOURS: ${A12_SESSION_HOURS:-12}
       A12_DEMO_SEED_ENABLED: ${A12_DEMO_SEED_ENABLED:-true}
       A12_DEMO_LEADER_PASSWORD: ${A12_DEMO_LEADER_PASSWORD:-Leader123!}
       A12_DEMO_TEACHER_PASSWORD: ${A12_DEMO_TEACHER_PASSWORD:-Teacher123!}
       A12_DEMO_STUDENT_PASSWORD: ${A12_DEMO_STUDENT_PASSWORD:-Student123!}
       A12_DEMO_MULTI_PASSWORD: ${A12_DEMO_MULTI_PASSWORD:-Multi123!}
+      A12_TEMPLATE_RENDERER_FIXTURE_ENABLED: ${A12_TEMPLATE_RENDERER_FIXTURE_ENABLED:-false}
+      A12_TEMPLATE_ANALYZER_FIXTURE_ENABLED: ${A12_TEMPLATE_ANALYZER_FIXTURE_ENABLED:-false}
       A12_MATERIAL_PARSER_MODE: ${A12_MATERIAL_PARSER_MODE:-remote}
       A12_MATERIAL_PARSER_BASE_URL: ${A12_MATERIAL_PARSER_BASE_URL:-http://file-parser-service:8080}
-      A12_MATERIAL_PARSER_TIMEOUT_MS: ${A12_MATERIAL_PARSER_TIMEOUT_MS:-10000}
+      A12_MATERIAL_PARSER_TIMEOUT_MS: ${A12_MATERIAL_PARSER_TIMEOUT_MS:-120000}
+      A12_MATERIAL_PARSER_MAX_REQUEST_BYTES: ${A12_MATERIAL_PARSER_MAX_REQUEST_BYTES:-214958080}
       A12_ARTIFACT_GENERATOR_MODE: ${A12_ARTIFACT_GENERATOR_MODE:-remote}
       A12_ARTIFACT_GENERATOR_BASE_URL: ${A12_ARTIFACT_GENERATOR_BASE_URL:-http://file-generator-service:8080}
       A12_ARTIFACT_GENERATOR_TIMEOUT_MS: ${A12_ARTIFACT_GENERATOR_TIMEOUT_MS:-15000}
+      A12_PPT_ENGINE_MODE: ${A12_PPT_ENGINE_MODE:-remote}
+      A12_PPT_ENGINE_BASE_URL: ${A12_PPT_ENGINE_BASE_URL:-http://ppt-engine-service:8080}
+      A12_PPT_ENGINE_TIMEOUT_MS: ${A12_PPT_ENGINE_TIMEOUT_MS:-15000}
+      A12_PPT_ENGINE_TRACE_FILE: ${A12_PPT_ENGINE_TRACE_FILE:-}
       KIMI_API_BASE_URL: ${KIMI_API_BASE_URL:-https://api.moonshot.cn/v1}
       MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
       A12_CREDENTIAL_ENCRYPTION_KEY: ${A12_CREDENTIAL_ENCRYPTION_KEY:-}
@@ -42,9 +87,13 @@ services:
     networks:
       - a12-local-net
     depends_on:
+      database:
+        condition: service_healthy
       file-parser-service:
         condition: service_healthy
       file-generator-service:
+        condition: service_healthy
+      ppt-engine-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/health >/dev/null || exit 1"]
@@ -52,6 +101,23 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-a12_teaching_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-a12_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-a12_dev_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - a12-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   file-parser-service:
     build:
@@ -124,7 +190,11 @@ services:
 
 networks:
   a12-local-net:
-    driver: bridge
+    external: true
+    name: ${A12_NETWORK_NAME:-lessonforge-a12-net}
 
 volumes:
   backend-data:
+    name: ${A12_SHARED_STORAGE_VOLUME:-lessonforge-engine-shared}
+  ppt-engine-output:
+  postgres-data:

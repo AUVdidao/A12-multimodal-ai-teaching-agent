@@ -132,8 +132,13 @@ public class MaterialParseService {
         List<PurposeType> usages = preparation.usages();
         ParseResult result = preparation.result();
         long startedAt = preparation.startedAtNanos();
+        String parserSnapshotChecksum = null;
         try {
             MaterialPrototypeParser.ParsedContent parsed = prototypeParser.parse(material, usages, summary);
+            parserSnapshotChecksum = MaterialParseIdentity.snapshotChecksum(parsed);
+            if (parserSnapshotChecksum == null) {
+                throw new MaterialParsingException("Material parser returned no snapshot");
+            }
             String extractedText = textCleaner.clean(parsed.extractedText());
             if (extractedText == null || extractedText.isBlank()) {
                 throw new MaterialParsingException("Material parser returned no extractable text");
@@ -181,6 +186,9 @@ public class MaterialParseService {
                     extractedText,
                     parsed.pageCount(),
                     normalizeSections(parsed.sections()),
+                    preparation.analysisRunId(),
+                    preparation.sourceVersionId(),
+                    parserSnapshotChecksum,
                     startedAt
             ));
         } catch (MaterialParsingException exception) {
@@ -191,7 +199,10 @@ public class MaterialParseService {
                     material,
                     result,
                     startedAt,
-                    null
+                    null,
+                    preparation.analysisRunId(),
+                    preparation.sourceVersionId(),
+                    parserSnapshotChecksum
             ));
         } catch (RuntimeException exception) {
             LOGGER.error("Unexpected material parsing failure (exceptionType={})", exception.getClass().getSimpleName());
@@ -202,7 +213,10 @@ public class MaterialParseService {
                         material,
                         result,
                         startedAt,
-                        null
+                        null,
+                        preparation.analysisRunId(),
+                        preparation.sourceVersionId(),
+                        parserSnapshotChecksum
                 ));
             } catch (RuntimeException failureException) {
                 exception.addSuppressed(failureException);
@@ -229,11 +243,19 @@ public class MaterialParseService {
     public ParseResultResponse getResult(Long projectId, Long materialId) {
         materialService.requireProject(projectId);
         materialService.requireMaterial(projectId, materialId);
-        return parseResultRepository.findFirstByMaterialIdOrderByCreatedAtDescIdDesc(materialId)
-                .map(MaterialParseService::toResponse)
+        return parseResultRepository.findLatestForRead(materialId)
+                .map(result -> {
+                    if (result.getParseStatus() == MaterialParseStatus.SUCCEEDED) {
+                        MaterialParseIdentity.requireComplete(result);
+                    }
+                    return toResponse(result);
+                })
                 .orElse(new ParseResultResponse(
                         null,
                         materialId,
+                        null,
+                        materialId,
+                        null,
                         MaterialParseStatus.NOT_STARTED,
                         null,
                         List.of(),
@@ -247,6 +269,47 @@ public class MaterialParseService {
                         null,
                         null
                 ));
+    }
+
+    /**
+     * Downstream profile/planning consumers must use this gate instead of
+     * trusting a client-provided parse response.  It re-reads the fact from
+     * the repository and requires all three server-owned identities to match.
+     */
+    @Transactional(readOnly = true)
+    public ParseResult requireBoundParseResult(Long projectId, Long materialId, String analysisRunId,
+                                                Long sourceVersionId, String parserSnapshotChecksum) {
+        materialService.requireProject(projectId);
+        materialService.requireMaterial(projectId, materialId);
+        if (analysisRunId == null || analysisRunId.isBlank()
+                || sourceVersionId == null || !sourceVersionId.equals(materialId)
+                || parserSnapshotChecksum == null
+                || !parserSnapshotChecksum.matches("[0-9a-fA-F]{64}")) {
+            throw new ConflictException("PARSE_RESULT_IDENTITY_INVALID");
+        }
+        ParseResult result = parseResultRepository
+                .findByMaterialIdAndAnalysisRunIdAndSourceVersionIdAndParserSnapshotChecksum(
+                        materialId, analysisRunId, sourceVersionId, parserSnapshotChecksum)
+                .orElseThrow(() -> new ConflictException("PARSE_RESULT_IDENTITY_MISMATCH"));
+        if (result.getParseStatus() != MaterialParseStatus.SUCCEEDED) {
+            throw new ConflictException("PARSE_RESULT_NOT_READY");
+        }
+        MaterialParseIdentity.requireComplete(result);
+        return result;
+    }
+
+    /**
+     * Server-owned convenience gate for downstream profile consumers. The
+     * caller supplies no parse identity; this method reads the latest fact and
+     * routes its persisted identity back through the strict binding gate.
+     */
+    @Transactional(readOnly = true)
+    public ParseResult requireLatestBoundParseResult(Long projectId, Long materialId) {
+        ParseResult latest = parseResultRepository.findLatestForRead(materialId)
+                .orElseThrow(() -> new ConflictException("PARSE_RESULT_NOT_READY"));
+        MaterialParseIdentity.requireComplete(latest);
+        return requireBoundParseResult(projectId, materialId, latest.getAnalysisRunId(),
+                latest.getSourceVersionId(), latest.getParserSnapshotChecksum());
     }
 
     @Transactional
@@ -425,6 +488,9 @@ public class MaterialParseService {
         return new ParseResultResponse(
                 result.getId(),
                 result.getMaterialId(),
+                result.getAnalysisRunId(),
+                result.getSourceVersionId(),
+                result.getParserSnapshotChecksum(),
                 result.getParseStatus(),
                 result.getSummary(),
                 result.getKeywords(),

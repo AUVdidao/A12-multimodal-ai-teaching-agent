@@ -31,7 +31,7 @@ public class TeachingTask extends BaseAuditableEntity {
     private Long assigneeId;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String requirements;
 
     @Enumerated(EnumType.STRING)
@@ -51,9 +51,11 @@ public class TeachingTask extends BaseAuditableEntity {
     private TeachingTaskStatus taskStatus;
 
     @Lob
+    @Column(columnDefinition = "TEXT")
     private String submissionNote;
 
     @Lob
+    @Column(columnDefinition = "TEXT")
     private String reviewNote;
 
     private LocalDateTime submittedAt;

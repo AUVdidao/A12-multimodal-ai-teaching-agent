@@ -1,5 +1,8 @@
 package com.auvdidao.a12teachingagent.ai.kimi;
 
+import com.auvdidao.a12teachingagent.agent.model.ModelFailureException;
+import com.auvdidao.a12teachingagent.agent.model.ModelFailureKind;
+import com.auvdidao.a12teachingagent.agent.model.ResolvedModelCredential;
 import com.auvdidao.a12teachingagent.ai.exception.AiFailureKind;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -36,13 +39,36 @@ public class KimiStructuredExecutor {
             Class<T> responseType
     ) {
         KimiChatResponse response = kimiChatClient.complete(new KimiChatRequest(
+                messages, model, maxCompletionTokens, timeoutSeconds, responseFormat));
+        return mapResponse(response, responseFormat, responseType);
+    }
+
+    /** Structured Planning path: the resolver result must reach the HTTP client unchanged. */
+    public <T> T execute(
+            List<Map<String, String>> messages,
+            String model,
+            int maxCompletionTokens,
+            int timeoutSeconds,
+            JsonNode responseFormat,
+            ResolvedModelCredential credential,
+            Class<T> responseType
+    ) {
+        if (credential == null) {
+            throw new ModelFailureException(ModelFailureKind.CONFIGURATION, "MODEL_CREDENTIAL_NOT_BOUND", 503,
+                    "A resolved credential is required for structured provider execution");
+        }
+        KimiChatResponse response = kimiChatClient.complete(new KimiChatRequest(
                 messages,
                 model,
                 maxCompletionTokens,
                 timeoutSeconds,
-                responseFormat
+                responseFormat,
+                credential
         ));
+        return mapResponse(response, responseFormat, responseType);
+    }
 
+    private <T> T mapResponse(KimiChatResponse response, JsonNode responseFormat, Class<T> responseType) {
         if ("length".equalsIgnoreCase(response.finishReason())) {
             throw invalidResponse("Kimi structured output was truncated", AiFailureKind.TRUNCATED_RESPONSE);
         }

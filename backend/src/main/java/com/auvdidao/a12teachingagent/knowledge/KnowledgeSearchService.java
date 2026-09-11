@@ -7,6 +7,7 @@ import com.auvdidao.a12teachingagent.domain.knowledge.KnowledgeChunk;
 import com.auvdidao.a12teachingagent.domain.knowledge.repository.KnowledgeChunkRepository;
 import com.auvdidao.a12teachingagent.domain.project.repository.ProjectRepository;
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeHitResponse;
+import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeMaterialReadResponse;
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeOverviewResponse;
 import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeSearchResponse;
 import com.auvdidao.a12teachingagent.material.MaterialLabels;
@@ -19,9 +20,13 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class KnowledgeSearchService {
+
+    private static final Pattern CHUNK_LOCATOR = Pattern.compile("^(?:chunk[-:]?)?(\\d+)$", Pattern.CASE_INSENSITIVE);
 
     private final ProjectRepository projectRepository;
     private final KnowledgeChunkRepository chunkRepository;
@@ -52,6 +57,16 @@ public class KnowledgeSearchService {
 
     @Transactional(readOnly = true)
     public KnowledgeSearchResponse search(Long projectId, String query, Integer requestedLimit) {
+        return searchWithinMaterialIds(projectId, query, requestedLimit, null);
+    }
+
+    @Transactional(readOnly = true)
+    public KnowledgeSearchResponse searchWithinMaterialIds(
+            Long projectId,
+            String query,
+            Integer requestedLimit,
+            java.util.Set<Long> allowedMaterialIds
+    ) {
         requireProject(projectId);
         String normalizedQuery = normalizeQuery(query);
         int limit = requestedLimit == null ? 10 : requestedLimit;
@@ -62,6 +77,9 @@ public class KnowledgeSearchService {
         List<String> terms = queryTerms(normalizedQuery);
         List<ScoredChunk> scored = new ArrayList<>();
         for (KnowledgeChunk chunk : chunkRepository.findByProjectIdOrderByMaterialIdAscChunkNoAsc(projectId)) {
+            if (allowedMaterialIds != null && !allowedMaterialIds.contains(chunk.getMaterialId())) {
+                continue;
+            }
             ScoredChunk value = score(chunk, terms);
             if (value.score() > 0) {
                 scored.add(value);
@@ -87,6 +105,52 @@ public class KnowledgeSearchService {
                 true,
                 "确定性关键词、标题、内容与资料用途加权"
         );
+    }
+
+    @Transactional(readOnly = true)
+    public KnowledgeMaterialReadResponse readMaterial(Long projectId, Long materialId, String locator) {
+        requireProject(projectId);
+        if (materialId == null || materialId <= 0) {
+            throw new BadRequestException("materialId must be greater than 0");
+        }
+        List<KnowledgeChunk> chunks = chunkRepository.findByMaterialIdOrderByChunkNoAsc(materialId).stream()
+                .filter(chunk -> projectId.equals(chunk.getProjectId()))
+                .toList();
+        if (chunks.isEmpty()) {
+            throw new ResourceNotFoundException("Knowledge material not found: " + materialId);
+        }
+
+        String requestedLocator = locator == null ? "" : locator.trim();
+        List<KnowledgeChunk> selected = selectChunks(chunks, requestedLocator);
+        if (selected.isEmpty()) {
+            throw new ResourceNotFoundException("Knowledge locator not found: " + requestedLocator);
+        }
+        String content = selected.stream()
+                .map(KnowledgeChunk::getContent)
+                .filter(value -> value != null && !value.isBlank())
+                .reduce((left, right) -> left + "\n\n" + right)
+                .orElse("");
+        return new KnowledgeMaterialReadResponse(projectId, materialId, selected.get(0).getSourceFilename(), requestedLocator, content);
+    }
+
+    private List<KnowledgeChunk> selectChunks(List<KnowledgeChunk> chunks, String locator) {
+        if (locator.isBlank()) {
+            return chunks;
+        }
+        Matcher matcher = CHUNK_LOCATOR.matcher(locator);
+        if (matcher.matches()) {
+            int chunkNo;
+            try {
+                chunkNo = Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException exception) {
+                return List.of();
+            }
+            return chunks.stream().filter(chunk -> Integer.valueOf(chunkNo).equals(chunk.getChunkNo())).toList();
+        }
+        String needle = normalize(locator);
+        return chunks.stream()
+                .filter(chunk -> normalize(chunk.getTitle()).contains(needle) || normalize(chunk.getContent()).contains(needle))
+                .toList();
     }
 
     private ScoredChunk score(KnowledgeChunk chunk, List<String> terms) {

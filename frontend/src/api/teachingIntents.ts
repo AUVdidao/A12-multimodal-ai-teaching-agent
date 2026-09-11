@@ -15,6 +15,7 @@ export interface TeachingIntentEvidence {
 
 export interface TeachingIntentPayload {
   generationGoal: string;
+  generationGoals?: string[];
   contentBasis: string;
   teachingApproach: string;
   interactionMode: string;

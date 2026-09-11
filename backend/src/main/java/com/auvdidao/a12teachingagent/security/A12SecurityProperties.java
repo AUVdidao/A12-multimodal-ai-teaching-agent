@@ -8,6 +8,7 @@ public class A12SecurityProperties {
     private boolean enabled = true;
     private int sessionHours = 12;
     private boolean demoSeedEnabled;
+    private String internalServiceToken;
     private Demo demo = new Demo();
 
     public boolean isEnabled() {
@@ -32,6 +33,14 @@ public class A12SecurityProperties {
 
     public void setDemoSeedEnabled(boolean demoSeedEnabled) {
         this.demoSeedEnabled = demoSeedEnabled;
+    }
+
+    public String getInternalServiceToken() {
+        return internalServiceToken;
+    }
+
+    public void setInternalServiceToken(String internalServiceToken) {
+        this.internalServiceToken = internalServiceToken;
     }
 
     public Demo getDemo() {

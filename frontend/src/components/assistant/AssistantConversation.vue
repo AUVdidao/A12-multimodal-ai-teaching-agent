@@ -3,10 +3,10 @@
     <header class="assistant-conversation__header">
       <div>
         <span :class="['assistant-conversation__dot', statusTone]" />
-        <strong>AI 教学副驾驶</strong>
-        <small>{{ loading ? '正在读取当前项目上下文' : empty ? '等待项目上下文' : '已读取当前项目上下文' }}</small>
+        <strong>{{ workspaceTitle }}</strong>
+        <small>{{ loading ? loadingStatusText : empty ? emptyStatusText : readyStatusText }}</small>
       </div>
-      <div class="assistant-conversation__tools">
+      <div v-if="showToolbarActions" class="assistant-conversation__tools">
         <el-button plain :icon="CirclePlus" :disabled="empty || loading" @click="$emit('new-dialogue')">新建对话</el-button>
         <el-button plain :icon="Clock" :disabled="empty || loading" @click="$emit('history')">需求对话记录</el-button>
       </div>
@@ -133,34 +133,70 @@
     </div>
 
     <footer class="assistant-composer">
-      <div class="assistant-composer__row">
-        <textarea
-          ref="inputEl"
-          :value="modelValue"
-          :disabled="empty || loading || sending"
-          :maxlength="maxLength"
-          aria-label="告诉 AI 你想完成什么"
-          :placeholder="empty ? '创建教学项目后即可开始对话' : loading ? '项目上下文读取完成后即可继续对话' : '告诉 AI 你想完成什么，例如：帮我检查教学需求是否完整'"
-          rows="1"
-          @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
-          @keydown="handleKeydown"
-        />
-        <el-button
-          class="assistant-composer__send"
-          type="primary"
-          :icon="Position"
-          :loading="sending"
-          :disabled="empty || loading || sending || !modelValue.trim()"
-          aria-label="发送消息"
-          @click="$emit('send')"
-        />
-      </div>
-      <div class="assistant-composer__meta">
-        <span>{{ empty ? 'AI 需要先读取项目数据' : loading ? 'AI 正在结合当前项目数据准备回答' : 'AI 将结合当前项目数据回答' }}</span>
-        <div v-if="!empty && !loading" class="assistant-quick-prompts">
-          <button v-for="prompt in quickPrompts" :key="prompt.id" type="button" :disabled="sending" @click="$emit('quick-prompt', prompt.id)">
-            {{ prompt.label }}
-          </button>
+      <section class="assistant-context-files" aria-label="Context Files">
+        <div v-if="files.length" class="assistant-context-files__list">
+          <article v-for="file in files.slice(0, 4)" :key="file.id" class="assistant-file-card">
+            <A12AssetIcon name="document" :size="17" />
+            <div>
+              <strong>{{ file.originalFilename }}</strong>
+                  <span>{{ file.displayStatus || (file.fileType || '文件') + ' · ' + (file.parseStatus === 'SUCCEEDED' ? '已解析' : file.parseStatus === 'FAILED' ? '解析失败' : '待解析') }}</span>
+            </div>
+          </article>
+          <span v-if="files.length > 4" class="assistant-context-files__more">还有 {{ files.length - 4 }} 份材料</span>
+        </div>
+        <div v-else class="assistant-context-files__empty">{{ contextFilesEmptyText }}</div>
+        <div v-if="uploading" class="assistant-upload-progress" role="status">
+          <span>正在上传文件</span><el-progress :percentage="uploadProgress" :show-text="false" />
+        </div>
+      </section>
+      <div class="assistant-composer__panel">
+        <div class="assistant-composer__row">
+          <textarea
+            ref="inputEl"
+            :value="modelValue"
+            :disabled="empty || loading || sending"
+            :maxlength="maxLength"
+            :aria-label="composerAriaLabel"
+            :placeholder="empty ? emptyComposerPlaceholder : loading ? loadingComposerPlaceholder : composerPlaceholder"
+            rows="1"
+            @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+            @keydown="handleKeydown"
+          />
+          <el-button
+            class="assistant-composer__send"
+            type="primary"
+            :icon="Position"
+            :loading="sending"
+            :disabled="empty || loading || sending || !modelValue.trim()"
+            aria-label="发送消息"
+            @click="$emit('send')"
+          />
+        </div>
+        <div class="assistant-composer__meta">
+          <div class="assistant-composer__meta-left">
+            <UiUploadDropzone
+              compact
+              :disabled="empty || loading || uploading"
+              title="添加文件"
+              description=""
+              @select="$emit('file-select', $event)"
+            />
+            <button
+              v-if="showConnectionControl"
+              type="button"
+              class="assistant-composer__connection"
+              data-test="open-connection"
+              @click="$emit('open-connection')"
+            >
+              <span>连接</span>
+              <strong>{{ connectionLabel }}</strong>
+            </button>
+          </div>
+          <div v-if="!empty && !loading" class="assistant-quick-prompts">
+            <button v-for="prompt in quickPrompts" :key="prompt.id" type="button" :disabled="sending" @click="$emit('quick-prompt', prompt.id)">
+              {{ prompt.label }}
+            </button>
+          </div>
         </div>
       </div>
     </footer>
@@ -168,8 +204,9 @@
 </template>
 
 <script setup lang="ts">
-import type { AssistantMessage, AssistantWorkspaceAction } from '@/types/assistant';
+import type { AssistantContextFile, AssistantMessage, AssistantWorkspaceAction } from '@/types/assistant';
 import A12AssetIcon, { type A12AssetIconName } from '@/components/ui/A12AssetIcon.vue';
+import UiUploadDropzone from '@/components/ui/UiUploadDropzone.vue';
 import { ArrowRight, Check, CirclePlus, Clock, Close, Document, InfoFilled, Position } from '@element-plus/icons-vue';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -182,9 +219,47 @@ const props = withDefaults(defineProps<{
   sending?: boolean;
   teacherInitial?: string;
   maxLength?: number;
+  files?: AssistantContextFile[];
+  uploading?: boolean;
+  uploadProgress?: number;
+  workspaceTitle?: string;
+  loadingStatusText?: string;
+  emptyStatusText?: string;
+  readyStatusText?: string;
+  contextFilesSubtitle?: string;
+  contextFilesEmptyText?: string;
+  composerAriaLabel?: string;
+  emptyComposerPlaceholder?: string;
+  loadingComposerPlaceholder?: string;
+  composerPlaceholder?: string;
+  emptyComposerMeta?: string;
+  loadingComposerMeta?: string;
+  composerMeta?: string;
+  showToolbarActions?: boolean;
+  showConnectionControl?: boolean;
+  connectionLabel?: string;
 }>(), {
   teacherInitial: '师',
   maxLength: 1000,
+  files: () => [],
+  uploading: false,
+  uploadProgress: 0,
+  workspaceTitle: 'Conversation Workspace',
+  loadingStatusText: '正在读取当前 Task 上下文',
+  emptyStatusText: '等待项目上下文',
+  readyStatusText: '已读取当前 Task 上下文',
+  contextFilesSubtitle: '当前项目材料',
+  contextFilesEmptyText: '还没有绑定材料，可从这里添加教材、教案、PPTX 或图片。',
+  composerAriaLabel: '告诉 AI 你想完成什么',
+  emptyComposerPlaceholder: '创建教学项目后即可开始对话',
+  loadingComposerPlaceholder: '项目上下文读取完成后即可继续对话',
+  composerPlaceholder: '告诉 AI 你想完成什么，例如：帮我检查教学需求是否完整',
+  emptyComposerMeta: 'AI 需要先读取项目数据',
+  loadingComposerMeta: 'AI 正在结合当前项目数据准备回答',
+  composerMeta: 'AI 将结合当前项目数据回答',
+  showToolbarActions: true,
+  showConnectionControl: false,
+  connectionLabel: '未选择连接',
 });
 
 const emit = defineEmits<{
@@ -196,6 +271,8 @@ const emit = defineEmits<{
   history: [];
   'create-project': [];
   'view-projects': [];
+  'file-select': [file: File];
+  'open-connection': [];
 }>();
 
 const scrollEl = ref<HTMLElement>();
@@ -539,6 +616,95 @@ function retrySaveAction(messageId: string): AssistantWorkspaceAction {
   background: #fbfcff;
 }
 
+.assistant-context-files {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.assistant-context-files__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.assistant-context-files__header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.assistant-context-files__header strong {
+  color: var(--ui-text);
+  font-size: 13px;
+}
+
+.assistant-context-files__header span,
+.assistant-context-files__empty,
+.assistant-context-files__more {
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.assistant-context-files__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assistant-file-card {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  max-width: 220px;
+  padding: 7px 9px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.assistant-file-card > .a12-asset-icon {
+  flex: 0 0 auto;
+}
+
+.assistant-file-card div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.assistant-file-card strong,
+.assistant-file-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-file-card strong {
+  color: var(--ui-text);
+  font-size: 11px;
+}
+
+.assistant-file-card span {
+  color: var(--ui-muted);
+  font-size: 10px;
+}
+
+.assistant-upload-progress {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--ui-primary);
+  font-size: 11px;
+}
+
 .assistant-composer__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 42px;
@@ -614,6 +780,46 @@ function retrySaveAction(messageId: string): AssistantWorkspaceAction {
   margin-top: 8px;
   color: var(--ui-muted);
   font-size: 12px;
+}
+
+.assistant-composer__meta-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.assistant-composer__connection {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ui-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.assistant-composer__connection:hover,
+.assistant-composer__connection:focus-visible {
+  border-color: var(--ui-primary);
+  color: var(--ui-primary);
+  outline: 0;
+}
+
+.assistant-composer__connection strong {
+  color: var(--ui-text);
+  font-size: 11px;
+}
+
+.assistant-composer__connection em {
+  color: var(--ui-primary);
+  font-style: normal;
+  font-weight: 700;
 }
 
 .assistant-quick-prompts {
@@ -763,6 +969,267 @@ function retrySaveAction(messageId: string): AssistantWorkspaceAction {
   width: 64%;
 }
 
+/* Mission Workspace uses a compact desktop shell; the conversation remains the visual center. */
+.assistant-conversation {
+  border: 0;
+  border-radius: 0;
+  background: #090808;
+  box-shadow: none;
+  color: #eee8e3;
+}
+
+.assistant-conversation__header {
+  display: none;
+}
+
+.assistant-conversation__body {
+  width: min(100%, 920px);
+  align-self: center;
+  padding: 28px 30px 18px;
+  scrollbar-color: #403936 transparent;
+}
+
+.assistant-message {
+  max-width: min(780px, 94%);
+}
+
+.assistant-message__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: #28211e;
+  color: #ff965e;
+  font-size: 12px;
+}
+
+.assistant-message.is-teacher .assistant-message__avatar {
+  background: #26272a;
+  color: #ddd6d1;
+}
+
+.assistant-ai-card,
+.assistant-teacher-bubble {
+  border-color: #302b29;
+  border-radius: 5px;
+  background: #141211;
+  box-shadow: none;
+}
+
+.assistant-ai-card {
+  padding: 13px 15px;
+}
+
+.assistant-teacher-bubble {
+  padding: 10px 13px;
+  background: #201b19;
+  color: #e5ddd8;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.assistant-ai-card__intro,
+.assistant-ai-section p {
+  color: #ddd5d0;
+  font-size: 13px;
+}
+
+.assistant-ai-section {
+  border-top-color: #302b29;
+}
+
+.assistant-ai-section h3 {
+  color: #ff9a5e;
+  font-size: 13px;
+}
+
+.assistant-ai-item {
+  min-height: 48px;
+  padding: 8px 10px;
+  border-color: #302b29;
+  border-radius: 4px;
+  background: #111010;
+}
+
+.assistant-ai-item strong { color: #e8e0db; font-size: 12px; }
+.assistant-ai-item small { color: #8f8681; font-size: 11px; }
+
+.assistant-evidence-tags span {
+  min-height: 27px;
+  padding: 0 9px;
+  border-color: #302b29;
+  border-radius: 4px;
+  background: #111010;
+  color: #918984;
+}
+
+.assistant-version-notice {
+  min-height: 34px;
+  border-color: #4a382b;
+  border-radius: 4px;
+  background: #1a1512;
+  color: #b8aaa0;
+  font-size: 11px;
+}
+
+.assistant-composer {
+  width: min(100%, 860px);
+  align-self: center;
+  padding: 0 24px 14px;
+  border-top: 0;
+  background: #090808;
+}
+
+.assistant-context-files {
+  gap: 5px;
+  margin-bottom: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.assistant-context-files__empty {
+}
+
+.assistant-file-card {
+  max-width: 190px;
+  padding: 5px 7px;
+  border-color: #302b29;
+  border-radius: 4px;
+  background: #141211;
+}
+
+.assistant-file-card strong { color: #d9d1cc; font-size: 10px; }
+.assistant-file-card span { color: #837a75; font-size: 9px; }
+
+.assistant-composer__panel {
+  overflow: hidden;
+  border: 1px solid #3b3431;
+  border-radius: 6px;
+  background: #111010;
+}
+
+.assistant-composer__row {
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 7px;
+  padding: 5px;
+  border: 0;
+  border-bottom: 1px solid #2b2625;
+  border-radius: 0;
+  background: transparent;
+}
+
+.assistant-composer textarea {
+  height: 36px;
+  max-height: 84px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #eee8e3;
+  font-size: 13px;
+}
+
+.assistant-composer textarea:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.assistant-composer textarea:disabled {
+  background: transparent;
+  color: #675f5b;
+}
+
+.assistant-composer__send {
+  width: 36px;
+  height: 36px;
+  border-color: #ff6b16;
+  background: #ff6b16;
+  color: #1d1008;
+}
+
+.assistant-composer__meta {
+  min-height: 30px;
+  margin-top: 0;
+  padding: 3px 5px 4px;
+  color: #746c67;
+  font-size: 10px;
+}
+
+.assistant-composer__meta-left {
+  gap: 7px;
+}
+
+.assistant-composer__meta-left > span {
+  display: none;
+}
+
+.assistant-composer__connection {
+  min-height: 24px;
+  padding: 0 6px;
+  border-color: #38312e;
+  border-radius: 4px;
+  background: transparent;
+  color: #8f8681;
+  font-size: 10px;
+}
+
+.assistant-composer__connection strong { color: #d4cbc5; font-size: 10px; }
+.assistant-composer__connection em { display: none; }
+
+.assistant-composer__meta-left :deep(.ui-upload-dropzone) {
+  min-height: 24px;
+  padding: 3px 7px;
+  border-color: #38312e;
+  border-radius: 4px;
+  background: transparent;
+  color: #b5aaa4;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.assistant-composer__meta-left :deep(.ui-upload-dropzone:hover) {
+  border-color: #6a5b52;
+  background: #171414;
+  color: #eee8e3;
+}
+
+.assistant-composer__meta-left :deep(.ui-upload-dropzone.is-compact strong) {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.assistant-composer__meta-left :deep(.ui-upload-dropzone.is-compact .ui-upload-dropzone__icon),
+.assistant-composer__meta-left :deep(.ui-upload-dropzone.is-compact .ui-upload-dropzone__icon svg) {
+  width: 15px;
+  height: 15px;
+}
+
+.assistant-quick-prompts button {
+  min-height: 25px;
+  padding: 0 8px;
+  border-color: #38312e;
+  border-radius: 4px;
+  background: transparent;
+  color: #a09892;
+  font-size: 10px;
+}
+
+.assistant-empty-state__icon { background: #211a17; }
+.assistant-empty-state section { border-color: #302b29; border-radius: 5px; background: #141211; }
+.assistant-empty-state p { color: #c9c0ba; font-size: 13px; }
+
+.assistant-loading-state { border-color: #302b29; border-radius: 5px; background: #141211; }
+.assistant-loading-step { border-bottom-color: #302b29; }
+.assistant-loading-step strong { color: #d8d0cb; font-size: 12px; }
+.assistant-loading-step div > span,
+.assistant-skeleton-lines i { background: #2a2523; }
+
+@media (max-width: 760px) {
+  .assistant-conversation__body,
+  .assistant-composer { padding-right: 16px; padding-left: 16px; }
+}
+
 @keyframes assistant-spin {
   to {
     transform: rotate(360deg);
@@ -786,6 +1253,12 @@ function retrySaveAction(messageId: string): AssistantWorkspaceAction {
   .assistant-composer__meta {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .assistant-composer__meta-left {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .assistant-quick-prompts {

@@ -2,6 +2,9 @@ package com.auvdidao.a12teachingagent.ai.kimi;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.auvdidao.a12teachingagent.agent.model.CredentialSource;
+import com.auvdidao.a12teachingagent.agent.model.ModelProvider;
+import com.auvdidao.a12teachingagent.agent.model.ResolvedModelCredential;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -95,6 +98,19 @@ class KimiStructuredExecutorTest {
                 """, "future_reason"));
 
         assertThat(execute().summary()).isEqualTo("A summary");
+    }
+
+    @Test
+    void structuredExecutionForwardsResolvedCredentialToClient() {
+        ResolvedModelCredential credential = new ResolvedModelCredential(
+                ModelProvider.KIMI, CredentialSource.ACTIVE_USER_CREDENTIAL, "resolver-key");
+        when(client.complete(any(KimiChatRequest.class))).thenAnswer(invocation -> {
+            assertThat(invocation.getArgument(0, KimiChatRequest.class).credential()).isSameAs(credential);
+            return response("{\"summary\":\"A summary\",\"keywords\":[],\"teachingUses\":[]}", "stop");
+        });
+
+        assertThat(executor.execute(messages, "kimi-k2.6", 1000, 30, responseFormat, credential,
+                MaterialAnalysisModelOutput.class).summary()).isEqualTo("A summary");
     }
 
     private MaterialAnalysisModelOutput execute() {

@@ -9,16 +9,16 @@
 - `reverse-proxy` 是唯一浏览器入口，默认仅绑定 `127.0.0.1:8081`：`/api` 转发至 `backend-api:8080`，其他请求转发至 `frontend-web:80`；它提供 SPA 回退、安全响应头和 `/healthz` 健康检查。
 - `monitor-log` 使用 Dozzle 读取 Docker socket（只读），默认仅绑定 `127.0.0.1:8082`，展示实际容器日志。
 - `file-parser-service` 是内部真实解析服务，只在 Compose 网络中监听 `8080`。它仅接收受限 multipart 文件字节流和最小元数据，提供 `GET /internal/health` 与 `POST /internal/file-parser/parse`；不接收宿主机或容器文件路径。
-- 后端沿用当前开发数据库方案：H2 文件数据库，数据保存在 Compose 命名卷 `backend-data` 中。
+- Compose 默认使用 PostgreSQL 生产 profile；数据库服务使用 `postgres:16-alpine`，数据保存在 `postgres-data` 命名卷，backend 通过健康依赖和 `SPRING_DATASOURCE_*` 环境变量连接。H2 仅保留给 `dev`/`test` profile。
 - AI Workflow 由 Spring Boot 的 `AIWorkflowGateway` 编排；默认使用 KIMI，离线演示或测试可设置 `AI_PROVIDER=MOCK`。
 - 资料正文解析由 `file-parser-service` 提供 TXT、MD、PDF、DOCX、PPTX 的实际提取；图片和视频仍按未启用 OCR、未启用转写诚实降级。Docker 中的 `backend-api` 使用远程解析适配器，测试与明确的 `local` 配置可继续使用本地确定性解析器。
 - 内容生成持久化规范化 PPT 计划、教案和互动问答 JSON，并由 Vue 页面预览；新 PPT Engine 尚未接入。`file-generator-service` 在 Compose 内网只生成 `.docx`、互动 HTML 和 ZIP；当前公开导出只提供 DOCX，PPTX 请求明确返回不可用。
 
 ## 数据库模式判断
 
-当前 Docker 原型采用 H2 embedded 模式，不启动 MySQL 容器。依据是 `backend/src/main/resources/application.yml` 中的 `spring.datasource.url=jdbc:h2:file:./data/a12-teaching-agent`，且当前 main 没有要求 MySQL 才能启动。
+当前 Docker Compose 默认采用 PostgreSQL，不启动 H2。生产 profile 从 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD` 读取连接信息，Flyway 使用独立的 `classpath:db/postgresql-migration`，Hibernate 仅执行 `validate`。H2 文件库只在 `dev` profile 使用。
 
-`.env.example` 保留 MySQL 示例变量，仅为后续数据库容器化任务预留；本基线不会读取真实数据库密码。
+`.env.example` 中的数据库密码仅为本地占位示例；生产必须通过部署 secret 注入，不得提交真实密码。旧 `MYSQL_*` 变量保留作历史兼容占位，不参与 Spring datasource 连接。
 
 ## 启动前准备
 

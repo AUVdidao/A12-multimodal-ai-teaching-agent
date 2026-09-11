@@ -36,7 +36,7 @@ public class RemoteMaterialPrototypeParser implements MaterialPrototypeParser {
     public RemoteMaterialPrototypeParser(
             FileStorageService fileStorageService,
             @Value("${a12.material-parser.base-url}") String baseUrl,
-            @Value("${a12.material-parser.timeout-ms:10000}") long timeoutMs,
+            @Value("${a12.material-parser.timeout-ms:120000}") long timeoutMs,
             @Value("${a12.material-parser.max-request-bytes:20971520}") long maxRequestBytes
     ) {
         this(fileStorageService, remoteClient(baseUrl, timeoutMs), maxRequestBytes);
