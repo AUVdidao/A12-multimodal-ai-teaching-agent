@@ -43,11 +43,27 @@ function Test-LessonForgeDevServer {
 function Get-LessonForgeViteProcess {
     return Get-CimInstance Win32_Process | Where-Object {
         $_.Name -eq 'node.exe' -and
-        $_.CommandLine -like "*$frontendRoot*vite*bin*vite.js*--port 5173*"
+        $_.CommandLine -like "*$frontendRoot*vite*bin*vite.js*"
     }
 }
 
 $existingVite = @(Get-LessonForgeViteProcess)
+if ($existingVite.Count -gt 1) {
+    $listenerProcessIds = @(Get-NetTCPConnection -State Listen -LocalPort 5173 -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+    $keepVite = @($existingVite |
+        Where-Object { $listenerProcessIds -contains $_.ProcessId } |
+        Sort-Object CreationDate |
+        Select-Object -First 1)
+    if ($keepVite.Count -eq 0) {
+        $keepVite = @($existingVite | Sort-Object CreationDate | Select-Object -First 1)
+    }
+    $existingVite |
+        Where-Object { $_.ProcessId -ne $keepVite[0].ProcessId } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    $existingVite = @($keepVite)
+}
+
 if ($existingVite.Count -eq 0 -and (Test-LessonForgeDevServer)) {
     throw 'Port 5173 is already used by another frontend service; the LessonForge desktop launcher will not attach to an unknown page.'
 }
