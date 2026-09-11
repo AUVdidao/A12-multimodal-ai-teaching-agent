@@ -2377,6 +2377,12 @@ func (s *Store) validateGenerationTemplateBindingTx(ctx context.Context, tx pgx.
 		return ErrGenerationTemplateInvalid
 	}
 	for _, key := range []string{"templateStorageKey", "templateFileSha256", "templateOriginalName", "templateMimeType", "templateFileSize"} {
+		if key == "templateFileSize" {
+			if numericID(binding[key]) != numericID(expected[key]) {
+				return ErrGenerationTemplateInvalid
+			}
+			continue
+		}
 		if fmt.Sprint(binding[key]) != fmt.Sprint(expected[key]) {
 			return ErrGenerationTemplateInvalid
 		}

@@ -50,7 +50,7 @@ func newGenerationRequestFixture(t *testing.T) generationRequestFixture {
 		t.Fatal(err)
 	}
 	var fileObjectID, missionFileID int64
-	if err := store.DB.QueryRow(ctx, `INSERT INTO file_objects(owner_user_id,storage_key,original_name,mime_type,size_bytes,sha256) VALUES($1,$2,'fixture-template.pptx','application/vnd.openxmlformats-officedocument.presentationml.presentation',12,$3) RETURNING id`, owner.ID, "generation-template/"+suffix+".pptx", strings.Repeat("a", 64)).Scan(&fileObjectID); err != nil {
+	if err := store.DB.QueryRow(ctx, `INSERT INTO file_objects(owner_user_id,storage_key,original_name,mime_type,size_bytes,sha256) VALUES($1,$2,'fixture-template.pptx','application/vnd.openxmlformats-officedocument.presentationml.presentation',147487399,$3) RETURNING id`, owner.ID, "generation-template/"+suffix+".pptx", strings.Repeat("a", 64)).Scan(&fileObjectID); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB.QueryRow(ctx, `INSERT INTO mission_files(mission_id,file_object_id,role,provenance,parse_status,uploaded_by) VALUES($1,$2,'TEMPLATE','TEACHER','READY',$3) RETURNING id`, missionID, fileObjectID, owner.ID).Scan(&missionFileID); err != nil {
@@ -60,7 +60,7 @@ func newGenerationRequestFixture(t *testing.T) generationRequestFixture {
 		"bindingKind": "LESSONFORGE_UPSTREAM_TEMPLATE_BINDING", "contractVersion": "lessonforge-upstream-template-v1", "missionId": missionID,
 		"missionFileId": missionFileID, "fileObjectId": fileObjectID, "ownerUserId": owner.ID,
 		"templateStorageKey": "generation-template/" + suffix + ".pptx", "templateFileSha256": strings.Repeat("a", 64),
-		"templateOriginalName": "fixture-template.pptx", "templateMimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "templateFileSize": 12,
+		"templateOriginalName": "fixture-template.pptx", "templateMimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "templateFileSize": 147487399,
 	}
 	bindingJSON, err := json.Marshal(binding)
 	if err != nil {
