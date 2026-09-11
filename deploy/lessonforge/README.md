@@ -1,9 +1,10 @@
 # LessonForge unified container layout
 
-This directory is the target control plane for the LessonForge Go bridge and
-the A12/PPT services. The source repositories remain in their existing
-directories; this file only centralizes Docker orchestration and readable
-runtime names.
+This directory is the canonical control plane for the LessonForge Go bridge
+and the A12/PPT services. The repository-relative build contexts in
+`compose.yaml` are the source of truth for the published runtime; the
+separate `D:\pri_work\lessonforge` directory is retained only for backups and
+operational notes.
 
 ## Current transition state
 
@@ -51,13 +52,13 @@ persistent encryption/provider values through a protected environment or
 secret store; do not copy secrets into this repository.
 
 ```powershell
-docker compose --project-directory D:\pri_work\lessonforge --env-file D:\pri_work\lessonforge\.env.example config --quiet
+docker compose --project-directory D:\pri_work\A12-ppt-stage34-integration\deploy\lessonforge --env-file D:\pri_work\A12-ppt-stage34-integration\deploy\lessonforge\.env.example config --quiet
 ```
 
 The active stack can be inspected with:
 
 ```powershell
-docker compose --project-directory D:\pri_work\lessonforge --env-file D:\pri_work\lessonforge\.env.example --project-name lessonforge ps
+docker compose --project-directory D:\pri_work\A12-ppt-stage34-integration\deploy\lessonforge --env-file D:\pri_work\A12-ppt-stage34-integration\deploy\lessonforge\.env.example --project-name lessonforge ps
 ```
 
 Do not run `down -v`; that could remove data if the command is changed later.
