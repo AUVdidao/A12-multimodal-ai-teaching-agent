@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/contracts/v1/approved-asset-manifest.schema.json",
+  "title": "Approved Asset Manifest 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion", "manifestId", "projectId", "ownerUserId", "manifestVersion", "status",
+    "specificationId", "specificationVersion", "specificationChecksum",
+    "manifestChecksum", "entries"
+  ],
+  "properties": {
+    "contractVersion": {"const": "1.0.0"},
+    "manifestId": {"$ref": "#/$defs/id"},
+    "projectId": {"$ref": "#/$defs/id"},
+    "ownerUserId": {"$ref": "#/$defs/id"},
+    "manifestVersion": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "status": {"type": "string", "enum": ["DRAFT", "REVIEW", "APPROVED"]},
+    "specificationId": {"$ref": "#/$defs/id"},
+    "specificationVersion": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "specificationChecksum": {"$ref": "#/$defs/hash"},
+    "manifestChecksum": {"$ref": "#/$defs/hash"},
+    "entries": {
+      "type": "array",
+      "maxItems": 20000,
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetRequirementId", "resolution"],
+      "properties": {
+        "assetRequirementId": {"$ref": "#/$defs/id"},
+        "resolution": {"type": "string", "enum": ["APPROVED_ASSET", "APPROVED_OMISSION"]},
+        "approvedAssetId": {"$ref": "#/$defs/id"},
+        "assetType": {"type": "string", "enum": ["IMAGE", "CHART", "TABLE", "ICON", "VIDEO", "OTHER"]},
+        "contentSha256": {"$ref": "#/$defs/hash"},
+        "storageKey": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\u0000-\\u001f]+$"},
+        "fileSize": {"type": "integer", "minimum": 1},
+        "lastModifiedUtc": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"resolution": {"const": "APPROVED_ASSET"}}},
+          "then": {"required": ["approvedAssetId", "assetType", "contentSha256", "storageKey", "fileSize", "lastModifiedUtc"]}
+        },
+        {
+          "if": {"properties": {"resolution": {"const": "APPROVED_OMISSION"}}},
+          "then": {
+            "not": {
+              "anyOf": [
+                {"required": ["approvedAssetId"]},
+                {"required": ["assetType"]},
+                {"required": ["contentSha256"]},
+                {"required": ["storageKey"]},
+                {"required": ["fileSize"]},
+                {"required": ["lastModifiedUtc"]}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

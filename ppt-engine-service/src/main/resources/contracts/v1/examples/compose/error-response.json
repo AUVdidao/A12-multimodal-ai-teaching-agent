@@ -1,0 +1,32 @@
+{
+  "contractVersion": "2.0.0",
+  "feedbackContractVersion": "2.0.0",
+  "requestId": "req-page-missing",
+  "feedback": {
+    "contractVersion": "2.0.0",
+    "feedbackContractVersion": "2.0.0",
+    "requestId": "req-page-missing",
+    "generationJobId": "job-001",
+    "executionAttemptId": "attempt-001",
+    "specificationId": "spec-001",
+    "specificationVersion": 1,
+    "specificationChecksum": "4525d23601fdb720a3c366bdf6a5c8b87311dcc5c2dc258424263ac177696414",
+    "templateProfileId": "profile-001",
+    "templateProfileVersion": 1,
+    "status": "FAILED",
+    "diagnostics": [
+      {
+        "code": "TEMPLATE_PAGE_MISSING",
+        "severity": "ERROR",
+        "source": "TEMPLATE_PAGE_RESOLVER",
+        "impact": "JOB_BLOCKING",
+        "retryable": false,
+        "slideId": "slide-001",
+        "pageNumber": 1,
+        "messageKey": "templatePage.missing",
+        "safeDetails": {"semanticRole": "BODY"}
+      }
+    ],
+    "generatedAt": "2026-08-24T00:00:00Z"
+  }
+}

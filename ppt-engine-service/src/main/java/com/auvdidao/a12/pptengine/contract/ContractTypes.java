@@ -1,0 +1,146 @@
+package com.auvdidao.a12.pptengine.contract;
+
+public final class ContractTypes {
+
+    public static final String V1 = "1.0.0";
+    public static final String COMPOSE_CONTRACT_V2 = "2.0.0";
+    public static final String COMPOSITION_PLAN_V2 = "2.0.0";
+    public static final String COMPOSITION_FEEDBACK_V2 = "2.0.0";
+    public static final String APPROVED_ASSET_MANIFEST_V1 = "1.0.0";
+    public static final String STABLE_NATIVE_OBJECT_REFERENCE_V1 = "1.0.0";
+    public static final String TEXT_FIT_BOUNDARY_V1 = "1.0.0";
+    public static final String EXECUTOR_CONTRACT_V1 = "1.0.0";
+    public static final String EXECUTOR_CONTRACT_V2 = "2.0.0";
+
+    private ContractTypes() {
+    }
+
+    public enum SpecificationStatus { DRAFT, REVIEW, LOCKED }
+
+    public enum TemplateProfileStatus { CANDIDATE, READY, CONFIRMED }
+
+    public enum AssetManifestStatus { DRAFT, REVIEW, APPROVED }
+
+    public enum AssetResolution { APPROVED_ASSET, APPROVED_OMISSION }
+
+    public enum ContentSourceType { MATERIAL, TEACHER, AI_EXAMPLE, AI_IMAGE }
+
+    public enum ApprovalStatus { APPROVED, PENDING, REJECTED }
+
+    public enum ContentType { TITLE, BODY, BULLETS, QUOTE, TABLE, CHART, IMAGE, TEXT }
+
+    public enum AssetType { IMAGE, CHART, TABLE, ICON, VIDEO, OTHER }
+
+    public enum TransformConstraint { FIXED, TRANSLATE_ONLY, UNIFORM_SCALE, STRETCH_X, STRETCH_Y, RESPONSIVE }
+
+    public enum ObjectType { UNKNOWN, SHAPE, GROUP, PICTURE, TEXT, CHART, TABLE }
+
+    public enum DiagnosticSeverity { INFO, WARNING, ERROR }
+
+    public enum DiagnosticSource {
+        CONTRACT_GATE,
+        ASSET_MANIFEST_GATE,
+        COMPONENT_RESOLVER,
+        TEMPLATE_PAGE_RESOLVER,
+        LAYOUT_RESOLVER,
+        SLIDE_COMPOSER,
+        PLAN_VALIDATOR
+        , POWERPOINT_EXECUTOR
+        , FILE_BUILD_VALIDATOR
+    }
+
+    public enum DiagnosticCode {
+        CONTRACT_INVALID,
+        SPECIFICATION_NOT_LOCKED,
+        TEMPLATE_PROFILE_NOT_CONFIRMED,
+        CHECKSUM_MISMATCH,
+        TEMPLATE_PROFILE_MISMATCH,
+        SLIDE_COUNT_MISMATCH,
+        PAGE_SEQUENCE_INVALID,
+        DUPLICATE_ID,
+        COMPONENT_MISSING,
+        SLOT_INCOMPATIBLE,
+        SLOT_CAPACITY_EXCEEDED,
+        REQUIRED_SLOT_UNFILLED,
+        ASSET_TYPE_UNSUPPORTED,
+        IMAGE_NOT_APPROVED,
+        TRANSFORM_NOT_ALLOWED,
+        TEMPLATE_PAGE_MISSING,
+        LAYOUT_OUT_OF_BOUNDS,
+        SAFE_AREA_VIOLATION,
+        SEMANTIC_REGION_CAPACITY_EXCEEDED,
+        COMPOSITION_REFERENCE_INVALID,
+        PLAN_CHECKSUM_MISMATCH,
+        GENERATION_JOB_CONTRACT_VERSION_MISMATCH,
+        GENERATION_JOB_BINDING_CHECKSUM_MISMATCH,
+        GENERATION_JOB_SPECIFICATION_BINDING_MISMATCH,
+        GENERATION_JOB_TEMPLATE_PROFILE_BINDING_MISMATCH,
+        GENERATION_JOB_ASSET_MANIFEST_BINDING_MISMATCH,
+        ASSET_MANIFEST_NOT_APPROVED,
+        ASSET_MANIFEST_SPECIFICATION_MISMATCH,
+        ASSET_MANIFEST_CHECKSUM_MISMATCH,
+        ASSET_MANIFEST_ENTRY_INVALID,
+        ASSET_MANIFEST_ENTRY_DUPLICATE,
+        ASSET_MANIFEST_ENTRY_DANGLING,
+        ASSET_MANIFEST_REQUIREMENT_MISSING,
+        ASSET_MANIFEST_REQUIRED_OMISSION,
+        ASSET_MANIFEST_TYPE_MISMATCH,
+        ASSET_MANIFEST_CONTENT_HASH_INVALID,
+        ASSET_MANIFEST_FILE_IDENTITY_INVALID,
+        GENERATION_JOB_PROJECT_BINDING_MISMATCH,
+        GENERATION_JOB_OWNER_BINDING_MISMATCH,
+        ASSET_APPROVED_OMISSION,
+        COMPONENT_SELECTION_COMPATIBILITY_FALLBACK,
+        CONTENT_OVERFLOW,
+        TEXT_FIT_POLICY_UNAVAILABLE,
+        RASTER_FALLBACK_FORBIDDEN
+        , EXECUTOR_INPUT_INVALID
+        , TEMPLATE_SOURCE_INVALID
+        , TEMPLATE_SOURCE_HASH_MISMATCH
+        , TEMPLATE_SOURCE_METADATA_MISMATCH
+        , SAME_PACKAGE_REFERENCE_INVALID
+        , CROSS_PACKAGE_REFERENCE_FORBIDDEN
+        , NATIVE_OBJECT_NOT_SUPPORTED
+        , NATIVE_OBJECT_NOT_FOUND
+        , APPROVED_ASSET_FILE_INVALID
+        , APPROVED_ASSET_FILE_HASH_MISMATCH
+        , PPTX_PACKAGE_INVALID
+        , PPTX_SLIDE_COUNT_MISMATCH
+        , PPTX_RELATIONSHIP_INVALID
+        , PPTX_CONTENT_TYPES_INVALID
+        , PPTX_NATIVE_REFERENCE_INVALID
+        , PPTX_OPERATION_NOT_COVERED
+        , PPTX_CHECKSUM_MISMATCH
+    }
+
+    public enum FeedbackOutcome { SUCCESS, PARTIAL, REJECTED }
+
+    public enum GenerationJobStatus { FAILED, PARTIAL, SUCCEEDED_WITH_FEEDBACK, SUCCEEDED }
+
+    public enum DiagnosticImpact { JOB_BLOCKING, ARTIFACT_INCOMPLETE, NON_BLOCKING }
+
+    public enum ComponentSelectionBasis { PROFILE_V1_CONFIDENCE_FALLBACK_TOTAL_ORDER }
+
+    public enum PlacementIntent { TITLE, BODY, SIDEBAR, FOOTER, IMAGE, CHART, TABLE, DECORATION, OTHER }
+
+    public enum PreferredPosition { TOP, LEFT, RIGHT, CENTER, BOTTOM, FULL_BLEED }
+
+    public enum TemplatePageSelectionBasis { EXACT_SEMANTIC_ROLE_STABLE_ORDER }
+
+    public enum SlotBindingKind { TEXT, ASSET }
+
+    public enum CompositionOperationType {
+        PRESERVE_BASE_OBJECT,
+        USE_OR_CLONE_COMPONENT_OBJECT,
+        FILL_TEXT_SLOT,
+        FILL_ASSET_SLOT
+    }
+
+    public enum ComponentObjectAction { USE_EXISTING_OBJECT, CLONE_FROM_SOURCE }
+
+    public enum NativeObjectScope { SLIDE }
+
+    public enum TextFitMode { NO_ADJUSTMENT_PROFILE_V1, PROFILE_CONSTRAINED }
+
+    public enum TextMeasurementStatus { NOT_IMPLEMENTED }
+}

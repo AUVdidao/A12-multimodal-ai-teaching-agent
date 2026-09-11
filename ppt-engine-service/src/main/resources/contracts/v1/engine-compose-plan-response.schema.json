@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/contracts/v1/engine-compose-plan-response.schema.json",
+  "title": "Engine Compose Plan Response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "planContractVersion", "feedbackContractVersion", "requestId", "plan", "feedback"],
+  "properties": {
+    "contractVersion": {"const": "2.0.0"},
+    "planContractVersion": {"const": "2.0.0"},
+    "feedbackContractVersion": {"const": "2.0.0"},
+    "requestId": {"$ref": "#/$defs/requestId"},
+    "plan": {"$ref": "#/$defs/plan"},
+    "feedback": {"$ref": "#/$defs/feedback"}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "transform": {"type": ["string", "null"], "enum": ["FIXED", "TRANSLATE_ONLY", "UNIFORM_SCALE", "STRETCH_X", "STRETCH_Y", "RESPONSIVE", null]},
+    "objectType": {"type": "string", "enum": ["UNKNOWN", "SHAPE", "GROUP", "PICTURE", "TEXT", "CHART", "TABLE"]},
+    "assetType": {"type": ["string", "null"], "enum": ["IMAGE", "CHART", "TABLE", "ICON", "VIDEO", "OTHER", null]},
+    "pageSize": {
+      "type": "object", "additionalProperties": false, "required": ["widthEmu", "heightEmu"],
+      "properties": {"widthEmu": {"type": "integer", "minimum": 1}, "heightEmu": {"type": "integer", "minimum": 1}}
+    },
+    "bounds": {
+      "type": "object", "additionalProperties": false,
+      "required": ["leftEmu", "topEmu", "widthEmu", "heightEmu"],
+      "properties": {
+        "leftEmu": {"type": "integer", "minimum": 0},
+        "topEmu": {"type": "integer", "minimum": 0},
+        "widthEmu": {"type": "integer", "minimum": 1},
+        "heightEmu": {"type": "integer", "minimum": 1}
+      }
+    },
+    "stableNativeObjectReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["referenceVersion", "templateId", "templateVersion", "scope", "sourceSlide", "objectId", "objectType"],
+      "properties": {
+        "referenceVersion": {"const": "1.0.0"},
+        "templateId": {"$ref": "#/$defs/id"},
+        "templateVersion": {"type": "integer", "minimum": 1},
+        "scope": {"const": "SLIDE"},
+        "sourceSlide": {"type": "integer", "minimum": 1, "maximum": 200},
+        "objectId": {"$ref": "#/$defs/id"},
+        "objectType": {"$ref": "#/$defs/objectType"}
+      }
+    },
+    "templatePage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pageReferenceId", "sourceSlide", "semanticRole", "selectionBasis"],
+      "properties": {
+        "pageReferenceId": {"$ref": "#/$defs/id"},
+        "sourceSlide": {"type": "integer", "minimum": 1, "maximum": 200},
+        "semanticRole": {"type": "string", "minLength": 1, "maxLength": 64},
+        "selectionBasis": {"const": "EXACT_SEMANTIC_ROLE_STABLE_ORDER"}
+      }
+    },
+    "componentPlacement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["componentId", "nativeObjectReferences", "allowedTransform"],
+      "properties": {
+        "componentId": {"$ref": "#/$defs/id"},
+        "nativeObjectReferences": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/stableNativeObjectReference"}},
+        "allowedTransform": {"type": "string", "enum": ["FIXED", "TRANSLATE_ONLY", "UNIFORM_SCALE", "STRETCH_X", "STRETCH_Y", "RESPONSIVE"]}
+      }
+    },
+    "componentSelection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bindingKind", "bindingId", "selectedComponentId", "selectedSlotId", "selectionBasis"],
+      "properties": {
+        "bindingKind": {"type": "string", "enum": ["TEXT", "ASSET"]},
+        "bindingId": {"$ref": "#/$defs/id"},
+        "selectedComponentId": {"$ref": "#/$defs/id"},
+        "selectedSlotId": {"$ref": "#/$defs/id"},
+        "selectionBasis": {"const": "PROFILE_V1_CONFIDENCE_FALLBACK_TOTAL_ORDER"}
+      }
+    },
+    "slotPlacement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["placementId", "componentId", "slotId", "bindingKind", "bindingId", "semanticRole", "regionId", "bounds", "requestedTransform", "allowedTransform"],
+      "properties": {
+        "placementId": {"$ref": "#/$defs/id"},
+        "componentId": {"$ref": "#/$defs/id"},
+        "slotId": {"$ref": "#/$defs/id"},
+        "bindingKind": {"type": "string", "enum": ["TEXT", "ASSET"]},
+        "bindingId": {"$ref": "#/$defs/id"},
+        "semanticRole": {"type": "string", "minLength": 1, "maxLength": 64},
+        "regionId": {"type": ["string", "null"], "maxLength": 128},
+        "bounds": {"$ref": "#/$defs/bounds"},
+        "requestedTransform": {"$ref": "#/$defs/transform"},
+        "allowedTransform": {"type": "string", "enum": ["FIXED", "TRANSLATE_ONLY", "UNIFORM_SCALE", "STRETCH_X", "STRETCH_Y", "RESPONSIVE"]}
+      }
+    },
+    "layout": {
+      "type": "object", "additionalProperties": false,
+      "required": ["slideId", "pageNumber", "pageSize", "safeArea", "templatePage", "componentPlacements", "componentSelections", "slotPlacements"],
+      "properties": {
+        "slideId": {"$ref": "#/$defs/id"},
+        "pageNumber": {"type": "integer", "minimum": 1, "maximum": 200},
+        "pageSize": {"$ref": "#/$defs/pageSize"},
+        "safeArea": {"$ref": "#/$defs/bounds"},
+        "templatePage": {"$ref": "#/$defs/templatePage"},
+        "componentPlacements": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/componentPlacement"}},
+        "componentSelections": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/componentSelection"}},
+        "slotPlacements": {"type": "array", "items": {"$ref": "#/$defs/slotPlacement"}}
+      }
+    },
+    "operation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operationId", "operationType"],
+      "properties": {
+        "operationId": {"$ref": "#/$defs/id"},
+        "operationType": {"type": "string", "enum": ["PRESERVE_BASE_OBJECT", "USE_OR_CLONE_COMPONENT_OBJECT", "FILL_TEXT_SLOT", "FILL_ASSET_SLOT"]},
+        "pageReferenceId": {"$ref": "#/$defs/id"},
+        "nativeObjectReference": {"$ref": "#/$defs/stableNativeObjectReference"},
+        "componentId": {"$ref": "#/$defs/id"},
+        "componentObjectAction": {"type": "string", "enum": ["USE_EXISTING_OBJECT", "CLONE_FROM_SOURCE"]},
+        "slotId": {"$ref": "#/$defs/id"},
+        "blockId": {"$ref": "#/$defs/id"},
+        "contentSha256": {"$ref": "#/$defs/hash"},
+        "assetRequirementId": {"$ref": "#/$defs/id"},
+        "approvedAssetId": {"$ref": "#/$defs/id"},
+        "assetType": {"$ref": "#/$defs/assetType"},
+        "bounds": {"$ref": "#/$defs/bounds"},
+        "requestedTransform": {"$ref": "#/$defs/transform"},
+        "allowedTransform": {"type": "string", "enum": ["FIXED", "TRANSLATE_ONLY", "UNIFORM_SCALE", "STRETCH_X", "STRETCH_Y", "RESPONSIVE"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"operationType": {"enum": ["PRESERVE_BASE_OBJECT", "USE_OR_CLONE_COMPONENT_OBJECT"]}}},
+          "then": {"required": ["nativeObjectReference"]}
+        },
+        {
+          "if": {"properties": {"operationType": {"enum": ["FILL_TEXT_SLOT", "FILL_ASSET_SLOT"]}}},
+          "then": {"not": {"required": ["nativeObjectReference"]}}
+        }
+      ]
+    },
+    "slide": {
+      "type": "object", "additionalProperties": false,
+      "required": ["slideId", "pageNumber", "layout", "operations"],
+      "properties": {
+        "slideId": {"$ref": "#/$defs/id"},
+        "pageNumber": {"type": "integer", "minimum": 1, "maximum": 200},
+        "layout": {"$ref": "#/$defs/layout"},
+        "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/operation"}}
+      }
+    },
+    "requestReference": {
+      "type": "object", "additionalProperties": false, "required": ["requestId", "inputContractVersion"],
+      "properties": {"requestId": {"$ref": "#/$defs/requestId"}, "inputContractVersion": {"const": "2.0.0"}}
+    },
+    "generationJobReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["generationJobId", "executionAttemptId", "jobBindingChecksum", "engineBuildVersion", "executorAdapterVersion", "fontEnvironmentVersion"],
+      "properties": {
+        "generationJobId": {"$ref": "#/$defs/id"},
+        "executionAttemptId": {"$ref": "#/$defs/id"},
+        "jobBindingChecksum": {"$ref": "#/$defs/hash"},
+        "engineBuildVersion": {"$ref": "#/$defs/id"},
+        "executorAdapterVersion": {"$ref": "#/$defs/id"},
+        "fontEnvironmentVersion": {"$ref": "#/$defs/id"}
+      }
+    },
+    "specificationReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["specificationId", "specificationVersion", "specificationChecksum"],
+      "properties": {
+        "specificationId": {"$ref": "#/$defs/id"},
+        "specificationVersion": {"type": "integer", "minimum": 1},
+        "specificationChecksum": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "templateProfileReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profileId", "profileVersion", "templateId", "templateVersion", "profileContentSha256"],
+      "properties": {
+        "profileId": {"$ref": "#/$defs/id"},
+        "profileVersion": {"type": "integer", "minimum": 1},
+        "templateId": {"$ref": "#/$defs/id"},
+        "templateVersion": {"type": "integer", "minimum": 1},
+        "profileContentSha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "approvedAssetManifestReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["manifestId", "manifestVersion", "manifestChecksum"],
+      "properties": {
+        "manifestId": {"$ref": "#/$defs/id"},
+        "manifestVersion": {"type": "integer", "minimum": 1},
+        "manifestChecksum": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "textFitBoundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policyVersion", "mode", "fontEnvironmentVersion", "measurementStatus", "preserveCharacters", "preserveParagraphOrder", "preserveListHierarchy", "allowRewrite", "allowTruncate", "allowSlideSplitOrMerge", "allowPowerPointAutoFit"],
+      "properties": {
+        "policyVersion": {"const": "1.0.0"},
+        "mode": {"const": "NO_ADJUSTMENT_PROFILE_V1"},
+        "fontEnvironmentVersion": {"$ref": "#/$defs/id"},
+        "measurementStatus": {"const": "NOT_IMPLEMENTED"},
+        "preserveCharacters": {"const": true},
+        "preserveParagraphOrder": {"const": true},
+        "preserveListHierarchy": {"const": true},
+        "allowRewrite": {"const": false},
+        "allowTruncate": {"const": false},
+        "allowSlideSplitOrMerge": {"const": false},
+        "allowPowerPointAutoFit": {"const": false}
+      }
+    },
+    "plan": {
+      "type": "object", "additionalProperties": false,
+      "$comment": "The Validator requires originalSlideCount == slides.size and an exact specification slideId/pageNumber/order match. JSON Schema cannot express equality between these fields; this is an independent runtime gate.",
+      "required": ["planContractVersion", "requestReference", "generationJobReference", "specificationReference", "templateProfileReference", "approvedAssetManifestReference", "textFitBoundary", "originalSlideCount", "slides", "planChecksum"],
+      "properties": {
+        "planContractVersion": {"const": "2.0.0"},
+        "requestReference": {"$ref": "#/$defs/requestReference"},
+        "generationJobReference": {"$ref": "#/$defs/generationJobReference"},
+        "specificationReference": {"$ref": "#/$defs/specificationReference"},
+        "templateProfileReference": {"$ref": "#/$defs/templateProfileReference"},
+        "approvedAssetManifestReference": {"$ref": "#/$defs/approvedAssetManifestReference"},
+        "textFitBoundary": {"$ref": "#/$defs/textFitBoundary"},
+        "originalSlideCount": {"type": "integer", "minimum": 1, "maximum": 200},
+        "slides": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"$ref": "#/$defs/slide"}},
+        "planChecksum": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "feedback": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "feedbackContractVersion", "requestId", "generationJobId", "executionAttemptId", "specificationId", "specificationVersion", "specificationChecksum", "templateProfileId", "templateProfileVersion", "status", "diagnostics", "generatedAt"],
+      "properties": {
+        "contractVersion": {"const": "2.0.0"},
+        "feedbackContractVersion": {"const": "2.0.0"},
+        "requestId": {"$ref": "#/$defs/requestId"},
+        "generationJobId": {"$ref": "#/$defs/id"},
+        "executionAttemptId": {"$ref": "#/$defs/id"},
+        "specificationId": {"$ref": "#/$defs/id"},
+        "specificationVersion": {"type": "integer", "minimum": 1},
+        "specificationChecksum": {"$ref": "#/$defs/hash"},
+        "templateProfileId": {"$ref": "#/$defs/id"},
+        "templateProfileVersion": {"type": "integer", "minimum": 1},
+        "status": {"type": "string", "enum": ["FAILED", "PARTIAL", "SUCCEEDED_WITH_FEEDBACK", "SUCCEEDED"]},
+        "diagnostics": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/diagnostic"}},
+        "generatedAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "diagnostic": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "severity", "source", "impact", "retryable", "messageKey", "safeDetails"],
+      "properties": {
+        "code": {"type": "string", "enum": ["CONTRACT_INVALID", "SPECIFICATION_NOT_LOCKED", "TEMPLATE_PROFILE_NOT_CONFIRMED", "CHECKSUM_MISMATCH", "TEMPLATE_PROFILE_MISMATCH", "SLIDE_COUNT_MISMATCH", "PAGE_SEQUENCE_INVALID", "DUPLICATE_ID", "COMPONENT_MISSING", "SLOT_INCOMPATIBLE", "SLOT_CAPACITY_EXCEEDED", "REQUIRED_SLOT_UNFILLED", "ASSET_TYPE_UNSUPPORTED", "IMAGE_NOT_APPROVED", "TRANSFORM_NOT_ALLOWED", "TEMPLATE_PAGE_MISSING", "LAYOUT_OUT_OF_BOUNDS", "SAFE_AREA_VIOLATION", "SEMANTIC_REGION_CAPACITY_EXCEEDED", "COMPOSITION_REFERENCE_INVALID", "PLAN_CHECKSUM_MISMATCH", "GENERATION_JOB_CONTRACT_VERSION_MISMATCH", "GENERATION_JOB_BINDING_CHECKSUM_MISMATCH", "GENERATION_JOB_SPECIFICATION_BINDING_MISMATCH", "GENERATION_JOB_TEMPLATE_PROFILE_BINDING_MISMATCH", "GENERATION_JOB_ASSET_MANIFEST_BINDING_MISMATCH", "GENERATION_JOB_PROJECT_BINDING_MISMATCH", "GENERATION_JOB_OWNER_BINDING_MISMATCH", "ASSET_MANIFEST_NOT_APPROVED", "ASSET_MANIFEST_SPECIFICATION_MISMATCH", "ASSET_MANIFEST_CHECKSUM_MISMATCH", "ASSET_MANIFEST_ENTRY_INVALID", "ASSET_MANIFEST_ENTRY_DUPLICATE", "ASSET_MANIFEST_ENTRY_DANGLING", "ASSET_MANIFEST_REQUIREMENT_MISSING", "ASSET_MANIFEST_REQUIRED_OMISSION", "ASSET_MANIFEST_TYPE_MISMATCH", "ASSET_MANIFEST_CONTENT_HASH_INVALID", "ASSET_MANIFEST_FILE_IDENTITY_INVALID", "ASSET_APPROVED_OMISSION", "COMPONENT_SELECTION_COMPATIBILITY_FALLBACK", "CONTENT_OVERFLOW", "TEXT_FIT_POLICY_UNAVAILABLE", "RASTER_FALLBACK_FORBIDDEN", "EXECUTOR_INPUT_INVALID", "TEMPLATE_SOURCE_INVALID", "TEMPLATE_SOURCE_HASH_MISMATCH", "TEMPLATE_SOURCE_METADATA_MISMATCH", "SAME_PACKAGE_REFERENCE_INVALID", "CROSS_PACKAGE_REFERENCE_FORBIDDEN", "NATIVE_OBJECT_NOT_SUPPORTED", "NATIVE_OBJECT_NOT_FOUND", "APPROVED_ASSET_FILE_INVALID", "APPROVED_ASSET_FILE_HASH_MISMATCH", "PPTX_PACKAGE_INVALID", "PPTX_SLIDE_COUNT_MISMATCH", "PPTX_RELATIONSHIP_INVALID", "PPTX_CONTENT_TYPES_INVALID", "PPTX_NATIVE_REFERENCE_INVALID", "PPTX_OPERATION_NOT_COVERED", "PPTX_CHECKSUM_MISMATCH"]},
+        "severity": {"type": "string", "enum": ["INFO", "WARNING", "ERROR"]},
+        "source": {"type": "string", "enum": ["CONTRACT_GATE", "ASSET_MANIFEST_GATE", "COMPONENT_RESOLVER", "TEMPLATE_PAGE_RESOLVER", "LAYOUT_RESOLVER", "SLIDE_COMPOSER", "PLAN_VALIDATOR", "POWERPOINT_EXECUTOR", "FILE_BUILD_VALIDATOR"]},
+        "impact": {"type": "string", "enum": ["JOB_BLOCKING", "ARTIFACT_INCOMPLETE", "NON_BLOCKING"]},
+        "retryable": {"type": "boolean"},
+        "slideId": {"type": ["string", "null"], "maxLength": 128},
+        "pageNumber": {"type": ["integer", "null"], "minimum": 1, "maximum": 200},
+        "blockId": {"type": ["string", "null"], "maxLength": 128},
+        "assetRequirementId": {"type": ["string", "null"], "maxLength": 128},
+        "componentId": {"type": ["string", "null"], "maxLength": 128},
+        "slotId": {"type": ["string", "null"], "maxLength": 128},
+        "messageKey": {"type": "string", "minLength": 1, "maxLength": 128},
+        "safeDetails": {"type": "object", "maxProperties": 8, "additionalProperties": {"type": "string", "maxLength": 256}}
+      }
+    }
+  }
+}

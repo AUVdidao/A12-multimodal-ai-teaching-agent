@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: lessonforge
+      POSTGRES_USER: lessonforge
+      POSTGRES_PASSWORD: lessonforge
+    ports:
+      - "54329:5432"
+    volumes:
+      - lessonforge_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lessonforge -d lessonforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  server:
+    build: .
+    environment:
+      LESSONFORGE_ADDR: ":8090"
+      LESSONFORGE_DATABASE_URL: "postgres://lessonforge:lessonforge@postgres:5432/lessonforge?sslmode=disable"
+      LESSONFORGE_STORAGE_ROOT: "${LESSONFORGE_STORAGE_ROOT:-/app/data/files}"
+      LESSONFORGE_MIGRATIONS_DIR: "/app/migrations"
+      LESSONFORGE_ENCRYPTION_KEY: "${LESSONFORGE_ENCRYPTION_KEY:?set LESSONFORGE_ENCRYPTION_KEY to persistent raw-base64 or hex 32 bytes}"
+      # The Java reverse proxy is the explicit cross-service boundary for the
+      # local two-stack development setup. Production deployments must provide
+      # their own HTTPS/service-discovery URLs and internal token.
+      LESSONFORGE_RAG_BASE_URL: "${LESSONFORGE_RAG_BASE_URL:-http://backend-api:8080}"
+      LESSONFORGE_RAG_BEARER_TOKEN: "${LESSONFORGE_RAG_BEARER_TOKEN:-${A12_INTERNAL_SERVICE_TOKEN:-}}"
+      LESSONFORGE_TEMPLATE_CAPABILITY_URL: "${LESSONFORGE_TEMPLATE_CAPABILITY_URL:-http://backend-api:8080/api/v1/internal/template-capability}"
+      LESSONFORGE_TEMPLATE_CAPABILITY_BEARER_TOKEN: "${LESSONFORGE_TEMPLATE_CAPABILITY_BEARER_TOKEN:-${A12_INTERNAL_SERVICE_TOKEN:-}}"
+      LESSONFORGE_PARSER_URL: "${LESSONFORGE_PARSER_URL:-http://file-parser-service:8080/internal/file-parser/parse}"
+      LESSONFORGE_PARSER_TIMEOUT: "${LESSONFORGE_PARSER_TIMEOUT:-5m}"
+      LESSONFORGE_MAX_PARSER_RESPONSE_BYTES: "${LESSONFORGE_MAX_PARSER_RESPONSE_BYTES:-16777216}"
+      LESSONFORGE_PARSER_INTERVAL: "${LESSONFORGE_PARSER_INTERVAL:-5s}"
+      LESSONFORGE_JOB_LEASE: "${LESSONFORGE_JOB_LEASE:-30s}"
+      LESSONFORGE_TOOL_TIMEOUT: "${LESSONFORGE_TOOL_TIMEOUT:-30s}"
+      LESSONFORGE_ENABLE_GENERATION_WORKER: "${LESSONFORGE_ENABLE_GENERATION_WORKER:-false}"
+      LESSONFORGE_PPT_ENGINE_BASE_URL: "${LESSONFORGE_PPT_ENGINE_BASE_URL:-http://ppt-engine-service:8080}"
+      LESSONFORGE_PPT_ENGINE_ARTIFACT_ROOT: "${LESSONFORGE_PPT_ENGINE_ARTIFACT_ROOT:-/app/data/files}"
+      LESSONFORGE_PPT_ENGINE_SHARED_STORAGE_ROOT: "${LESSONFORGE_PPT_ENGINE_SHARED_STORAGE_ROOT:-/app/data/files}"
+    ports:
+      - "8090:8090"
+    volumes:
+      - lessonforge_files:/app/data/files
+    networks:
+      - default
+      - a12-local-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  lessonforge_pg:
+  lessonforge_files:
+    external: true
+    name: ${A12_SHARED_STORAGE_VOLUME:-lessonforge-engine-shared}
+networks:
+  a12-local-net:
+    external: true
+    name: ${A12_NETWORK_NAME:-lessonforge-a12-net}

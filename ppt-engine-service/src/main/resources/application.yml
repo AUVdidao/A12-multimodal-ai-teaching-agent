@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: ppt-engine-service
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+    serialization:
+      write-dates-as-timestamps: false
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+  max-http-request-header-size: 16KB
+logging:
+  level:
+    root: INFO
+    com.auvdidao.a12.pptengine: INFO
+
+ppt:
+  engine:
+    executor:
+      input-root: ${PPT_ENGINE_INPUT_ROOT:target/engine-input}
+      output-root: ${PPT_ENGINE_OUTPUT_ROOT:target/executor-output}
+      allow-legacy-absolute-paths: ${PPT_ENGINE_ALLOW_LEGACY_ABSOLUTE_PATHS:false}

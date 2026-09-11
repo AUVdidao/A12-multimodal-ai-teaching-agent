@@ -1,0 +1,7 @@
+{
+  "contractVersion": "1.0.0",
+  "requestId": "req-invalid-unknown",
+  "specification": {},
+  "templateProfile": {},
+  "unexpectedField": "this must be rejected"
+}

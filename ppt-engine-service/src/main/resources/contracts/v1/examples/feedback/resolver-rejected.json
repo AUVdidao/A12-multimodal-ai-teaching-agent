@@ -1,0 +1,49 @@
+{
+  "contractVersion": "1.0.0",
+  "requestId": "req-resolver-rejected",
+  "specificationId": "spec-001",
+  "specificationVersion": 1,
+  "specificationChecksum": "01923be87d5d379d363d922a61b1eaa8ed2b014882a7d01e76572fff470c6d25",
+  "templateProfileId": "profile-001",
+  "templateProfileVersion": 1,
+  "outcome": "REJECTED",
+  "diagnostics": [
+    {
+      "code": "SLOT_CAPACITY_EXCEEDED",
+      "severity": "ERROR",
+      "source": "COMPONENT_RESOLVER",
+      "retryable": false,
+      "slideId": "slide-001",
+      "pageNumber": 1,
+      "blockId": "block-002",
+      "componentId": "component-body",
+      "slotId": "slot-body",
+      "messageKey": "resolver.slotCapacityExceeded",
+      "safeDetails": {"contentType": "BODY", "constraint": "maxItems"}
+    },
+    {
+      "code": "REQUIRED_SLOT_UNFILLED",
+      "severity": "ERROR",
+      "source": "COMPONENT_RESOLVER",
+      "retryable": false,
+      "slideId": "slide-001",
+      "pageNumber": 1,
+      "componentId": "component-body",
+      "slotId": "slot-required-image",
+      "messageKey": "resolver.requiredSlotUnfilled",
+      "safeDetails": {"required": "true"}
+    },
+    {
+      "code": "ASSET_TYPE_UNSUPPORTED",
+      "severity": "ERROR",
+      "source": "COMPONENT_RESOLVER",
+      "retryable": false,
+      "slideId": "slide-001",
+      "pageNumber": 1,
+      "assetId": "asset-video",
+      "messageKey": "resolver.assetTypeUnsupported",
+      "safeDetails": {"assetType": "VIDEO"}
+    }
+  ],
+  "generatedAt": "2026-08-24T00:00:00Z"
+}

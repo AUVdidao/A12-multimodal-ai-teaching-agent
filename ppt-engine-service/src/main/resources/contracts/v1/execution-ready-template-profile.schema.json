@@ -1,0 +1,762 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/contracts/v1/execution-ready-template-profile.schema.json",
+  "title": "Execution-Ready Template Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "profileId",
+    "templateId",
+    "projectId",
+    "ownerUserId",
+    "templateVersion",
+    "profileVersion",
+    "status",
+    "pageSize",
+    "spatialProfile",
+    "templatePageReferences",
+    "components"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "profileId": {
+      "$ref": "#/$defs/id"
+    },
+    "templateId": {
+      "$ref": "#/$defs/id"
+    },
+    "projectId": {
+      "$ref": "#/$defs/id"
+    },
+    "ownerUserId": {
+      "$ref": "#/$defs/id"
+    },
+    "templateVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "profileVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "READY",
+        "CONFIRMED"
+      ]
+    },
+    "pageSize": {
+      "$ref": "#/$defs/pageSize"
+    },
+    "spatialProfile": {
+      "$ref": "#/$defs/spatialProfile"
+    },
+    "templatePageReferences": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/pageReference"
+      }
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "preservedNativeObjects": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/preservedNativeObject"
+      }
+    },
+    "textFitPolicy": {
+      "$ref": "#/$defs/textFitPolicy"
+    },
+    "executionStatus": {
+      "const": "EXECUTION_READY"
+    },
+    "sourceVersionId": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000000
+    },
+    "sourceSha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "parserSnapshotChecksum": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "pageSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "widthEmu",
+        "heightEmu"
+      ],
+      "properties": {
+        "widthEmu": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "heightEmu": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        }
+      }
+    },
+    "spatialProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "safeMarginLeftEmu",
+        "safeMarginTopEmu",
+        "safeMarginRightEmu",
+        "safeMarginBottomEmu"
+      ],
+      "properties": {
+        "safeMarginLeftEmu": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "safeMarginTopEmu": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "safeMarginRightEmu": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "safeMarginBottomEmu": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        }
+      }
+    },
+    "pageReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pageReferenceId",
+        "sourceSlide",
+        "semanticRole",
+        "objectIds",
+        "semanticRoleSource"
+      ],
+      "properties": {
+        "pageReferenceId": {
+          "$ref": "#/$defs/id"
+        },
+        "sourceSlide": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "semanticRole": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "semanticRoleSource": {
+          "type": "string",
+          "enum": [
+            "ANALYZER_PROFILE_COVER_FIRST_PAGE",
+            "ANALYZER_PROFILE_CONTENT_REMAINDER",
+            "PROFILE_ROLE_UNAVAILABLE_FAIL_CLOSED"
+          ]
+        },
+        "objectIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2000,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "componentId",
+        "name",
+        "semanticRole",
+        "sourceSlide",
+        "shapeRefs",
+        "childComponentIds",
+        "slots",
+        "transformConstraint",
+        "fixedStyle",
+        "reusable",
+        "confidence",
+        "teacherConfirmed",
+        "executionEligibility"
+      ],
+      "properties": {
+        "componentId": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "semanticRole": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "sourceSlide": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "shapeRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/objectReference"
+          }
+        },
+        "childComponentIds": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "slots": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/slot"
+          }
+        },
+        "transformConstraint": {
+          "type": "string",
+          "enum": [
+            "FIXED",
+            "TRANSLATE_ONLY",
+            "UNIFORM_SCALE",
+            "STRETCH_X",
+            "STRETCH_Y",
+            "RESPONSIVE"
+          ]
+        },
+        "fixedStyle": {
+          "$ref": "#/$defs/fixedStyle"
+        },
+        "reusable": {
+          "type": "boolean"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "teacherConfirmed": {
+          "type": "boolean"
+        },
+        "executionEligibility": {
+          "type": "string",
+          "enum": [
+            "EXECUTION_READY",
+            "NOT_EXECUTION_READY"
+          ]
+        },
+        "nativePreservation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "fixedDecoration": {
+          "type": "boolean"
+        },
+        "fixedDecorationReason": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "coordinatePolicy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "preserveOriginalCoordinates": {
+          "type": "boolean"
+        }
+      }
+    },
+    "preservedNativeObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceSlide",
+        "stableNativeReference",
+        "objectType",
+        "ooxmlType",
+        "geometry",
+        "originalBounds",
+        "placeholder",
+        "contentPlaceholder",
+        "textContent",
+        "semanticRole",
+        "fixedDecoration",
+        "classification",
+        "classificationReason",
+        "editable",
+        "relationships",
+        "relationshipEvidence"
+      ],
+      "properties": {
+        "sourceSlide": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "stableNativeReference": {
+          "$ref": "#/$defs/id"
+        },
+        "objectType": {
+          "type": "string",
+          "enum": [
+            "SHAPE",
+            "GROUP",
+            "PICTURE",
+            "TEXT",
+            "CHART",
+            "TABLE"
+          ]
+        },
+        "ooxmlType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "geometry": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "originalBounds": {
+          "$ref": "#/$defs/originalBounds"
+        },
+        "placeholder": {
+          "type": "boolean"
+        },
+        "contentPlaceholder": {
+          "type": "boolean"
+        },
+        "textContent": {
+          "type": "boolean"
+        },
+        "semanticRole": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "fixedDecoration": {
+          "type": "boolean"
+        },
+        "classification": {
+          "const": "PRESERVE_ONLY"
+        },
+        "classificationReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Z0-9_-]+$"
+        },
+        "editable": {
+          "const": false
+        },
+        "relationships": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "relationshipEvidence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "originalBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height",
+        "coordinateUnit"
+      ],
+      "properties": {
+        "x": {
+          "type": ["number", "null"]
+        },
+        "y": {
+          "type": ["number", "null"]
+        },
+        "width": {
+          "type": ["number", "null"]
+        },
+        "height": {
+          "type": ["number", "null"]
+        },
+        "coordinateUnit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    },
+    "objectReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectType",
+        "objectId"
+      ],
+      "properties": {
+        "objectType": {
+          "type": "string",
+          "enum": [
+            "SHAPE",
+            "GROUP",
+            "PICTURE",
+            "TEXT",
+            "CHART",
+            "TABLE"
+          ]
+        },
+        "objectId": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slotId",
+        "semanticRole",
+        "acceptedContentTypes",
+        "bounds",
+        "required",
+        "capacityConstraint"
+      ],
+      "properties": {
+        "slotId": {
+          "$ref": "#/$defs/id"
+        },
+        "semanticRole": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "acceptedContentTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "TITLE",
+              "BODY",
+              "BULLETS",
+              "QUOTE",
+              "TABLE",
+              "CHART",
+              "IMAGE",
+              "TEXT"
+            ]
+          }
+        },
+        "bounds": {
+          "$ref": "#/$defs/bounds"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "capacityConstraint": {
+          "$ref": "#/$defs/capacity"
+        }
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "leftEmu",
+        "topEmu",
+        "widthEmu",
+        "heightEmu"
+      ],
+      "properties": {
+        "leftEmu": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "topEmu": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "widthEmu": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "heightEmu": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        }
+      }
+    },
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxCharacters",
+        "maxItems"
+      ],
+      "properties": {
+        "maxCharacters": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 4000
+        },
+        "maxItems": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "fixedStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "styleId",
+        "fontToken",
+        "colorToken",
+        "preserveTheme"
+      ],
+      "properties": {
+        "styleId": {
+          "$ref": "#/$defs/id"
+        },
+        "fontToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "colorToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "preserveTheme": {
+          "type": "boolean"
+        }
+      }
+    },
+    "textFitPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "PROFILE_CONSTRAINED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fontEnvironmentVersion": {
+                "not": {
+                  "const": "UNBOUND"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "required": [
+        "policyVersion",
+        "mode",
+        "fontEnvironmentVersion",
+        "minimumFontSizePt",
+        "defaultFontSizePt",
+        "maximumFontSizePt",
+        "fontSizeStepPt",
+        "minimumLineSpacingPct",
+        "defaultLineSpacingPct",
+        "maximumLineSpacingPct",
+        "lineSpacingStepPct",
+        "maxTextBoxGrowthWidthEmu",
+        "maxTextBoxGrowthHeightEmu",
+        "minimumParagraphSpacingPt",
+        "defaultParagraphSpacingPt",
+        "maximumParagraphSpacingPt",
+        "paragraphSpacingStepPt",
+        "adjustmentOrder"
+      ],
+      "properties": {
+        "policyVersion": {
+          "const": "1.0.0"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "NO_ADJUSTMENT_PROFILE_V1",
+            "PROFILE_CONSTRAINED"
+          ]
+        },
+        "fontEnvironmentVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "minimumFontSizePt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "defaultFontSizePt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "maximumFontSizePt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "fontSizeStepPt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "minimumLineSpacingPct": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "defaultLineSpacingPct": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "maximumLineSpacingPct": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "lineSpacingStepPct": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "maxTextBoxGrowthWidthEmu": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "maxTextBoxGrowthHeightEmu": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "minimumParagraphSpacingPt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defaultParagraphSpacingPt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "maximumParagraphSpacingPt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "paragraphSpacingStepPt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "adjustmentOrder": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "FONT_SIZE",
+              "LINE_SPACING",
+              "TEXT_BOX_GROWTH",
+              "PARAGRAPH_SPACING"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

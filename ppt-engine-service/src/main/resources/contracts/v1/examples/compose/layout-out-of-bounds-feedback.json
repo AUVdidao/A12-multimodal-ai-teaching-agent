@@ -1,0 +1,30 @@
+{
+  "contractVersion": "2.0.0",
+  "feedbackContractVersion": "2.0.0",
+  "requestId": "req-layout-out-of-bounds",
+  "generationJobId": "job-layout-out-of-bounds",
+  "executionAttemptId": "attempt-001",
+  "specificationId": "spec-example-001",
+  "specificationVersion": 1,
+  "specificationChecksum": "01923be87d5d379d363d922a61b1eaa8ed2b014882a7d01e76572fff470c6d25",
+  "templateProfileId": "profile-example-001",
+  "templateProfileVersion": 1,
+  "status": "FAILED",
+  "diagnostics": [
+    {
+      "code": "LAYOUT_OUT_OF_BOUNDS",
+      "severity": "ERROR",
+      "source": "LAYOUT_RESOLVER",
+      "impact": "JOB_BLOCKING",
+      "retryable": false,
+      "slideId": "slide-example-001",
+      "pageNumber": 1,
+      "blockId": "block-example-001",
+      "componentId": "component-body-example",
+      "slotId": "slot-body-example",
+      "messageKey": "layout.outOfBounds",
+      "safeDetails": {"leftEmu": "12191900", "topEmu": "500000", "widthEmu": "200", "heightEmu": "1000"}
+    }
+  ],
+  "generatedAt": "2026-08-24T00:00:00Z"
+}

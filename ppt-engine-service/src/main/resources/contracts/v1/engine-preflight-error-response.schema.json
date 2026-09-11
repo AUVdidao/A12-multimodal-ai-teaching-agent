@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/contracts/v1/engine-preflight-error-response.schema.json",
+  "title": "Engine Preflight v1 Error Feedback",
+  "description": "Strict raw GenerationFeedback body used for every non-2xx preflight response.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "requestId", "specificationId", "specificationVersion", "specificationChecksum", "templateProfileId", "templateProfileVersion", "outcome", "diagnostics", "generatedAt"],
+  "properties": {
+    "contractVersion": {"const": "1.0.0"},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+    "specificationId": {"type": ["string", "null"], "maxLength": 128},
+    "specificationVersion": {"type": ["integer", "null"], "minimum": 1, "maximum": 100000},
+    "specificationChecksum": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "templateProfileId": {"type": ["string", "null"], "maxLength": 128},
+    "templateProfileVersion": {"type": ["integer", "null"], "minimum": 1, "maximum": 100000},
+    "outcome": {"const": "REJECTED"},
+    "diagnostics": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"$ref": "#/$defs/diagnostic"}},
+    "generatedAt": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "diagnostic": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "severity", "source", "retryable", "messageKey", "safeDetails"],
+      "properties": {
+        "code": {"type": "string", "enum": ["CONTRACT_INVALID", "SPECIFICATION_NOT_LOCKED", "TEMPLATE_PROFILE_NOT_CONFIRMED", "CHECKSUM_MISMATCH", "TEMPLATE_PROFILE_MISMATCH", "SLIDE_COUNT_MISMATCH", "PAGE_SEQUENCE_INVALID", "DUPLICATE_ID", "COMPONENT_MISSING", "SLOT_INCOMPATIBLE", "SLOT_CAPACITY_EXCEEDED", "REQUIRED_SLOT_UNFILLED", "ASSET_TYPE_UNSUPPORTED", "IMAGE_NOT_APPROVED", "TRANSFORM_NOT_ALLOWED"]},
+        "severity": {"type": "string", "enum": ["INFO", "WARNING", "ERROR"]},
+        "source": {"type": "string", "enum": ["CONTRACT_GATE", "COMPONENT_RESOLVER"]},
+        "retryable": {"type": "boolean"},
+        "slideId": {"type": ["string", "null"], "maxLength": 128},
+        "pageNumber": {"type": ["integer", "null"], "minimum": 1, "maximum": 200},
+        "blockId": {"type": ["string", "null"], "maxLength": 128},
+        "assetId": {"type": ["string", "null"], "maxLength": 128},
+        "componentId": {"type": ["string", "null"], "maxLength": 128},
+        "slotId": {"type": ["string", "null"], "maxLength": 128},
+        "messageKey": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9._-]+$"},
+        "safeDetails": {"type": "object", "maxProperties": 8, "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"}, "additionalProperties": {"type": "string", "maxLength": 256}}
+      }
+    }
+  }
+}

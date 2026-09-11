@@ -1,0 +1,124 @@
+{
+  "contractVersion": "1.0.0",
+  "requestId": "req-example-001",
+  "specification": {
+    "contractVersion": "1.0.0",
+    "specificationId": "spec-example-001",
+    "projectId": "project-example-001",
+    "version": 1,
+    "status": "LOCKED",
+    "templateProfileId": "profile-example-001",
+    "templateProfileVersion": 1,
+    "targetSlideCount": 1,
+    "slideCountTolerance": 0,
+    "locale": "zh-CN",
+    "provider": "mock",
+    "model": "offline",
+    "aiSupplementPolicy": "DISABLED",
+    "lockedBy": "teacher-example-001",
+    "lockedAt": "2026-08-24T00:00:00Z",
+    "checksum": "01923be87d5d379d363d922a61b1eaa8ed2b014882a7d01e76572fff470c6d25",
+    "slides": [
+      {
+        "slideId": "slide-example-001",
+        "pageNumber": 1,
+        "title": "光合作用",
+        "teachingGoal": "说明光合作用的基本过程",
+        "contentBlocks": [
+          {
+            "blockId": "block-example-001",
+            "type": "BODY",
+            "content": "植物利用光能将二氧化碳和水转化为有机物。",
+            "sourceType": "MATERIAL",
+            "sourceReference": "material-example-001",
+            "locked": true
+          }
+        ],
+        "semanticLayout": {
+          "primaryRole": "BODY",
+          "regions": [
+            {"regionId": "region-example-001", "semanticRole": "BODY", "preferredPosition": "CENTER", "maxItems": 1}
+          ],
+          "requestedTransform": "TRANSLATE_ONLY"
+        },
+        "assetRequirements": [
+          {
+            "assetId": "asset-example-001",
+            "assetType": "IMAGE",
+            "source": "asset-example-001",
+            "approvalStatus": "APPROVED",
+            "required": true,
+            "placementIntent": "IMAGE"
+          }
+        ],
+        "provenance": [
+          {"sourceType": "MATERIAL", "sourceReference": "material-example-001"}
+        ],
+        "notes": ""
+      }
+    ]
+  },
+  "templateProfile": {
+    "contractVersion": "1.0.0",
+    "profileId": "profile-example-001",
+    "templateId": "template-example-001",
+    "projectId": "project-example-001",
+    "ownerUserId": "owner-example-001",
+    "templateVersion": 1,
+    "profileVersion": 1,
+    "status": "CONFIRMED",
+    "pageSize": {"widthEmu": 12192000, "heightEmu": 6858000},
+    "spatialProfile": {"safeMarginLeftEmu": 300000, "safeMarginTopEmu": 300000, "safeMarginRightEmu": 300000, "safeMarginBottomEmu": 300000},
+    "templatePageReferences": [
+      {"pageReferenceId": "page-ref-example-001", "sourceSlide": 1, "semanticRole": "BODY", "objectIds": ["shape-body-example", "shape-image-example"]}
+    ],
+    "components": [
+      {
+        "componentId": "component-body-example",
+        "name": "正文组件",
+        "semanticRole": "BODY",
+        "sourceSlide": 1,
+        "shapeRefs": [{"objectType": "GROUP", "objectId": "shape-body-example"}],
+        "childComponentIds": [],
+        "slots": [
+          {
+            "slotId": "slot-body-example",
+            "semanticRole": "BODY",
+            "acceptedContentTypes": ["BODY"],
+            "bounds": {"leftEmu": 500000, "topEmu": 500000, "widthEmu": 5000000, "heightEmu": 2500000},
+            "required": true,
+            "capacityConstraint": {"maxCharacters": 1000, "maxItems": 1}
+          }
+        ],
+        "transformConstraint": "TRANSLATE_ONLY",
+        "fixedStyle": {"styleId": "style-example-001", "fontToken": "font-body", "colorToken": "color-body", "preserveTheme": true},
+        "reusable": true,
+        "confidence": 0.9,
+        "teacherConfirmed": true
+      },
+      {
+        "componentId": "component-image-example",
+        "name": "图片组件",
+        "semanticRole": "BODY",
+        "sourceSlide": 1,
+        "shapeRefs": [{"objectType": "GROUP", "objectId": "shape-image-example"}],
+        "childComponentIds": [],
+        "slots": [
+          {
+            "slotId": "slot-image-example",
+            "semanticRole": "IMAGE",
+            "acceptedContentTypes": ["IMAGE"],
+            "bounds": {"leftEmu": 6000000, "topEmu": 500000, "widthEmu": 4000000, "heightEmu": 4000000},
+            "required": true,
+            "capacityConstraint": {"maxCharacters": null, "maxItems": 1}
+          }
+        ],
+        "transformConstraint": "TRANSLATE_ONLY",
+        "fixedStyle": {"styleId": "style-example-001", "fontToken": "font-body", "colorToken": "color-body", "preserveTheme": true},
+        "reusable": true,
+        "confidence": 0.9,
+        "teacherConfirmed": true
+      }
+    ]
+  }
+}

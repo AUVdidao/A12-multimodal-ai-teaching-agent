@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/contracts/v1/locked-ppt-specification.schema.json",
+  "title": "LOCKED PPT Specification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "specificationId", "projectId", "version", "status", "templateProfileId", "templateProfileVersion", "targetSlideCount", "slideCountTolerance", "locale", "provider", "model", "aiSupplementPolicy", "lockedBy", "lockedAt", "checksum", "slides"],
+  "properties": {
+    "contractVersion": {"const": "1.0.0"},
+    "specificationId": {"$ref": "#/$defs/id"},
+    "projectId": {"$ref": "#/$defs/id"},
+    "version": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "status": {"type": "string", "enum": ["DRAFT", "REVIEW", "LOCKED"]},
+    "templateProfileId": {"$ref": "#/$defs/id"},
+    "templateProfileVersion": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "targetSlideCount": {"type": "integer", "minimum": 1, "maximum": 200},
+    "slideCountTolerance": {"type": "integer", "minimum": 0, "maximum": 20},
+    "locale": {"type": "string", "minLength": 2, "maxLength": 32, "pattern": "^[A-Za-z0-9_-]+$"},
+    "provider": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$"},
+    "model": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._:/-]+$"},
+    "aiSupplementPolicy": {"type": "string", "enum": ["DISABLED", "TEACHER_APPROVED_ONLY"]},
+    "lockedBy": {"$ref": "#/$defs/id"},
+    "lockedAt": {"type": "string", "format": "date-time"},
+    "checksum": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "slides": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"$ref": "#/$defs/slide"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "reference": {"type": "string", "minLength": 1, "maxLength": 500},
+    "sourceType": {"type": "string", "enum": ["MATERIAL", "TEACHER", "AI_EXAMPLE", "AI_IMAGE"]},
+    "contentType": {"type": "string", "enum": ["TITLE", "BODY", "BULLETS", "QUOTE", "TABLE", "CHART", "IMAGE", "TEXT"]},
+    "assetType": {"type": "string", "enum": ["IMAGE", "CHART", "TABLE", "ICON", "VIDEO", "OTHER"]},
+    "placementIntent": {"type": "string", "enum": ["TITLE", "BODY", "SIDEBAR", "FOOTER", "IMAGE", "CHART", "TABLE", "DECORATION", "OTHER"]},
+    "transformConstraint": {"type": ["string", "null"], "enum": ["FIXED", "TRANSLATE_ONLY", "UNIFORM_SCALE", "STRETCH_X", "STRETCH_Y", "RESPONSIVE", null]},
+    "preferredPosition": {"type": "string", "enum": ["TOP", "LEFT", "RIGHT", "CENTER", "BOTTOM", "FULL_BLEED"]},
+    "slide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slideId", "pageNumber", "title", "teachingGoal", "contentBlocks", "semanticLayout", "assetRequirements", "provenance", "notes"],
+      "properties": {
+        "slideId": {"$ref": "#/$defs/id"},
+        "pageNumber": {"type": "integer", "minimum": 1, "maximum": 200},
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "teachingGoal": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "contentBlocks": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/contentBlock"}},
+        "semanticLayout": {"$ref": "#/$defs/semanticLayout"},
+        "assetRequirements": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/asset"}},
+        "provenance": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/provenance"}},
+        "notes": {"type": "string", "maxLength": 2000}
+      }
+    },
+    "contentBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blockId", "type", "content", "sourceType", "sourceReference", "locked"],
+      "properties": {
+        "blockId": {"$ref": "#/$defs/id"},
+        "type": {"$ref": "#/$defs/contentType"},
+        "content": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "sourceType": {"$ref": "#/$defs/sourceType"},
+        "sourceReference": {"$ref": "#/$defs/reference"},
+        "locked": {"type": "boolean"}
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "assetType", "source", "approvalStatus", "required", "placementIntent"],
+      "properties": {
+        "assetId": {"$ref": "#/$defs/id"},
+        "assetType": {"$ref": "#/$defs/assetType"},
+        "source": {"$ref": "#/$defs/reference"},
+        "approvalStatus": {"type": "string", "enum": ["APPROVED", "PENDING", "REJECTED"]},
+        "required": {"type": "boolean"},
+        "placementIntent": {"$ref": "#/$defs/placementIntent"}
+      }
+    },
+    "semanticLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primaryRole", "regions", "requestedTransform"],
+      "properties": {
+        "primaryRole": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
+        "regions": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/region"}},
+        "requestedTransform": {"$ref": "#/$defs/transformConstraint"}
+      }
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["regionId", "semanticRole", "preferredPosition", "maxItems"],
+      "properties": {
+        "regionId": {"$ref": "#/$defs/id"},
+        "semanticRole": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
+        "preferredPosition": {"$ref": "#/$defs/preferredPosition"},
+        "maxItems": {"type": "integer", "minimum": 1, "maximum": 100}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceType", "sourceReference"],
+      "properties": {
+        "sourceType": {"$ref": "#/$defs/sourceType"},
+        "sourceReference": {"$ref": "#/$defs/reference"}
+      }
+    }
+  }
+}

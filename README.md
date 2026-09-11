@@ -16,17 +16,41 @@ Spring Boot 业务后端
         ├── Model Connection / Credential / Audit
         ├── Template / Material / Knowledge
         └── 远程文件解析、文件生成、PPT Engine
+
+LessonForge Go 业务后端（同仓库发布）
+        ├── Mission / Planning / Locked Specification
+        ├── Agent、Parser、RAG 与 Generation Worker
+        ├── Generation Job / Artifact / SHA-256 校验
+        └── 通过受控适配器调用 A12 服务与独立 PPT Engine
 ```
 
 主要技术栈：
 
 - 前端：Vue 3、Vite、TypeScript、Element Plus
 - 业务后端：Java 17、Spring Boot、Maven
+- LessonForge 主业务后端：Go 1.24（构建工具链位于 `go-backend/Dockerfile`）
 - AI 工作流：Spring Boot 内部 `AIWorkflowGateway`，生产路径使用 OpenAI-compatible 的 Kimi 接口
 - 文件服务：独立 `file-parser-service` 和 `file-generator-service`
 - PPT：独立 `ppt-engine-service`，通过受控 HTTP 合同调用
 - 数据库：本地原型可使用 H2；Docker 运行使用 PostgreSQL 迁移路径
 - 部署：Docker Compose、Nginx 反向代理
+
+## 仓库目录
+
+当前 `main` 发布的是完整的 LessonForge 单仓库版本，关键源码目录如下：
+
+```text
+backend/                         # A12 Java 业务后端
+frontend/                        # Vue 教师工作台
+file-parser-service/             # 文件解析服务
+file-generator-service/          # 文件生成服务
+ppt-engine-service/              # 独立 Java PPT Engine 源码
+go-backend/                      # LessonForge Go Mission-first 后端
+infra/reverse-proxy/             # 统一入口反向代理
+deploy/lessonforge/              # lessonforge-* 统一 Compose 控制面
+```
+
+Go 后端和 PPT Engine 之前分别位于本地独立目录；本次版本已将其当前源码纳入本仓库，便于远端代码、Docker 构建上下文和运行版本保持一致。Go 数据库与 A12 数据库仍然是两套独立数据边界。
 
 本版本不再依赖 Dify 作为默认工作流执行入口。外部模型不可用时，只有显式开启的 Mock 配置才允许降级；系统不会把等待、失败或未配置能力伪装成成功。
 
@@ -82,12 +106,21 @@ npm.cmd install
 npm.cmd run build
 ```
 
-单独运行本仓库的 A12 Compose 原型：
+运行本仓库的 A12 Compose 原型：
 
 ```powershell
 docker compose config
 docker compose up -d --build
 ```
+
+运行当前统一 LessonForge Compose：
+
+```powershell
+docker compose --project-directory deploy/lessonforge --env-file deploy/lessonforge/.env.example config --quiet
+docker compose --project-directory deploy/lessonforge --env-file deploy/lessonforge/.env.example --project-name lessonforge up -d --build
+```
+
+统一 Compose 默认复用现有的外部数据库卷、共享产物卷和迁移期网络；生产或验收环境必须提供真实的持久化密钥，不得把本地 `.env` 提交到 Git。
 
 默认入口通常为 `http://localhost:8081`，健康检查为 `http://localhost:8081/healthz`，后端健康检查为 `http://localhost:8081/api/health`。
 

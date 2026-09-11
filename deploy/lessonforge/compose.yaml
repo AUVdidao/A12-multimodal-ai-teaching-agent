@@ -1,0 +1,327 @@
+name: lessonforge
+
+# Unified LessonForge control plane.
+#
+# This file is the monorepo copy of the live LessonForge control plane. Build
+# contexts are intentionally repository-relative so the remote source tree can
+# reproduce the same service boundaries; external volumes and networks retain
+# the current data/rollback contract.
+
+services:
+  # Go bridge/API service. The service name `server` is retained for internal
+  # DNS compatibility; the container name is the readable public name.
+  server:
+    container_name: lessonforge-go-server
+    build:
+      context: ../../go-backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      LESSONFORGE_ADDR: ":8090"
+      LESSONFORGE_DATABASE_URL: "postgres://lessonforge:lessonforge@postgres:5432/lessonforge?sslmode=disable"
+      LESSONFORGE_STORAGE_ROOT: "${LESSONFORGE_STORAGE_ROOT:-/app/data/files}"
+      LESSONFORGE_MIGRATIONS_DIR: "/app/migrations"
+      LESSONFORGE_ENCRYPTION_KEY: "${LESSONFORGE_ENCRYPTION_KEY:?set LESSONFORGE_ENCRYPTION_KEY in .env}"
+      LESSONFORGE_RAG_BASE_URL: "${LESSONFORGE_RAG_BASE_URL:-http://backend-api:8080}"
+      LESSONFORGE_RAG_BEARER_TOKEN: "${LESSONFORGE_RAG_BEARER_TOKEN:-${A12_INTERNAL_SERVICE_TOKEN:-}}"
+      LESSONFORGE_TEMPLATE_CAPABILITY_URL: "${LESSONFORGE_TEMPLATE_CAPABILITY_URL:-http://backend-api:8080/api/v1/internal/template-capability}"
+      LESSONFORGE_TEMPLATE_CAPABILITY_BEARER_TOKEN: "${LESSONFORGE_TEMPLATE_CAPABILITY_BEARER_TOKEN:-${A12_INTERNAL_SERVICE_TOKEN:-}}"
+      LESSONFORGE_PARSER_URL: "${LESSONFORGE_PARSER_URL:-http://file-parser-service:8080/internal/file-parser/parse}"
+      LESSONFORGE_PARSER_TIMEOUT: "${LESSONFORGE_PARSER_TIMEOUT:-5m}"
+      LESSONFORGE_MAX_PARSER_RESPONSE_BYTES: "${LESSONFORGE_MAX_PARSER_RESPONSE_BYTES:-16777216}"
+      LESSONFORGE_PARSER_INTERVAL: "${LESSONFORGE_PARSER_INTERVAL:-5s}"
+      LESSONFORGE_JOB_LEASE: "${LESSONFORGE_JOB_LEASE:-30s}"
+      LESSONFORGE_TOOL_TIMEOUT: "${LESSONFORGE_TOOL_TIMEOUT:-30s}"
+      LESSONFORGE_ENABLE_GENERATION_WORKER: "${LESSONFORGE_ENABLE_GENERATION_WORKER:-false}"
+      LESSONFORGE_PPT_ENGINE_BASE_URL: "${LESSONFORGE_PPT_ENGINE_BASE_URL:-http://ppt-engine-service:8080}"
+      LESSONFORGE_PPT_ENGINE_ARTIFACT_ROOT: "${LESSONFORGE_PPT_ENGINE_ARTIFACT_ROOT:-/app/data/files}"
+      LESSONFORGE_PPT_ENGINE_SHARED_STORAGE_ROOT: "${LESSONFORGE_PPT_ENGINE_SHARED_STORAGE_ROOT:-/app/data/files}"
+      LESSONFORGE_CORS_ORIGINS: "${LESSONFORGE_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
+    ports:
+      - "8090:8090"
+    volumes:
+      - shared-files:/app/data/files
+    networks:
+      lessonforge-network:
+        aliases:
+          - server
+      legacy-go-network:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend-api:
+        condition: service_healthy
+      file-parser-service:
+        condition: service_healthy
+      ppt-engine-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8090/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # Go backend database. This is intentionally kept separate from the A12
+  # application database; their schemas and migration histories differ.
+  postgres:
+    container_name: lessonforge-go-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lessonforge
+      POSTGRES_USER: lessonforge
+      POSTGRES_PASSWORD: "${LESSONFORGE_POSTGRES_PASSWORD:-lessonforge}"
+    ports:
+      - "54329:5432"
+    volumes:
+      - go-postgres-data:/var/lib/postgresql/data
+    networks:
+      lessonforge-network:
+        aliases:
+          - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lessonforge -d lessonforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # A12 application/API service.
+  backend-api:
+    container_name: lessonforge-backend-api
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: "${SPRING_PROFILES_ACTIVE:-prod}"
+      SPRING_DATASOURCE_URL: "${SPRING_DATASOURCE_URL:-jdbc:postgresql://database:5432/${POSTGRES_DB:-a12_teaching_agent}}"
+      SPRING_DATASOURCE_USERNAME: "${SPRING_DATASOURCE_USERNAME:-${POSTGRES_USER:-a12_user}}"
+      SPRING_DATASOURCE_PASSWORD: "${SPRING_DATASOURCE_PASSWORD:-${POSTGRES_PASSWORD:-a12_dev_password}}"
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: "${SPRING_DATASOURCE_DRIVER_CLASS_NAME:-org.postgresql.Driver}"
+      SPRING_FLYWAY_LOCATIONS: "${SPRING_FLYWAY_LOCATIONS:-classpath:db/postgresql-migration}"
+      SERVER_PORT: "8080"
+      AI_PROVIDER: "${AI_PROVIDER:-KIMI}"
+      A12_AI_PROVIDER: "${A12_AI_PROVIDER:-KIMI}"
+      A12_AI_FALLBACK_TO_MOCK: "${A12_AI_FALLBACK_TO_MOCK:-false}"
+      A12_AI_DEVELOPMENT_MOCK_ENABLED: "${A12_AI_DEVELOPMENT_MOCK_ENABLED:-false}"
+      APP_UPLOAD_DIR: "${APP_UPLOAD_DIR:-/app/data/uploads}"
+      APP_MAX_UPLOAD_SIZE: "${APP_MAX_UPLOAD_SIZE:-209715200}"
+      A12_FLYWAY_ENABLED: "${A12_FLYWAY_ENABLED:-true}"
+      A12_SECURITY_ENABLED: "${A12_SECURITY_ENABLED:-true}"
+      A12_INTERNAL_SERVICE_TOKEN: "${A12_INTERNAL_SERVICE_TOKEN:-}"
+      A12_SESSION_HOURS: "${A12_SESSION_HOURS:-12}"
+      A12_DEMO_SEED_ENABLED: "${A12_DEMO_SEED_ENABLED:-true}"
+      A12_DEMO_LEADER_PASSWORD: "${A12_DEMO_LEADER_PASSWORD:-Leader123!}"
+      A12_DEMO_TEACHER_PASSWORD: "${A12_DEMO_TEACHER_PASSWORD:-Teacher123!}"
+      A12_DEMO_STUDENT_PASSWORD: "${A12_DEMO_STUDENT_PASSWORD:-Student123!}"
+      A12_DEMO_MULTI_PASSWORD: "${A12_DEMO_MULTI_PASSWORD:-Multi123!}"
+      A12_TEMPLATE_RENDERER_FIXTURE_ENABLED: "${A12_TEMPLATE_RENDERER_FIXTURE_ENABLED:-false}"
+      A12_TEMPLATE_ANALYZER_FIXTURE_ENABLED: "${A12_TEMPLATE_ANALYZER_FIXTURE_ENABLED:-false}"
+      A12_MATERIAL_PARSER_MODE: "${A12_MATERIAL_PARSER_MODE:-remote}"
+      A12_MATERIAL_PARSER_BASE_URL: "${A12_MATERIAL_PARSER_BASE_URL:-http://file-parser-service:8080}"
+      A12_MATERIAL_PARSER_TIMEOUT_MS: "${A12_MATERIAL_PARSER_TIMEOUT_MS:-120000}"
+      A12_MATERIAL_PARSER_MAX_REQUEST_BYTES: "${A12_MATERIAL_PARSER_MAX_REQUEST_BYTES:-214958080}"
+      A12_ARTIFACT_GENERATOR_MODE: "${A12_ARTIFACT_GENERATOR_MODE:-remote}"
+      A12_ARTIFACT_GENERATOR_BASE_URL: "${A12_ARTIFACT_GENERATOR_BASE_URL:-http://file-generator-service:8080}"
+      A12_ARTIFACT_GENERATOR_TIMEOUT_MS: "${A12_ARTIFACT_GENERATOR_TIMEOUT_MS:-15000}"
+      A12_PPT_ENGINE_MODE: "${A12_PPT_ENGINE_MODE:-remote}"
+      A12_PPT_ENGINE_BASE_URL: "${A12_PPT_ENGINE_BASE_URL:-http://ppt-engine-service:8080}"
+      A12_PPT_ENGINE_TIMEOUT_MS: "${A12_PPT_ENGINE_TIMEOUT_MS:-15000}"
+      A12_PPT_ENGINE_TRACE_FILE: "${A12_PPT_ENGINE_TRACE_FILE:-}"
+      KIMI_API_BASE_URL: "${KIMI_API_BASE_URL:-https://api.moonshot.cn/v1}"
+      MOONSHOT_API_KEY: "${MOONSHOT_API_KEY:-}"
+      A12_CREDENTIAL_ENCRYPTION_KEY: "${A12_CREDENTIAL_ENCRYPTION_KEY:-}"
+      KIMI_CONNECT_TIMEOUT_SECONDS: "${KIMI_CONNECT_TIMEOUT_SECONDS:-15}"
+      KIMI_REQUEST_ATTEMPTS: "${KIMI_REQUEST_ATTEMPTS:-2}"
+      KIMI_RETRY_DELAY_MILLIS: "${KIMI_RETRY_DELAY_MILLIS:-1200}"
+      KIMI_WORKFLOW_MODEL: "${KIMI_WORKFLOW_MODEL:-kimi-k2.6}"
+      KIMI_WORKFLOW_TIMEOUT_SECONDS: "${KIMI_WORKFLOW_TIMEOUT_SECONDS:-180}"
+      KIMI_WORKFLOW_MAX_COMPLETION_TOKENS: "${KIMI_WORKFLOW_MAX_COMPLETION_TOKENS:-8000}"
+      KIMI_WORKFLOW_MAX_INPUT_CHARACTERS: "${KIMI_WORKFLOW_MAX_INPUT_CHARACTERS:-60000}"
+      KIMI_ASSISTANT_MODEL: "${KIMI_ASSISTANT_MODEL:-kimi-k2.6}"
+      KIMI_ASSISTANT_TIMEOUT_SECONDS: "${KIMI_ASSISTANT_TIMEOUT_SECONDS:-90}"
+      KIMI_ASSISTANT_MAX_COMPLETION_TOKENS: "${KIMI_ASSISTANT_MAX_COMPLETION_TOKENS:-1600}"
+    volumes:
+      - shared-files:/app/data
+    networks:
+      lessonforge-network:
+        aliases:
+          - backend-api
+    depends_on:
+      database:
+        condition: service_healthy
+      file-parser-service:
+        condition: service_healthy
+      file-generator-service:
+        condition: service_healthy
+      ppt-engine-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # A12 application database. It is separate from the Go database by design.
+  database:
+    container_name: lessonforge-a12-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-a12_teaching_agent}"
+      POSTGRES_USER: "${POSTGRES_USER:-a12_user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-a12_dev_password}"
+    volumes:
+      - a12-postgres-data:/var/lib/postgresql/data
+    networks:
+      lessonforge-network:
+        aliases:
+          - database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  ppt-engine-service:
+    container_name: lessonforge-ppt-engine
+    build:
+      context: ../../ppt-engine-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8080"
+      PPT_ENGINE_INPUT_ROOT: /engine-input
+      PPT_ENGINE_OUTPUT_ROOT: /engine-output
+      PPT_ENGINE_ALLOW_LEGACY_ABSOLUTE_PATHS: "false"
+    volumes:
+      - shared-files:/engine-input:rw
+      - shared-files:/engine-output:rw
+    networks:
+      lessonforge-network:
+        aliases:
+          - ppt-engine-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/internal/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  file-parser-service:
+    container_name: lessonforge-file-parser
+    build:
+      context: ../../file-parser-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      lessonforge-network:
+        aliases:
+          - file-parser-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/internal/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  file-generator-service:
+    container_name: lessonforge-file-generator
+    build:
+      context: ../../file-generator-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      lessonforge-network:
+        aliases:
+          - file-generator-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/internal/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  frontend-web:
+    container_name: lessonforge-frontend
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_DEMO_MODE: "${VITE_DEMO_MODE:-true}"
+    restart: unless-stopped
+    networks:
+      lessonforge-network:
+        aliases:
+          - frontend-web
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  reverse-proxy:
+    container_name: lessonforge-reverse-proxy
+    build:
+      context: ../../infra/reverse-proxy
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend-api:
+        condition: service_healthy
+      frontend-web:
+        condition: service_healthy
+    ports:
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8081}:80"
+    networks:
+      lessonforge-network:
+        aliases:
+          - reverse-proxy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # Optional operational UI. It is not started by the default profile.
+  monitor-log:
+    container_name: lessonforge-monitor-log
+    image: amir20/dozzle:v10.6.9
+    profiles: ["ops"]
+    ports:
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${MONITOR_PORT:-8082}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      lessonforge-network:
+        aliases:
+          - monitor-log
+
+volumes:
+  # Existing live volumes are explicitly referenced by name. Compose will not
+  # create a replacement volume with a project prefix during the cutover.
+  go-postgres-data:
+    external: true
+    name: lessonforge-bridge_lessonforge_pg
+  a12-postgres-data:
+    external: true
+    name: a12-bridge_postgres-data
+  shared-files:
+    external: true
+    name: ${A12_SHARED_STORAGE_VOLUME:-lessonforge-engine-shared}
+
+networks:
+  # During migration this resolves to the already-running network name so the
+  # service DNS contract remains compatible with the two live stacks.
+  lessonforge-network:
+    external: true
+    name: ${LESSONFORGE_NETWORK_NAME:-lessonforge-a12-net}
+  # Retained only for the Go bridge's current compatibility attachment. The
+  # external network must already exist; it is never created or removed here.
+  legacy-go-network:
+    external: true
+    name: lessonforge-bridge_default

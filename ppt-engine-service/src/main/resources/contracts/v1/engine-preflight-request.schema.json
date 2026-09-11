@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/contracts/v1/engine-preflight-request.schema.json",
+  "title": "Engine Preflight Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "requestId", "specification", "templateProfile"],
+  "properties": {
+    "contractVersion": {"const": "1.0.0"},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+    "specification": {"type": "object"},
+    "templateProfile": {"type": "object"}
+  }
+}

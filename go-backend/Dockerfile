@@ -1,0 +1,16 @@
+FROM golang:1.24-alpine AS build
+WORKDIR /src
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN gofmt -w cmd internal && go test ./... && go build -trimpath -o /out/lessonforge-server ./cmd/lessonforge-server
+
+FROM alpine:3.22
+RUN addgroup -S lessonforge && adduser -S -G lessonforge lessonforge
+WORKDIR /app
+COPY --from=build /out/lessonforge-server /app/lessonforge-server
+COPY migrations /app/migrations
+RUN mkdir -p /app/data/files && chown -R lessonforge:lessonforge /app
+USER lessonforge
+EXPOSE 8090
+ENTRYPOINT ["/app/lessonforge-server"]

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/contracts/v1/composition-feedback.schema.json",
+  "title": "Composition Feedback 2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "feedbackContractVersion", "requestId", "generationJobId", "executionAttemptId", "specificationId", "specificationVersion", "specificationChecksum", "templateProfileId", "templateProfileVersion", "status", "diagnostics", "generatedAt"],
+  "properties": {
+    "contractVersion": {"const": "2.0.0"},
+    "feedbackContractVersion": {"const": "2.0.0"},
+    "requestId": {"$ref": "#/$defs/requestId"},
+    "generationJobId": {"$ref": "#/$defs/id"},
+    "executionAttemptId": {"$ref": "#/$defs/id"},
+    "specificationId": {"$ref": "#/$defs/id"},
+    "specificationVersion": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "specificationChecksum": {"$ref": "#/$defs/hash"},
+    "templateProfileId": {"$ref": "#/$defs/id"},
+    "templateProfileVersion": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "status": {"type": "string", "enum": ["FAILED", "PARTIAL", "SUCCEEDED_WITH_FEEDBACK", "SUCCEEDED"]},
+    "diagnostics": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/diagnostic"}},
+    "generatedAt": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "source", "impact", "retryable", "messageKey", "safeDetails"],
+      "properties": {
+        "code": {"type": "string", "enum": ["CONTRACT_INVALID", "SPECIFICATION_NOT_LOCKED", "TEMPLATE_PROFILE_NOT_CONFIRMED", "CHECKSUM_MISMATCH", "TEMPLATE_PROFILE_MISMATCH", "SLIDE_COUNT_MISMATCH", "PAGE_SEQUENCE_INVALID", "DUPLICATE_ID", "COMPONENT_MISSING", "SLOT_INCOMPATIBLE", "SLOT_CAPACITY_EXCEEDED", "REQUIRED_SLOT_UNFILLED", "ASSET_TYPE_UNSUPPORTED", "IMAGE_NOT_APPROVED", "TRANSFORM_NOT_ALLOWED", "TEMPLATE_PAGE_MISSING", "LAYOUT_OUT_OF_BOUNDS", "SAFE_AREA_VIOLATION", "SEMANTIC_REGION_CAPACITY_EXCEEDED", "COMPOSITION_REFERENCE_INVALID", "PLAN_CHECKSUM_MISMATCH", "GENERATION_JOB_CONTRACT_VERSION_MISMATCH", "GENERATION_JOB_BINDING_CHECKSUM_MISMATCH", "GENERATION_JOB_SPECIFICATION_BINDING_MISMATCH", "GENERATION_JOB_TEMPLATE_PROFILE_BINDING_MISMATCH", "GENERATION_JOB_ASSET_MANIFEST_BINDING_MISMATCH", "GENERATION_JOB_PROJECT_BINDING_MISMATCH", "GENERATION_JOB_OWNER_BINDING_MISMATCH", "ASSET_MANIFEST_NOT_APPROVED", "ASSET_MANIFEST_SPECIFICATION_MISMATCH", "ASSET_MANIFEST_CHECKSUM_MISMATCH", "ASSET_MANIFEST_ENTRY_INVALID", "ASSET_MANIFEST_ENTRY_DUPLICATE", "ASSET_MANIFEST_ENTRY_DANGLING", "ASSET_MANIFEST_REQUIREMENT_MISSING", "ASSET_MANIFEST_REQUIRED_OMISSION", "ASSET_MANIFEST_TYPE_MISMATCH", "ASSET_MANIFEST_CONTENT_HASH_INVALID", "ASSET_MANIFEST_FILE_IDENTITY_INVALID", "ASSET_APPROVED_OMISSION", "COMPONENT_SELECTION_COMPATIBILITY_FALLBACK", "CONTENT_OVERFLOW", "TEXT_FIT_POLICY_UNAVAILABLE", "RASTER_FALLBACK_FORBIDDEN", "EXECUTOR_INPUT_INVALID", "TEMPLATE_SOURCE_INVALID", "TEMPLATE_SOURCE_HASH_MISMATCH", "TEMPLATE_SOURCE_METADATA_MISMATCH", "SAME_PACKAGE_REFERENCE_INVALID", "CROSS_PACKAGE_REFERENCE_FORBIDDEN", "NATIVE_OBJECT_NOT_SUPPORTED", "NATIVE_OBJECT_NOT_FOUND", "APPROVED_ASSET_FILE_INVALID", "APPROVED_ASSET_FILE_HASH_MISMATCH", "PPTX_PACKAGE_INVALID", "PPTX_SLIDE_COUNT_MISMATCH", "PPTX_RELATIONSHIP_INVALID", "PPTX_CONTENT_TYPES_INVALID", "PPTX_NATIVE_REFERENCE_INVALID", "PPTX_OPERATION_NOT_COVERED", "PPTX_CHECKSUM_MISMATCH"]},
+        "severity": {"type": "string", "enum": ["INFO", "WARNING", "ERROR"]},
+        "source": {"type": "string", "enum": ["CONTRACT_GATE", "ASSET_MANIFEST_GATE", "COMPONENT_RESOLVER", "TEMPLATE_PAGE_RESOLVER", "LAYOUT_RESOLVER", "SLIDE_COMPOSER", "PLAN_VALIDATOR", "POWERPOINT_EXECUTOR", "FILE_BUILD_VALIDATOR"]},
+        "impact": {"type": "string", "enum": ["JOB_BLOCKING", "ARTIFACT_INCOMPLETE", "NON_BLOCKING"]},
+        "retryable": {"type": "boolean"},
+        "slideId": {"type": ["string", "null"], "maxLength": 128},
+        "pageNumber": {"type": ["integer", "null"], "minimum": 1, "maximum": 200},
+        "blockId": {"type": ["string", "null"], "maxLength": 128},
+        "assetRequirementId": {"type": ["string", "null"], "maxLength": 128},
+        "componentId": {"type": ["string", "null"], "maxLength": 128},
+        "slotId": {"type": ["string", "null"], "maxLength": 128},
+        "messageKey": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9._-]+$"},
+        "safeDetails": {"type": "object", "maxProperties": 8, "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"}, "additionalProperties": {"type": "string", "maxLength": 256}}
+      }
+    }
+  }
+}

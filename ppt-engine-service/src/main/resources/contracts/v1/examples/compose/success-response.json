@@ -1,0 +1,278 @@
+{
+  "contractVersion": "2.0.0",
+  "planContractVersion": "2.0.0",
+  "feedbackContractVersion": "2.0.0",
+  "requestId": "req-example-001",
+  "plan": {
+    "planContractVersion": "2.0.0",
+    "requestReference": {"requestId": "req-example-001", "inputContractVersion": "2.0.0"},
+    "generationJobReference": {
+      "generationJobId": "job-001",
+      "executionAttemptId": "attempt-001",
+      "jobBindingChecksum": "9969d9cac189c86e1eb25c5dcf5b451cd76800a86cadf6c62ec21f0e3015cf33",
+      "engineBuildVersion": "engine-build-test",
+      "executorAdapterVersion": "executor-adapter-none",
+      "fontEnvironmentVersion": "font-env-test"
+    },
+    "specificationReference": {
+      "specificationId": "spec-example-001",
+      "specificationVersion": 1,
+      "specificationChecksum": "01923be87d5d379d363d922a61b1eaa8ed2b014882a7d01e76572fff470c6d25"
+    },
+    "templateProfileReference": {
+      "profileId": "profile-example-001",
+      "profileVersion": 1,
+      "templateId": "template-example-001",
+      "templateVersion": 1,
+      "profileContentSha256": "d1ebd64f93a211fc775bcc45890fc25ebbe9bb9c6ec4d6aa5f449b93af8b53c0"
+    },
+    "approvedAssetManifestReference": {
+      "manifestId": "manifest-001",
+      "manifestVersion": 1,
+      "manifestChecksum": "f7c9adc1365dbed4c0164df3f9460974eb40406be6abf29b914110f49f426058"
+    },
+    "textFitBoundary": {
+      "policyVersion": "1.0.0",
+      "mode": "NO_ADJUSTMENT_PROFILE_V1",
+      "fontEnvironmentVersion": "font-env-test",
+      "measurementStatus": "NOT_IMPLEMENTED",
+      "preserveCharacters": true,
+      "preserveParagraphOrder": true,
+      "preserveListHierarchy": true,
+      "allowRewrite": false,
+      "allowTruncate": false,
+      "allowSlideSplitOrMerge": false,
+      "allowPowerPointAutoFit": false
+    },
+    "originalSlideCount": 1,
+    "slides": [
+      {
+        "slideId": "slide-example-001",
+        "pageNumber": 1,
+        "layout": {
+          "slideId": "slide-example-001",
+          "pageNumber": 1,
+          "pageSize": {"widthEmu": 12192000, "heightEmu": 6858000},
+          "safeArea": {"leftEmu": 300000, "topEmu": 300000, "widthEmu": 11592000, "heightEmu": 6258000},
+          "templatePage": {
+            "pageReferenceId": "page-ref-example-001",
+            "sourceSlide": 1,
+            "semanticRole": "BODY",
+            "selectionBasis": "EXACT_SEMANTIC_ROLE_STABLE_ORDER"
+          },
+          "componentPlacements": [
+            {
+              "componentId": "component-body-example",
+              "nativeObjectReferences": [
+                {
+                  "referenceVersion": "1.0.0",
+                  "templateId": "template-example-001",
+                  "templateVersion": 1,
+                  "scope": "SLIDE",
+                  "sourceSlide": 1,
+                  "objectId": "shape-body-example",
+                  "objectType": "GROUP"
+                }
+              ],
+              "allowedTransform": "TRANSLATE_ONLY"
+            },
+            {
+              "componentId": "component-image-example",
+              "nativeObjectReferences": [
+                {
+                  "referenceVersion": "1.0.0",
+                  "templateId": "template-example-001",
+                  "templateVersion": 1,
+                  "scope": "SLIDE",
+                  "sourceSlide": 1,
+                  "objectId": "shape-image-example",
+                  "objectType": "GROUP"
+                }
+              ],
+              "allowedTransform": "TRANSLATE_ONLY"
+            }
+          ],
+          "componentSelections": [
+            {
+              "bindingKind": "TEXT",
+              "bindingId": "block-example-001",
+              "selectedComponentId": "component-body-example",
+              "selectedSlotId": "slot-body-example",
+              "selectionBasis": "PROFILE_V1_CONFIDENCE_FALLBACK_TOTAL_ORDER"
+            },
+            {
+              "bindingKind": "ASSET",
+              "bindingId": "asset-example-001",
+              "selectedComponentId": "component-image-example",
+              "selectedSlotId": "slot-image-example",
+              "selectionBasis": "PROFILE_V1_CONFIDENCE_FALLBACK_TOTAL_ORDER"
+            }
+          ],
+          "slotPlacements": [
+            {
+              "placementId": "placement-16f8fe9578fbfa33c603b20857470fd1d682b1f0a22867ae2e21a85e47908dad",
+              "componentId": "component-body-example",
+              "slotId": "slot-body-example",
+              "bindingKind": "TEXT",
+              "bindingId": "block-example-001",
+              "semanticRole": "BODY",
+              "regionId": "region-example-001",
+              "bounds": {"leftEmu": 500000, "topEmu": 500000, "widthEmu": 5000000, "heightEmu": 2500000},
+              "requestedTransform": "TRANSLATE_ONLY",
+              "allowedTransform": "TRANSLATE_ONLY"
+            },
+            {
+              "placementId": "placement-67cc9c030a0568f59b9bd89f3c760b3a3074881ff8fdb82aef343596efe6176f",
+              "componentId": "component-image-example",
+              "slotId": "slot-image-example",
+              "bindingKind": "ASSET",
+              "bindingId": "asset-example-001",
+              "semanticRole": "IMAGE",
+              "regionId": null,
+              "bounds": {"leftEmu": 6000000, "topEmu": 500000, "widthEmu": 4000000, "heightEmu": 4000000},
+              "requestedTransform": "TRANSLATE_ONLY",
+              "allowedTransform": "TRANSLATE_ONLY"
+            }
+          ]
+        },
+        "operations": [
+          {
+            "operationId": "operation-9e1abe8e427888b21d13d12b566a1017463d61ddd999b9b91ffe92bfa48ccc9f",
+            "operationType": "PRESERVE_BASE_OBJECT",
+            "pageReferenceId": "page-ref-example-001",
+            "nativeObjectReference": {
+              "referenceVersion": "1.0.0",
+              "templateId": "template-example-001",
+              "templateVersion": 1,
+              "scope": "SLIDE",
+              "sourceSlide": 1,
+              "objectId": "shape-body-example",
+              "objectType": "UNKNOWN"
+            }
+          },
+          {
+            "operationId": "operation-e89776bc29f6e83f5712dec82918dcf9308122020befd609d6c8a4459b3b3fd4",
+            "operationType": "PRESERVE_BASE_OBJECT",
+            "pageReferenceId": "page-ref-example-001",
+            "nativeObjectReference": {
+              "referenceVersion": "1.0.0",
+              "templateId": "template-example-001",
+              "templateVersion": 1,
+              "scope": "SLIDE",
+              "sourceSlide": 1,
+              "objectId": "shape-image-example",
+              "objectType": "UNKNOWN"
+            }
+          },
+          {
+            "operationId": "operation-d38a006cff294b94eff7c2b7b47ee48686bd6d6ded9b25da91ab23935a197584",
+            "operationType": "USE_OR_CLONE_COMPONENT_OBJECT",
+            "nativeObjectReference": {
+              "referenceVersion": "1.0.0",
+              "templateId": "template-example-001",
+              "templateVersion": 1,
+              "scope": "SLIDE",
+              "sourceSlide": 1,
+              "objectId": "shape-body-example",
+              "objectType": "GROUP"
+            },
+            "componentId": "component-body-example",
+            "componentObjectAction": "USE_EXISTING_OBJECT"
+          },
+          {
+            "operationId": "operation-8085e4b525f631224584b3c3918fc72bc0299b11d11ddc9a0c45f1b2be9ce2ae",
+            "operationType": "USE_OR_CLONE_COMPONENT_OBJECT",
+            "nativeObjectReference": {
+              "referenceVersion": "1.0.0",
+              "templateId": "template-example-001",
+              "templateVersion": 1,
+              "scope": "SLIDE",
+              "sourceSlide": 1,
+              "objectId": "shape-image-example",
+              "objectType": "GROUP"
+            },
+            "componentId": "component-image-example",
+            "componentObjectAction": "USE_EXISTING_OBJECT"
+          },
+          {
+            "operationId": "operation-7f10b97c18f0097414044621d5d2f466c2b9f51d1297eacf54d6bd7e468d27f5",
+            "operationType": "FILL_TEXT_SLOT",
+            "componentId": "component-body-example",
+            "slotId": "slot-body-example",
+            "blockId": "block-example-001",
+            "contentSha256": "3b5e56eb2ec26806befcef320d9dc3ee144cb0191afe2a136876350be1f46e27",
+            "bounds": {"leftEmu": 500000, "topEmu": 500000, "widthEmu": 5000000, "heightEmu": 2500000},
+            "requestedTransform": "TRANSLATE_ONLY",
+            "allowedTransform": "TRANSLATE_ONLY"
+          },
+          {
+            "operationId": "operation-8867409e968d2db3e88e6bb100861abeda17d912571fef84b01f6b14383a2d99",
+            "operationType": "FILL_ASSET_SLOT",
+            "componentId": "component-image-example",
+            "slotId": "slot-image-example",
+            "contentSha256": "6546b1a7c226833a36abf291962c96ca33c491d3e6bf6344b70a5e83842a1ea8",
+            "assetRequirementId": "asset-example-001",
+            "approvedAssetId": "approved-asset-example-001",
+            "assetType": "IMAGE",
+            "bounds": {"leftEmu": 6000000, "topEmu": 500000, "widthEmu": 4000000, "heightEmu": 4000000},
+            "requestedTransform": "TRANSLATE_ONLY",
+            "allowedTransform": "TRANSLATE_ONLY"
+          }
+        ]
+      }
+    ],
+    "planChecksum": "e442bd9f70306e3dd34b62272e98310a219eb2c3eb766d91b762022f3e477723"
+  },
+  "feedback": {
+    "contractVersion": "2.0.0",
+    "feedbackContractVersion": "2.0.0",
+    "requestId": "req-example-001",
+    "generationJobId": "job-001",
+    "executionAttemptId": "attempt-001",
+    "specificationId": "spec-example-001",
+    "specificationVersion": 1,
+    "specificationChecksum": "01923be87d5d379d363d922a61b1eaa8ed2b014882a7d01e76572fff470c6d25",
+    "templateProfileId": "profile-example-001",
+    "templateProfileVersion": 1,
+    "status": "SUCCEEDED_WITH_FEEDBACK",
+    "diagnostics": [
+      {
+        "code": "COMPONENT_SELECTION_COMPATIBILITY_FALLBACK",
+        "severity": "WARNING",
+        "source": "COMPONENT_RESOLVER",
+        "impact": "NON_BLOCKING",
+        "retryable": false,
+        "slideId": "slide-example-001",
+        "pageNumber": 1,
+        "blockId": "block-example-001",
+        "assetRequirementId": null,
+        "componentId": "component-body-example",
+        "slotId": "slot-body-example",
+        "messageKey": "resolver.profileV1PriorityFallback",
+        "safeDetails": {
+          "selectedComponentId": "component-body-example",
+          "selectionBasis": "PROFILE_V1_CONFIDENCE_FALLBACK_TOTAL_ORDER"
+        }
+      },
+      {
+        "code": "COMPONENT_SELECTION_COMPATIBILITY_FALLBACK",
+        "severity": "WARNING",
+        "source": "COMPONENT_RESOLVER",
+        "impact": "NON_BLOCKING",
+        "retryable": false,
+        "slideId": "slide-example-001",
+        "pageNumber": 1,
+        "blockId": null,
+        "assetRequirementId": "asset-example-001",
+        "componentId": "component-image-example",
+        "slotId": "slot-image-example",
+        "messageKey": "resolver.profileV1PriorityFallback",
+        "safeDetails": {
+          "selectedComponentId": "component-image-example",
+          "selectionBasis": "PROFILE_V1_CONFIDENCE_FALLBACK_TOTAL_ORDER"
+        }
+      }
+    ],
+    "generatedAt": "2026-08-24T00:00:00Z"
+  }
+}

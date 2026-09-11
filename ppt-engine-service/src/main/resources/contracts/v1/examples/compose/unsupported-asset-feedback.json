@@ -1,0 +1,28 @@
+{
+  "contractVersion": "2.0.0",
+  "feedbackContractVersion": "2.0.0",
+  "requestId": "req-unsupported-asset",
+  "generationJobId": "job-unsupported-asset",
+  "executionAttemptId": "attempt-001",
+  "specificationId": "spec-example-001",
+  "specificationVersion": 1,
+  "specificationChecksum": "01923be87d5d379d363d922a61b1eaa8ed2b014882a7d01e76572fff470c6d25",
+  "templateProfileId": "profile-example-001",
+  "templateProfileVersion": 1,
+  "status": "PARTIAL",
+  "diagnostics": [
+    {
+      "code": "ASSET_TYPE_UNSUPPORTED",
+      "severity": "ERROR",
+      "source": "COMPONENT_RESOLVER",
+      "impact": "ARTIFACT_INCOMPLETE",
+      "retryable": false,
+      "slideId": "slide-example-001",
+      "pageNumber": 1,
+      "assetRequirementId": "asset-example-001",
+      "messageKey": "resolver.assetTypeUnsupported",
+      "safeDetails": {"assetType": "VIDEO"}
+    }
+  ],
+  "generatedAt": "2026-08-24T00:00:00Z"
+}

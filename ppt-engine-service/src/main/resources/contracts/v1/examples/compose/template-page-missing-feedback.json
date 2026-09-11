@@ -1,0 +1,47 @@
+{
+  "contractVersion": "2.0.0",
+  "feedbackContractVersion": "2.0.0",
+  "requestId": "req-template-page-missing",
+  "generationJobId": "job-template-page-missing",
+  "executionAttemptId": "attempt-001",
+  "specificationId": "spec-example-001",
+  "specificationVersion": 1,
+  "specificationChecksum": "01923be87d5d379d363d922a61b1eaa8ed2b014882a7d01e76572fff470c6d25",
+  "templateProfileId": "profile-example-001",
+  "templateProfileVersion": 1,
+  "status": "FAILED",
+  "diagnostics": [
+    {
+      "code": "TEMPLATE_PAGE_MISSING",
+      "severity": "ERROR",
+      "source": "TEMPLATE_PAGE_RESOLVER",
+      "impact": "JOB_BLOCKING",
+      "retryable": false,
+      "slideId": "slide-example-001",
+      "pageNumber": 1,
+      "messageKey": "templatePage.exactRoleMissing",
+      "safeDetails": {"semanticRole": "BODY"}
+    },
+    {
+      "code": "COMPOSITION_REFERENCE_INVALID",
+      "severity": "ERROR",
+      "source": "SLIDE_COMPOSER",
+      "impact": "JOB_BLOCKING",
+      "retryable": false,
+      "slideId": "slide-example-001",
+      "pageNumber": 1,
+      "messageKey": "composer.referenceInvalid",
+      "safeDetails": {"reference": "layout", "reason": "missingOrMismatched"}
+    },
+    {
+      "code": "COMPOSITION_REFERENCE_INVALID",
+      "severity": "ERROR",
+      "source": "PLAN_VALIDATOR",
+      "impact": "JOB_BLOCKING",
+      "retryable": false,
+      "messageKey": "plan.referenceInvalid",
+      "safeDetails": {"reference": "slideCount", "reason": "mismatch"}
+    }
+  ],
+  "generatedAt": "2026-08-24T00:00:00Z"
+}

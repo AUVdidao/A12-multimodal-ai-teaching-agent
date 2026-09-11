@@ -1,0 +1,24 @@
+{
+  "contractVersion": "1.0.0",
+  "requestId": "req-invalid-checksum",
+  "specification": {
+    "contractVersion": "1.0.0",
+    "specificationId": "spec-invalid-checksum",
+    "projectId": "project-invalid-checksum",
+    "version": 1,
+    "status": "LOCKED",
+    "templateProfileId": "profile-invalid-checksum",
+    "templateProfileVersion": 1,
+    "targetSlideCount": 1,
+    "slideCountTolerance": 0,
+    "locale": "zh-CN",
+    "provider": "mock",
+    "model": "offline",
+    "aiSupplementPolicy": "DISABLED",
+    "lockedBy": "teacher-invalid",
+    "lockedAt": "2026-08-24T00:00:00Z",
+    "checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+    "slides": []
+  },
+  "templateProfile": {}
+}

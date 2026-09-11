@@ -28,6 +28,21 @@ output/kimi-ppt/
 frontend/output/
 /output/
 
+# LessonForge Go backend local/runtime artifacts. Keep source, migrations,
+# tests, and safe configuration templates; never publish local data or builds.
+go-backend/.env.lessonforge-desktop
+go-backend/work/
+go-backend/tmp-java-upload-copy-r1/
+go-backend/ppt-preview/
+go-backend/capability-response.json
+go-backend/*.pptx
+go-backend/*.pdf
+go-backend/*.png
+go-backend/lessonforge-server
+
+# Maven output is reproducible and should not be copied into the monorepo.
+ppt-engine-service/target/
+
 data/
 backend/data/
 *.db

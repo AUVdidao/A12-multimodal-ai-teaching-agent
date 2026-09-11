@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a12.local/contracts/v2/engine-compose-plan-request.schema.json",
+  "title": "Engine Compose Plan Request 2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "requestId", "generationJob", "specification", "templateProfile", "approvedAssetManifest"],
+  "properties": {
+    "contractVersion": {"const": "2.0.0"},
+    "requestId": {"$ref": "#/$defs/requestId"},
+    "generationJob": {"$ref": "#/$defs/generationJob"},
+    "specification": {"type": "object"},
+    "templateProfile": {"$ref": "https://a12.local/contracts/v1/execution-ready-template-profile.schema.json"},
+    "approvedAssetManifest": {"type": "object"}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "version": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "inputBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputId", "inputVersion", "inputChecksum"],
+      "properties": {
+        "inputId": {"$ref": "#/$defs/id"},
+        "inputVersion": {"$ref": "#/$defs/version"},
+        "inputChecksum": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "generationJob": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generationJobId", "executionAttemptId", "projectId", "ownerUserId", "jobBindingChecksum", "specificationBinding",
+        "templateProfileBinding", "approvedAssetManifestBinding",
+        "composeContractVersion", "planContractVersion", "engineBuildVersion",
+        "executorAdapterVersion", "fontEnvironmentVersion", "requestedBy",
+        "requestedAt", "idempotencyKey"
+      ],
+      "properties": {
+        "generationJobId": {"$ref": "#/$defs/id"},
+        "executionAttemptId": {"$ref": "#/$defs/id"},
+        "projectId": {"$ref": "#/$defs/id"},
+        "ownerUserId": {"$ref": "#/$defs/id"},
+        "jobBindingChecksum": {"$ref": "#/$defs/hash"},
+        "specificationBinding": {"$ref": "#/$defs/inputBinding"},
+        "templateProfileBinding": {"$ref": "#/$defs/inputBinding"},
+        "approvedAssetManifestBinding": {"$ref": "#/$defs/inputBinding"},
+        "composeContractVersion": {"const": "2.0.0"},
+        "planContractVersion": {"const": "2.0.0"},
+        "engineBuildVersion": {"type": "string", "minLength": 1, "maxLength": 128},
+        "executorAdapterVersion": {"type": "string", "minLength": 1, "maxLength": 128},
+        "fontEnvironmentVersion": {"type": "string", "minLength": 1, "maxLength": 128},
+        "requestedBy": {"type": "string", "minLength": 1, "maxLength": 128},
+        "requestedAt": {"type": "string", "format": "date-time"},
+        "idempotencyKey": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    }
+  }
+}
