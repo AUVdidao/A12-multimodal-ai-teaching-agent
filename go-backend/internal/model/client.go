@@ -81,6 +81,12 @@ type ChatRequest struct {
 	Tools       []ToolDefinition
 	Temperature *float64
 	MaxTokens   int
+	// DisableThinking requests a final answer without provider reasoning. It
+	// is intentionally opt-in because most providers do not expose the same
+	// thinking contract; the bounded vision capability probe uses it so a
+	// small max-token budget cannot consume the whole response before a final
+	// content token is emitted.
+	DisableThinking bool
 	// JSONMode asks an OpenAI-compatible provider to return structured JSON
 	// content. It is opt-in because not every compatible endpoint supports the
 	// response_format extension.
@@ -215,6 +221,9 @@ func (c *Client) Chat(ctx context.Context, connection ResolvedConnection, reques
 	if request.JSONMode {
 		body["response_format"] = map[string]string{"type": "json_object"}
 	}
+	if request.DisableThinking {
+		body["thinking"] = map[string]string{"type": "disabled"}
+	}
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return ChatResponse{}, err
@@ -306,7 +315,8 @@ func (c *Client) VerifyConnection(ctx context.Context, connection ResolvedConnec
 				URL:       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
 				MediaType: "image/png",
 			}}}},
-			MaxTokens: 8,
+			MaxTokens:       32,
+			DisableThinking: true,
 		})
 		if visionResponse.RawStatus != 0 {
 			result.HTTPStatus = visionResponse.RawStatus

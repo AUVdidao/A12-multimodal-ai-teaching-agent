@@ -87,6 +87,34 @@ func TestChatBuildsOpenAICompatibleRequest(t *testing.T) {
 	}
 }
 
+func TestChatDisablesThinkingOnlyWhenRequested(t *testing.T) {
+	var body map[string]any
+	client := &Client{
+		httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			data, err := io.ReadAll(request.Body)
+			if err != nil {
+				return nil, err
+			}
+			if err := json.Unmarshal(data, &body); err != nil {
+				return nil, err
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok"}}]}`)), Header: make(http.Header)}, nil
+		})},
+		maxResponseBytes: 4096,
+	}
+	if _, err := client.Chat(context.Background(), ResolvedConnection{Protocol: "OPENAI_COMPATIBLE", BaseURL: "https://8.8.8.8", ModelID: "vision-model", APIKey: "secret"}, ChatRequest{
+		Messages:        []ChatMessage{{Role: "user", Content: "describe"}},
+		MaxTokens:       32,
+		DisableThinking: true,
+	}); err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+	thinking, ok := body["thinking"].(map[string]any)
+	if !ok || thinking["type"] != "disabled" {
+		t.Fatalf("thinking = %#v", body["thinking"])
+	}
+}
+
 func TestChatSerializesVisionMessageAsContentParts(t *testing.T) {
 	var body struct {
 		Messages []struct {
