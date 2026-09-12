@@ -18,6 +18,9 @@ public interface LessonForgeMaterialBindingRepository extends JpaRepository<Less
     List<LessonForgeMaterialBinding> findByMissionIdAndRagProjectIdOrderByIdAsc(
             Long missionId, Long ragProjectId);
 
+    List<LessonForgeMaterialBinding> findByRagProjectIdAndOwnerUserIdOrderByCreatedAtAscIdAsc(
+            Long ragProjectId, Long ownerUserId);
+
     Optional<LessonForgeMaterialBinding> findByRagProjectIdAndRagMaterialId(
             Long ragProjectId, Long ragMaterialId);
 }

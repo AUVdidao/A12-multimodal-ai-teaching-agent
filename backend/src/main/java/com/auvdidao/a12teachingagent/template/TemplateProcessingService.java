@@ -11,6 +11,8 @@ import com.auvdidao.a12teachingagent.domain.template.TemplateProcessingStatus;
 import com.auvdidao.a12teachingagent.domain.template.TemplateRenderedSlideSet;
 import com.auvdidao.a12teachingagent.domain.template.TemplateSourceVersion;
 import com.auvdidao.a12teachingagent.domain.template.TemplateStructuralSnapshot;
+import com.auvdidao.a12teachingagent.domain.lessonforge.LessonForgeMaterialBinding;
+import com.auvdidao.a12teachingagent.domain.lessonforge.repository.LessonForgeMaterialBindingRepository;
 import com.auvdidao.a12teachingagent.domain.template.repository.TemplateProcessingRunRepository;
 import com.auvdidao.a12teachingagent.domain.template.repository.TemplateAnalysisResultRepository;
 import com.auvdidao.a12teachingagent.domain.template.repository.TemplateRenderedSlideSetRepository;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import static com.auvdidao.a12teachingagent.template.TemplateDtos.*;
 
@@ -34,6 +37,8 @@ public class TemplateProcessingService {
     private static final String RENDER_UNIMPLEMENTED = "真实 PPTX 页面渲染尚未配置；请勿将此记录视为预览通过。";
     private static final String ANALYZE_UNIMPLEMENTED = "多模态模板分析尚未配置；请勿将此记录视为 Analyzer 通过。";
     private static final String ANALYZE_NOT_READY = "ANALYZER_NOT_READY: Parser and Renderer must succeed before Analyzer can run.";
+    private static final String ANALYZE_MODEL_BINDING_NOT_READY =
+            "ANALYZER_MODEL_BINDING_NOT_READY: Java Project must have one unambiguous LessonForge Mission binding.";
 
     private final TemplateService templateService;
     private final TemplateParser parser;
@@ -46,6 +51,7 @@ public class TemplateProcessingService {
     private final TemplateSourceVersionRepository sourceRepository;
     private final ObjectMapper objectMapper;
     private final TemplateProfileContractGate profileContractGate;
+    private final LessonForgeMaterialBindingRepository lessonForgeBindingRepository;
 
     public TemplateProcessingService(
             TemplateService templateService,
@@ -58,7 +64,8 @@ public class TemplateProcessingService {
             TemplateRenderedSlideSetRepository renderedRepository,
             TemplateSourceVersionRepository sourceRepository,
             ObjectMapper objectMapper,
-            TemplateProfileContractGate profileContractGate
+            TemplateProfileContractGate profileContractGate,
+            LessonForgeMaterialBindingRepository lessonForgeBindingRepository
     ) {
         this.templateService = templateService;
         this.parser = parser;
@@ -71,6 +78,7 @@ public class TemplateProcessingService {
         this.sourceRepository = sourceRepository;
         this.objectMapper = objectMapper;
         this.profileContractGate = profileContractGate;
+        this.lessonForgeBindingRepository = lessonForgeBindingRepository;
     }
 
     @Transactional
@@ -155,6 +163,15 @@ public class TemplateProcessingService {
                     return toStatus(runRepository.findById(run.getId()).orElse(run));
                 }
                 JsonNode snapshot = readJson(profileContractGate.loadAndVerifySnapshot(source.getId()).getSnapshotJson());
+                Long missionId = resolveLessonForgeMissionId(source.getProjectId(), source.getCreatedByUserId());
+                if (missionId == null) {
+                    finish(run, TemplateProcessingStatus.NOT_READY, "analyzer-model-binding-gate", null,
+                            ANALYZE_MODEL_BINDING_NOT_READY);
+                    persistAnalysisResult(template, source, run, rendered, snapshot, null,
+                            TemplateProcessingStatus.NOT_READY, ANALYZE_MODEL_BINDING_NOT_READY, analysisRunId);
+                    setSourceStatus(source, operation, TemplateProcessingStatus.NOT_READY);
+                    return toStatus(runRepository.findById(run.getId()).orElse(run));
+                }
                 TemplateAnalyzer.AnalysisResult result = analyzer.analyze(new TemplateAnalyzer.AnalysisRequest(
                         snapshot,
                         rendered.getPreviewReference(),
@@ -162,7 +179,11 @@ public class TemplateProcessingService {
                         source.getId(),
                         source.getCreatedByUserId(),
                         source.getSha256(),
-                        analysisRunId
+                        analysisRunId,
+                        missionId,
+                        resolveLessonForgeMissionFileId(source.getProjectId(), source.getCreatedByUserId(), missionId),
+                        rendered.getId(),
+                        run.getId()
                 ));
                 if (!result.implemented()) {
                     finish(run, TemplateProcessingStatus.NOT_IMPLEMENTED, result.adapter(), null, ANALYZE_UNIMPLEMENTED);
@@ -225,6 +246,30 @@ public class TemplateProcessingService {
         return snapshotRepository.findTopBySourceVersionIdOrderByCreatedAtDescIdDesc(source.getId())
                 .map(snapshot -> snapshot.getSlideCount() != null && snapshot.getSlideCount().equals(result.slideCount()))
                 .orElse(false);
+    }
+
+    private Long resolveLessonForgeMissionId(Long projectId, Long ownerUserId) {
+        if (lessonForgeBindingRepository == null || projectId == null || ownerUserId == null) return null;
+        Long missionId = null;
+        for (LessonForgeMaterialBinding binding : lessonForgeBindingRepository
+                .findByRagProjectIdAndOwnerUserIdOrderByCreatedAtAscIdAsc(projectId, ownerUserId)) {
+            if (!"BOUND".equalsIgnoreCase(binding.getBindingStatus())
+                    || binding.getMissionId() == null || binding.getMissionId() <= 0) continue;
+            if (missionId == null) missionId = binding.getMissionId();
+            else if (!Objects.equals(missionId, binding.getMissionId())) return null;
+        }
+        return missionId;
+    }
+
+    private Long resolveLessonForgeMissionFileId(Long projectId, Long ownerUserId, Long missionId) {
+        if (lessonForgeBindingRepository == null || projectId == null || ownerUserId == null || missionId == null) return null;
+        return lessonForgeBindingRepository.findByRagProjectIdAndOwnerUserIdOrderByCreatedAtAscIdAsc(projectId, ownerUserId).stream()
+                .filter(binding -> "BOUND".equalsIgnoreCase(binding.getBindingStatus()))
+                .filter(binding -> Objects.equals(binding.getMissionId(), missionId))
+                .map(LessonForgeMaterialBinding::getMissionFileId)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean isValidAnalysisResult(TemplateAnalyzer.AnalysisResult result, String analysisRunId,

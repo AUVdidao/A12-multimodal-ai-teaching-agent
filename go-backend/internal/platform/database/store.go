@@ -333,6 +333,62 @@ func (s *Store) Connection(ctx context.Context, owner, id int64) (model.ModelCon
 	}
 	return c, encrypted, err
 }
+
+// ResolveVisionConnection binds one model execution to the Mission's current
+// selection while holding a shared row lock on the Mission. Java callers may
+// provide an expected connection id, but the Go control plane remains the
+// authority: a missing selection, owner mismatch, disabled connection,
+// unverified connection, or unverified vision capability all fail closed.
+func (s *Store) ResolveVisionConnection(ctx context.Context, owner, missionID int64, expected *int64) (model.ModelConnection, string, error) {
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	defer func() { s.recordCleanupError("vision connection transaction rollback", tx.Rollback(ctx)) }()
+
+	var selected *int64
+	if err := tx.QueryRow(ctx, `SELECT selected_model_connection_id FROM missions WHERE id=$1 AND owner_teacher_id=$2 FOR SHARE`, missionID, owner).Scan(&selected); err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	if selected == nil {
+		return model.ModelConnection{}, "", errors.New("MODEL_CONNECTION_REQUIRED")
+	}
+	if expected != nil && *expected != *selected {
+		return model.ModelConnection{}, "", errors.New("MODEL_CONNECTION_SELECTION_CHANGED")
+	}
+
+	var c model.ModelConnection
+	var encrypted string
+	var capabilities, verification []byte
+	err = tx.QueryRow(ctx, `
+		SELECT id,owner_user_id,name,provider,protocol,base_url,model_id,capabilities,
+		       capability_verification,key_hint,enabled,verification_status,last_verified_at,
+		       last_used_at,created_at,updated_at,encrypted_api_key
+		FROM model_connections
+		WHERE id=$1 AND owner_user_id=$2 AND enabled=true AND verification_status='VERIFIED'
+		FOR SHARE`, *selected, owner).Scan(
+		&c.ID, &c.OwnerUserID, &c.Name, &c.Provider, &c.Protocol, &c.BaseURL, &c.ModelID,
+		&capabilities, &verification, &c.KeyHint, &c.Enabled, &c.VerificationStatus,
+		&c.LastVerifiedAt, &c.LastUsedAt, &c.CreatedAt, &c.UpdatedAt, &encrypted,
+	)
+	if err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	if c.Capabilities, c.CapabilityVerification, err = decodeConnectionCapabilities(capabilities); err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	if c.CapabilityVerification, err = decodeCapabilityVerification(verification); err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	if !c.Capabilities.SupportsVision || c.CapabilityVerification.SupportsVision != model.CapabilityVerified {
+		return model.ModelConnection{}, "", errors.New("MODEL_VISION_NOT_VERIFIED")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	return c, encrypted, nil
+}
+
 func (s *Store) ConnectionOwnedBy(ctx context.Context, owner, id int64) error {
 	var ok bool
 	if err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM model_connections WHERE id=$1 AND owner_user_id=$2)`, id, owner).Scan(&ok); err != nil {

@@ -4,17 +4,23 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	_ "image/jpeg"
+	_ "image/png"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -52,10 +58,12 @@ type Server struct {
 	downloadSendErrorHook func(error)
 }
 type Config struct {
-	Addr, SessionCookie string
-	SessionTTL, timeOut time.Duration
-	MaxUploadBytes      int64
-	CORSOrigins         []string
+	Addr, SessionCookie       string
+	SessionTTL, timeOut       time.Duration
+	MaxUploadBytes            int64
+	ModelRequestTimeout       time.Duration
+	ModelExecutionBearerToken string
+	CORSOrigins               []string
 }
 
 func NewServer(cfg Config, db *pgxpool.Pool, store *database.Store, crypt *crypto.Service, files *storage.Service, models *model.Client, runtime *agent.Runtime) *Server {
@@ -65,6 +73,8 @@ func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 	r.Use(s.cors)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
+	r.Post("/internal/model-execution-leases", s.createModelExecutionLease)
+	r.Post("/internal/model-executions/multimodal", s.executeModelExecution)
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/register", s.register)
 		r.Post("/login", s.login)
@@ -115,6 +125,309 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/researcher/missions/{id}/feedback", s.createReviewFeedback)
 	})
 	return r
+}
+
+const (
+	modelExecutionPurposeTemplateAnalyzer = "TEMPLATE_ANALYZER"
+	modelExecutionLeaseTTL                = 2 * time.Minute
+	modelExecutionMaxPromptBytes          = 50_000
+	modelExecutionMaxPreviewBytes         = 8 * 1024 * 1024
+	modelExecutionMaxImageDimension       = 4096
+)
+
+var (
+	modelExecutionSHA256Pattern  = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+	modelExecutionRunPattern     = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+	modelExecutionPreviewPattern = regexp.MustCompile(`(?i)^template-renders/[a-z0-9][a-z0-9._-]{0,239}\.(png|jpe?g)$`)
+)
+
+type modelExecutionLeaseRequest struct {
+	OwnerUserID        int64  `json:"ownerUserId"`
+	MissionID          int64  `json:"missionId"`
+	MissionFileID      int64  `json:"missionFileId"`
+	Purpose            string `json:"purpose"`
+	AnalysisRunID      string `json:"analysisRunId"`
+	SourceVersionID    int64  `json:"sourceVersionId"`
+	RenderedSlideSetID int64  `json:"renderedSlideSetId"`
+	ProcessingRunID    int64  `json:"processingRunId"`
+	SourceSHA256       string `json:"sourceSha256"`
+	InputSHA256        string `json:"inputSha256"`
+	PromptSHA256       string `json:"promptSha256"`
+	PreviewStorageKey  string `json:"previewStorageKey"`
+	PreviewSHA256      string `json:"previewSha256"`
+	PreviewSizeBytes   int64  `json:"previewSizeBytes"`
+	PreviewMediaType   string `json:"previewMediaType"`
+	Nonce              string `json:"nonce"`
+}
+
+type modelExecutionRequest struct {
+	LeaseID             string `json:"leaseId"`
+	Nonce               string `json:"nonce"`
+	Prompt              string `json:"prompt"`
+	InputSHA256         string `json:"inputSha256"`
+	PromptSHA256        string `json:"promptSha256"`
+	MaxCompletionTokens int    `json:"maxCompletionTokens"`
+	TimeoutMS           int64  `json:"timeoutMs"`
+}
+
+func (s *Server) requireModelExecutionBearer(w http.ResponseWriter, r *http.Request) bool {
+	configured := strings.TrimSpace(s.cfg.ModelExecutionBearerToken)
+	provided := auth.Bearer(r.Header.Get("Authorization"))
+	if configured == "" {
+		writeError(w, http.StatusServiceUnavailable, "INTERNAL_SERVICE_NOT_CONFIGURED")
+		return false
+	}
+	if !crypto.ConstantTimeEqual(configured, provided) {
+		writeError(w, http.StatusUnauthorized, "INTERNAL_SERVICE_AUTH_REQUIRED")
+		return false
+	}
+	return true
+}
+
+func (s *Server) createModelExecutionLease(w http.ResponseWriter, r *http.Request) {
+	if !s.requireModelExecutionBearer(w, r) {
+		return
+	}
+	var req modelExecutionLeaseRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	if code := validateModelExecutionLeaseRequest(req); code != "" {
+		writeError(w, http.StatusBadRequest, code)
+		return
+	}
+	connection, _, err := s.store.ResolveVisionConnection(r.Context(), req.OwnerUserID, req.MissionID, nil)
+	if err != nil {
+		writeModelExecutionStoreError(w, err)
+		return
+	}
+	file, err := s.store.ResolveMissionTemplateFile(r.Context(), req.OwnerUserID, req.MissionID, req.MissionFileID, req.SourceSHA256)
+	if err != nil {
+		writeError(w, http.StatusConflict, "MODEL_EXECUTION_SOURCE_BINDING_INVALID")
+		return
+	}
+	if err := s.validateModelExecutionPreview(r.Context(), req.PreviewStorageKey, req.PreviewSHA256, req.PreviewSizeBytes, req.PreviewMediaType); err != nil {
+		writeError(w, http.StatusConflict, "MODEL_EXECUTION_PREVIEW_INVALID")
+		return
+	}
+	_ = file // The source row is intentionally resolved before issuing the lease.
+	input := database.ModelExecutionLeaseInput{
+		OwnerUserID:        req.OwnerUserID,
+		MissionID:          req.MissionID,
+		MissionFileID:      req.MissionFileID,
+		Purpose:            req.Purpose,
+		AnalysisRunID:      req.AnalysisRunID,
+		SourceVersionID:    req.SourceVersionID,
+		RenderedSlideSetID: req.RenderedSlideSetID,
+		ProcessingRunID:    req.ProcessingRunID,
+		SourceSHA256:       req.SourceSHA256,
+		InputSHA256:        req.InputSHA256,
+		PromptSHA256:       req.PromptSHA256,
+		PreviewStorageKey:  req.PreviewStorageKey,
+		PreviewSHA256:      req.PreviewSHA256,
+		PreviewSizeBytes:   req.PreviewSizeBytes,
+		PreviewMediaType:   req.PreviewMediaType,
+		Nonce:              req.Nonce,
+		ModelConnectionID:  connection.ID,
+	}
+	lease, _, err := s.store.CreateModelExecutionLease(r.Context(), input, time.Now().UTC().Add(modelExecutionLeaseTTL))
+	if err != nil {
+		if errors.Is(err, database.ErrModelExecutionIdempotencyConflict) {
+			writeError(w, http.StatusConflict, "MODEL_EXECUTION_IDEMPOTENCY_CONFLICT")
+		} else if errors.Is(err, database.ErrModelExecutionLeaseNotReusable) {
+			writeError(w, http.StatusConflict, "MODEL_EXECUTION_LEASE_NOT_REUSABLE")
+		} else {
+			writeError(w, http.StatusServiceUnavailable, "MODEL_EXECUTION_LEASE_WRITE_FAILED")
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"leaseId":           lease.ID,
+		"nonce":             req.Nonce,
+		"expiresAt":         lease.ExpiresAt,
+		"analysisRunId":     lease.AnalysisRunID,
+		"modelConnectionId": connection.ID,
+		"provider":          connection.Provider,
+		"modelId":           connection.ModelID,
+	})
+}
+
+func (s *Server) executeModelExecution(w http.ResponseWriter, r *http.Request) {
+	if !s.requireModelExecutionBearer(w, r) {
+		return
+	}
+	var req modelExecutionRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	leaseID, err := uuid.Parse(strings.TrimSpace(req.LeaseID))
+	if err != nil || strings.TrimSpace(req.Nonce) == "" || len(req.Nonce) > 128 ||
+		len([]byte(req.Prompt)) == 0 || len([]byte(req.Prompt)) > modelExecutionMaxPromptBytes ||
+		!modelExecutionSHA256Pattern.MatchString(req.InputSHA256) ||
+		!modelExecutionSHA256Pattern.MatchString(req.PromptSHA256) ||
+		req.MaxCompletionTokens < 1 || req.MaxCompletionTokens > 4096 ||
+		req.TimeoutMS < 1 || req.TimeoutMS > 120_000 ||
+		!strings.EqualFold(req.PromptSHA256, digestText(req.Prompt)) {
+		writeError(w, http.StatusBadRequest, "MODEL_EXECUTION_REQUEST_INVALID")
+		return
+	}
+	lease, err := s.store.ConsumeModelExecutionLease(r.Context(), leaseID, req.Nonce)
+	if err != nil {
+		if errors.Is(err, database.ErrModelExecutionLeaseInvalid) {
+			writeError(w, http.StatusConflict, "MODEL_EXECUTION_LEASE_INVALID")
+			return
+		}
+		writeError(w, http.StatusServiceUnavailable, "MODEL_EXECUTION_LEASE_READ_FAILED")
+		return
+	}
+	if !strings.EqualFold(lease.InputSHA256, req.InputSHA256) ||
+		!strings.EqualFold(lease.PromptSHA256, req.PromptSHA256) {
+		writeError(w, http.StatusConflict, "MODEL_EXECUTION_MANIFEST_MISMATCH")
+		return
+	}
+	connection, encrypted, err := s.store.ResolveVisionConnection(r.Context(), lease.OwnerUserID, lease.MissionID, &lease.ModelConnectionID)
+	if err != nil {
+		writeModelExecutionStoreError(w, err)
+		return
+	}
+	if _, err := s.store.ResolveMissionTemplateFile(r.Context(), lease.OwnerUserID, lease.MissionID, lease.MissionFileID, lease.SourceSHA256); err != nil {
+		writeError(w, http.StatusConflict, "MODEL_EXECUTION_SOURCE_BINDING_INVALID")
+		return
+	}
+	if err := s.validateModelExecutionPreview(r.Context(), lease.PreviewStorageKey, lease.PreviewSHA256, lease.PreviewSizeBytes, lease.PreviewMediaType); err != nil {
+		writeError(w, http.StatusConflict, "MODEL_EXECUTION_PREVIEW_INVALID")
+		return
+	}
+	key, err := s.crypto.Decrypt(encrypted)
+	if err != nil {
+		writeError(w, http.StatusConflict, "MODEL_CONNECTION_CREDENTIAL_UNAVAILABLE")
+		return
+	}
+	preview, err := s.readModelExecutionPreview(r.Context(), lease.PreviewStorageKey, lease.PreviewSHA256, lease.PreviewSizeBytes, lease.PreviewMediaType)
+	if err != nil {
+		writeError(w, http.StatusConflict, "MODEL_EXECUTION_PREVIEW_INVALID")
+		return
+	}
+	resolved := model.ResolvedConnection{
+		ID: lease.ModelConnectionID, OwnerUserID: lease.OwnerUserID, Provider: connection.Provider,
+		Protocol: connection.Protocol, BaseURL: connection.BaseURL, ModelID: connection.ModelID,
+		Capabilities: connection.Capabilities, CapabilityVerification: connection.CapabilityVerification, APIKey: key,
+	}
+	requestID := uuid.New()
+	started := time.Now()
+	modelCtx := r.Context()
+	requestTimeout := time.Duration(req.TimeoutMS) * time.Millisecond
+	if s.cfg.ModelRequestTimeout > 0 && requestTimeout > s.cfg.ModelRequestTimeout {
+		requestTimeout = s.cfg.ModelRequestTimeout
+	}
+	var cancel context.CancelFunc
+	modelCtx, cancel = context.WithTimeout(modelCtx, requestTimeout)
+	defer cancel()
+	response, callErr := s.models.Chat(modelCtx, resolved, model.ChatRequest{
+		Messages:  []model.ChatMessage{{Role: "user", Content: req.Prompt, Images: []model.ChatImage{{URL: "data:" + lease.PreviewMediaType + ";base64," + base64.StdEncoding.EncodeToString(preview), MediaType: lease.PreviewMediaType}}}},
+		MaxTokens: req.MaxCompletionTokens,
+	})
+	auditStatus := response.RawStatus
+	if callErr != nil && auditStatus == 0 {
+		auditStatus = 502
+	}
+	if auditErr := s.store.RecordModelAudit(r.Context(), requestID, lease.OwnerUserID, lease.MissionID, lease.ModelConnectionID, connection, lease.Purpose, auditStatus, time.Since(started)); auditErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "MODEL_EXECUTION_AUDIT_WRITE_FAILED")
+		return
+	}
+	if callErr != nil {
+		writeError(w, http.StatusBadGateway, safeErrorCode(callErr))
+		return
+	}
+	if err := s.store.MarkConnectionUsed(r.Context(), lease.OwnerUserID, lease.ModelConnectionID); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "MODEL_EXECUTION_STATE_WRITE_FAILED")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"requestId":         requestID,
+		"analysisRunId":     lease.AnalysisRunID,
+		"modelConnectionId": lease.ModelConnectionID,
+		"provider":          connection.Provider,
+		"modelId":           connection.ModelID,
+		"content":           response.Content,
+		"inputSha256":       lease.InputSHA256,
+		"previewSha256":     lease.PreviewSHA256,
+	})
+}
+
+func validateModelExecutionLeaseRequest(req modelExecutionLeaseRequest) string {
+	if req.OwnerUserID <= 0 || req.MissionID <= 0 || req.MissionFileID <= 0 ||
+		req.SourceVersionID <= 0 || req.RenderedSlideSetID <= 0 || req.ProcessingRunID <= 0 ||
+		req.Purpose != modelExecutionPurposeTemplateAnalyzer ||
+		!modelExecutionRunPattern.MatchString(req.AnalysisRunID) ||
+		!modelExecutionSHA256Pattern.MatchString(req.SourceSHA256) ||
+		!modelExecutionSHA256Pattern.MatchString(req.InputSHA256) ||
+		!modelExecutionSHA256Pattern.MatchString(req.PromptSHA256) ||
+		!modelExecutionPreviewPattern.MatchString(req.PreviewStorageKey) ||
+		!modelExecutionSHA256Pattern.MatchString(req.PreviewSHA256) ||
+		req.PreviewSizeBytes <= 0 || req.PreviewSizeBytes > modelExecutionMaxPreviewBytes ||
+		(req.PreviewMediaType != "image/png" && req.PreviewMediaType != "image/jpeg") ||
+		len(req.Nonce) < 16 || len(req.Nonce) > 128 {
+		return "MODEL_EXECUTION_MANIFEST_INVALID"
+	}
+	if _, err := uuid.Parse(req.Nonce); err != nil {
+		return "MODEL_EXECUTION_MANIFEST_INVALID"
+	}
+	return ""
+}
+
+func (s *Server) validateModelExecutionPreview(ctx context.Context, key, sha256Value string, size int64, mediaType string) error {
+	_, err := s.readAndValidateModelExecutionPreview(ctx, key, sha256Value, size, mediaType, false)
+	return err
+}
+
+func (s *Server) readModelExecutionPreview(ctx context.Context, key, sha256Value string, size int64, mediaType string) ([]byte, error) {
+	return s.readAndValidateModelExecutionPreview(ctx, key, sha256Value, size, mediaType, true)
+}
+
+func (s *Server) readAndValidateModelExecutionPreview(ctx context.Context, key, sha256Value string, size int64, mediaType string, includeBytes bool) ([]byte, error) {
+	if s.files == nil || !modelExecutionPreviewPattern.MatchString(key) || size <= 0 || size > modelExecutionMaxPreviewBytes ||
+		!modelExecutionSHA256Pattern.MatchString(sha256Value) ||
+		(mediaType != "image/png" && mediaType != "image/jpeg") {
+		return nil, errors.New("preview metadata invalid")
+	}
+	file, err := s.files.OpenVerified(ctx, storage.File{StorageKey: key, Size: size, SHA256: sha256Value, MimeType: mediaType})
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	config, format, err := image.DecodeConfig(file)
+	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > modelExecutionMaxImageDimension || config.Height > modelExecutionMaxImageDimension {
+		return nil, errors.New("preview image dimensions invalid")
+	}
+	if (mediaType == "image/png" && format != "png") || (mediaType == "image/jpeg" && format != "jpeg") {
+		return nil, errors.New("preview media type mismatch")
+	}
+	if !includeBytes {
+		return nil, nil
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(io.LimitReader(file, modelExecutionMaxPreviewBytes+1))
+}
+
+func writeModelExecutionStoreError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		writeError(w, http.StatusConflict, "MODEL_EXECUTION_BINDING_INVALID")
+	case strings.HasPrefix(err.Error(), "MODEL_VISION_"):
+		writeError(w, http.StatusConflict, err.Error())
+	case strings.HasPrefix(err.Error(), "MODEL_CONNECTION_"):
+		writeError(w, http.StatusConflict, err.Error())
+	default:
+		writeError(w, http.StatusServiceUnavailable, "MODEL_EXECUTION_BINDING_READ_FAILED")
+	}
+}
+
+func digestText(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *Server) cors(next http.Handler) http.Handler {

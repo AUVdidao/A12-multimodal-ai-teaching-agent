@@ -42,9 +42,10 @@ public class UnavailableTemplateRendererAdapter implements TemplateRenderer {
             com.auvdidao.a12teachingagent.material.storage.StorageProperties storageProperties,
             TemplateParser parser,
             @Value("${a12.template.renderer.fixture-enabled:false}") boolean fixtureEnabled,
-            @Value("${spring.profiles.active:}") String activeProfile
+            @Value("${spring.profiles.active:}") String activeProfile,
+            @Value("${a12.template.renderer.output-dir:}") String outputDirectory
     ) {
-        this(executable, timeoutSeconds, storageProperties, parser, fixtureEnabled, activeProfile, Files::move);
+        this(executable, timeoutSeconds, storageProperties, parser, fixtureEnabled, activeProfile, outputDirectory, Files::move);
     }
 
     UnavailableTemplateRendererAdapter(
@@ -56,9 +57,24 @@ public class UnavailableTemplateRendererAdapter implements TemplateRenderer {
             String activeProfile,
             MoveOperation moveOperation
     ) {
+        this(executable, timeoutSeconds, storageProperties, parser, fixtureEnabled, activeProfile, "", moveOperation);
+    }
+
+    UnavailableTemplateRendererAdapter(
+            String executable,
+            long timeoutSeconds,
+            com.auvdidao.a12teachingagent.material.storage.StorageProperties storageProperties,
+            TemplateParser parser,
+            boolean fixtureEnabled,
+            String activeProfile,
+            String outputDirectory,
+            MoveOperation moveOperation
+    ) {
         this.executable = executable == null ? "" : executable.strip();
         this.timeoutSeconds = Math.max(1, Math.min(timeoutSeconds, 900));
-        this.outputRoot = Path.of(storageProperties.getUploadDir()).toAbsolutePath().normalize().resolve("template-renders");
+        String root = outputDirectory == null || outputDirectory.isBlank()
+                ? storageProperties.getUploadDir() : outputDirectory;
+        this.outputRoot = Path.of(root).toAbsolutePath().normalize().resolve("template-renders");
         this.parser = parser;
         this.fixtureEnabled = fixtureEnabled;
         this.activeProfile = activeProfile == null ? "" : activeProfile.strip();

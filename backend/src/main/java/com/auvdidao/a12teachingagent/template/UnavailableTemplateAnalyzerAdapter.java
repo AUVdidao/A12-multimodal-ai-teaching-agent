@@ -12,7 +12,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -43,6 +42,8 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
     private final ObjectMapper objectMapper;
     private final ModelGateway modelGateway;
     private final ModelCredentialResolver credentialResolver;
+    private final LessonForgeModelExecutionClient modelExecutionClient;
+    private final TemplatePreviewImageService previewImageService;
     private final boolean enabled;
     private final String previewBaseUrl;
     private final String provider;
@@ -55,24 +56,23 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
     @Autowired
     public UnavailableTemplateAnalyzerAdapter(
             ObjectMapper objectMapper,
-            @Qualifier("kimiModelGateway") ModelGateway modelGateway,
-            ModelCredentialResolver credentialResolver,
+            LessonForgeModelExecutionClient modelExecutionClient,
+            TemplatePreviewImageService previewImageService,
             @Value("${a12.template.analyzer.enabled:false}") boolean enabled,
-            @Value("${a12.template.analyzer.preview-base-url:}") String previewBaseUrl,
-            @Value("${a12.template.analyzer.provider:KIMI}") String provider,
-            @Value("${a12.template.analyzer.model:}") String model,
             @Value("${a12.template.analyzer.max-completion-tokens:1600}") int maxCompletionTokens,
             @Value("${a12.template.analyzer.timeout-ms:90000}") long timeoutMs,
             @Value("${a12.template.analyzer.fixture-enabled:false}") boolean fixtureEnabled,
             @Value("${spring.profiles.active:}") String activeProfile
     ) {
         this.objectMapper = objectMapper;
-        this.modelGateway = modelGateway;
-        this.credentialResolver = credentialResolver;
+        this.modelGateway = null;
+        this.credentialResolver = null;
+        this.modelExecutionClient = modelExecutionClient;
+        this.previewImageService = previewImageService;
         this.enabled = enabled;
-        this.previewBaseUrl = previewBaseUrl == null ? "" : previewBaseUrl.strip();
-        this.provider = provider == null ? "" : provider.strip();
-        this.model = model == null ? "" : model.strip();
+        this.previewBaseUrl = "";
+        this.provider = "";
+        this.model = "";
         this.maxCompletionTokens = maxCompletionTokens;
         this.timeoutMs = timeoutMs;
         this.fixtureEnabled = fixtureEnabled;
@@ -94,6 +94,8 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
         this.objectMapper = objectMapper;
         this.modelGateway = modelGateway;
         this.credentialResolver = credentialResolver;
+        this.modelExecutionClient = null;
+        this.previewImageService = null;
         this.enabled = enabled;
         this.previewBaseUrl = previewBaseUrl == null ? "" : previewBaseUrl.strip();
         this.provider = provider == null ? "" : provider.strip();
@@ -102,6 +104,35 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
         this.timeoutMs = timeoutMs;
         this.fixtureEnabled = false;
         this.activeProfile = "";
+    }
+
+    /** Compatibility constructor retained for development-fixture tests. */
+    public UnavailableTemplateAnalyzerAdapter(
+            ObjectMapper objectMapper,
+            ModelGateway modelGateway,
+            ModelCredentialResolver credentialResolver,
+            boolean enabled,
+            String previewBaseUrl,
+            String provider,
+            String model,
+            int maxCompletionTokens,
+            long timeoutMs,
+            boolean fixtureEnabled,
+            String activeProfile
+    ) {
+        this.objectMapper = objectMapper;
+        this.modelGateway = modelGateway;
+        this.credentialResolver = credentialResolver;
+        this.modelExecutionClient = null;
+        this.previewImageService = null;
+        this.enabled = enabled;
+        this.previewBaseUrl = previewBaseUrl == null ? "" : previewBaseUrl.strip();
+        this.provider = provider == null ? "" : provider.strip();
+        this.model = model == null ? "" : model.strip();
+        this.maxCompletionTokens = maxCompletionTokens;
+        this.timeoutMs = timeoutMs;
+        this.fixtureEnabled = fixtureEnabled;
+        this.activeProfile = activeProfile == null ? "" : activeProfile.strip();
     }
 
     @Override
@@ -120,8 +151,11 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
         if (!enabled) {
             return AnalysisResult.notImplemented(
                     "multimodal-analyzer-not-configured",
-                    "多模态模板分析适配器尚未配置；未生成 Candidate，也未伪造分析通过。"
+                "多模态模板分析适配器尚未配置；未生成 Candidate，也未伪造分析通过。"
             );
+        }
+        if (modelExecutionClient != null) {
+            return analyzeThroughLessonForgeBridge(request);
         }
         if (!"KIMI".equalsIgnoreCase(provider) || model.isBlank() || maxCompletionTokens < 1
                 || maxCompletionTokens > ModelRequest.MAX_COMPLETION_TOKENS
@@ -180,6 +214,75 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
         return new AnalysisResult(true, "kimi-multimodal", candidate, null,
                 result.provider().name(), result.model(), request.analysisRunId(), inputSha256,
                 digest(result.content()));
+    }
+
+    private AnalysisResult analyzeThroughLessonForgeBridge(AnalysisRequest request) {
+        if (request.missionId() == null || request.missionFileId() == null
+                || request.renderedSlideSetId() == null || request.processingRunId() == null) {
+            return AnalysisResult.notImplemented(
+                    "multimodal-analyzer-mission-binding-unavailable",
+                    "多模态分析缺少 LessonForge Mission、MissionFile 或渲染运行绑定；已 fail closed。"
+            );
+        }
+        String snapshotJson;
+        try {
+            snapshotJson = objectMapper.writeValueAsString(request.structuralSnapshot());
+        } catch (Exception exception) {
+            return AnalysisResult.notImplemented("multimodal-analyzer-input-invalid",
+                    "结构快照无法序列化，已 fail closed。" );
+        }
+        if (snapshotJson.length() > 50_000) {
+            return AnalysisResult.notImplemented("multimodal-analyzer-input-too-large",
+                    "结构快照超过 Analyzer 输入上限，已 fail closed。" );
+        }
+
+        TemplatePreviewImageService.PreviewImage preview = previewImageService.create(request.previewReference());
+        try {
+            String inputSha256 = digest(request.sourceSha256() + "\n" + request.projectId() + "\n"
+                    + request.sourceVersionId() + "\n" + request.ownerUserId() + "\n"
+                    + request.missionId() + "\n" + request.missionFileId() + "\n"
+                    + request.renderedSlideSetId() + "\n" + request.processingRunId() + "\n"
+                    + request.previewReference() + "\n" + preview.sha256() + "\n" + snapshotJson);
+            String instruction = "Analyze this rendered teaching-template preview and structural snapshot. "
+                    + "Return JSON only with exactly the semantic profile fields: " + REQUIRED_FIELDS + ". "
+                    + "Do not return native PowerPoint object names, shape/group/slot IDs, coordinates, or OOXML.\n"
+                    + "sourceSha256=" + request.sourceSha256() + ", inputSha256=" + inputSha256 + "\n"
+                    + "snapshot=" + snapshotJson;
+            String promptSha256 = digest(instruction);
+            String nonce = java.util.UUID.randomUUID().toString();
+            LessonForgeModelExecutionClient.LeaseResponse lease = modelExecutionClient.createLease(
+                    new LessonForgeModelExecutionClient.LeaseRequest(
+                            request.ownerUserId(), request.missionId(), request.missionFileId(),
+                            "TEMPLATE_ANALYZER", request.analysisRunId(), request.sourceVersionId(),
+                            request.renderedSlideSetId(), request.processingRunId(), request.sourceSha256(),
+                            inputSha256, promptSha256, preview.reference(), preview.sha256(), preview.sizeBytes(),
+                            preview.mediaType(), nonce));
+            if (!nonce.equals(lease.nonce()) || !request.analysisRunId().equals(lease.analysisRunId())
+                    || lease.modelConnectionId() == null || lease.modelConnectionId() <= 0) {
+                throw new LessonForgeModelExecutionClient.ModelExecutionException("MODEL_EXECUTION_LEASE_RESPONSE_INVALID");
+            }
+            LessonForgeModelExecutionClient.ExecutionResponse result = modelExecutionClient.execute(
+                    new LessonForgeModelExecutionClient.ExecutionRequest(
+                            lease.leaseId(), lease.nonce(), instruction, inputSha256, promptSha256,
+                            maxCompletionTokens, timeoutMs));
+            if (!request.analysisRunId().equals(result.analysisRunId())
+                    || !inputSha256.equalsIgnoreCase(result.inputSha256())
+                    || !preview.sha256().equalsIgnoreCase(result.previewSha256())
+                    || result.modelConnectionId() == null || !lease.modelConnectionId().equals(result.modelConnectionId())) {
+                throw new LessonForgeModelExecutionClient.ModelExecutionException("MODEL_EXECUTION_RESULT_BINDING_INVALID");
+            }
+            JsonNode candidate = parseJson(result.content());
+            if (!isSemanticCandidate(candidate)) {
+                return new AnalysisResult(false, "multimodal-analyzer-integrity-gate", null,
+                        "ANALYZER_OUTPUT_INVALID: candidate is not a bounded semantic profile", null, null,
+                        request.analysisRunId(), inputSha256, digest(result.content()));
+            }
+            return new AnalysisResult(true, "lessonforge-go-vision", candidate, null,
+                    result.provider(), result.modelId(), request.analysisRunId(), inputSha256,
+                    digest(result.content()));
+        } finally {
+            previewImageService.delete(preview);
+        }
     }
 
     /**

@@ -48,6 +48,9 @@ func StartMaintenance(ctx context.Context, store *database.Store, files interfac
 					// object neither hides the failure nor leaks the maintenance goroutine.
 					log.Printf("agent maintenance error operation=cleanup_expired_uploads error=%v", err)
 				}
+				if err := store.CleanupExpiredModelExecutionLeases(ctx); err != nil {
+					log.Printf("agent maintenance error operation=cleanup_model_execution_leases error=%v", err)
+				}
 			}
 		}
 	}()

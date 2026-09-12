@@ -137,7 +137,15 @@ func main() {
 	// HTTP API 是对外入口，Router 内部负责认证、owner 隔离、Mission/文件/
 	// Agent/Planning/Generation/Artifact 路由分发；handler 通过 Store 和 Runtime
 	// 完成实际业务操作。
-	server := httpapi.NewServer(httpapi.Config{Addr: cfg.Addr, SessionCookie: cfg.SessionCookie, SessionTTL: cfg.SessionTTL, MaxUploadBytes: cfg.MaxUploadBytes, CORSOrigins: cfg.CORSOrigins}, pool, store, crypt, files, models, runtime)
+	server := httpapi.NewServer(httpapi.Config{
+		Addr:                      cfg.Addr,
+		SessionCookie:             cfg.SessionCookie,
+		SessionTTL:                cfg.SessionTTL,
+		MaxUploadBytes:            cfg.MaxUploadBytes,
+		ModelRequestTimeout:       cfg.ModelRequestTimeout,
+		ModelExecutionBearerToken: cfg.ModelExecutionBearerToken,
+		CORSOrigins:               cfg.CORSOrigins,
+	}, pool, store, crypt, files, models, runtime)
 	httpServer := &http.Server{Addr: cfg.Addr, Handler: server.Router(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 2 * time.Minute, WriteTimeout: 2 * time.Minute, IdleTimeout: 2 * time.Minute}
 	go func() { logger.Info("LessonForge Go backend listening", "addr", cfg.Addr) }()
 	go func() {

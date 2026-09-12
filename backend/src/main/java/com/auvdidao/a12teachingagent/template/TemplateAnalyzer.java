@@ -22,8 +22,25 @@ public interface TemplateAnalyzer {
             long sourceVersionId,
             long ownerUserId,
             String sourceSha256,
-            String analysisRunId
+            String analysisRunId,
+            Long missionId,
+            Long missionFileId,
+            Long renderedSlideSetId,
+            Long processingRunId
     ) {
+        public AnalysisRequest(
+                JsonNode structuralSnapshot,
+                String previewReference,
+                long projectId,
+                long sourceVersionId,
+                long ownerUserId,
+                String sourceSha256,
+                String analysisRunId
+        ) {
+            this(structuralSnapshot, previewReference, projectId, sourceVersionId, ownerUserId,
+                    sourceSha256, analysisRunId, null, null, null, null);
+        }
+
         public AnalysisRequest {
             if (structuralSnapshot == null || previewReference == null || previewReference.isBlank()) {
                 throw new IllegalArgumentException("analysis input is incomplete");
@@ -36,6 +53,14 @@ public interface TemplateAnalyzer {
             }
             if (analysisRunId == null || analysisRunId.isBlank() || analysisRunId.length() > 128) {
                 throw new IllegalArgumentException("analysisRunId is invalid");
+            }
+            if (missionId != null && missionId <= 0) {
+                throw new IllegalArgumentException("missionId is invalid");
+            }
+            if ((missionFileId != null && missionFileId <= 0)
+                    || (renderedSlideSetId != null && renderedSlideSetId <= 0)
+                    || (processingRunId != null && processingRunId <= 0)) {
+                throw new IllegalArgumentException("analysis binding ids are invalid");
             }
         }
     }

@@ -35,6 +35,7 @@ type Config struct {
 	RAGReadPath                   string
 	TemplateCapabilityURL         string
 	TemplateCapabilityBearerToken string
+	ModelExecutionBearerToken     string
 	ParserURL                     string
 	ParserRequestTimeout          time.Duration
 	ParserInterval                time.Duration
@@ -74,6 +75,7 @@ func Load() (Config, error) {
 		RAGReadPath:                   env("LESSONFORGE_RAG_READ_PATH", ""),
 		TemplateCapabilityURL:         env("LESSONFORGE_TEMPLATE_CAPABILITY_URL", ""),
 		TemplateCapabilityBearerToken: env("LESSONFORGE_TEMPLATE_CAPABILITY_BEARER_TOKEN", ""),
+		ModelExecutionBearerToken:     env("LESSONFORGE_MODEL_EXECUTION_BEARER_TOKEN", ""),
 		ParserURL:                     env("LESSONFORGE_PARSER_URL", ""),
 		ParserRequestTimeout:          durationEnv("LESSONFORGE_PARSER_TIMEOUT", 5*time.Minute),
 		ParserInterval:                durationEnv("LESSONFORGE_PARSER_INTERVAL", 5*time.Second),

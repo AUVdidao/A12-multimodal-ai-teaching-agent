@@ -53,6 +53,7 @@ a12:
       # local Office-compatible executable such as soffice in a controlled deployment.
       executable: ${A12_TEMPLATE_RENDERER_EXECUTABLE:}
       timeout-seconds: ${A12_TEMPLATE_RENDERER_TIMEOUT_SECONDS:120}
+      output-dir: ${A12_TEMPLATE_RENDERER_OUTPUT_DIR:}
       # Disabled by default. This creates a synthetic PDF solely for local
       # development and is never a real Office/LibreOffice render.
       fixture-enabled: ${A12_TEMPLATE_RENDERER_FIXTURE_ENABLED:false}
@@ -68,6 +69,11 @@ a12:
       model: ${A12_TEMPLATE_ANALYZER_MODEL:}
       max-completion-tokens: ${A12_TEMPLATE_ANALYZER_MAX_COMPLETION_TOKENS:1600}
       timeout-ms: ${A12_TEMPLATE_ANALYZER_TIMEOUT_MS:90000}
+  lessonforge:
+    model-execution:
+      base-url: ${A12_MODEL_EXECUTION_BASE_URL:http://server:8090}
+      bearer-token: ${A12_MODEL_EXECUTION_BEARER_TOKEN:${A12_INTERNAL_SERVICE_TOKEN:}}
+      timeout-ms: ${A12_MODEL_EXECUTION_TIMEOUT_MS:120000}
   kimi:
     base-url: ${KIMI_API_BASE_URL:https://api.moonshot.cn/v1}
     api-key: ${MOONSHOT_API_KEY:}
