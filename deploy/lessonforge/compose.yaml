@@ -106,7 +106,10 @@ services:
       A12_AI_PROVIDER: "${A12_AI_PROVIDER:-KIMI}"
       A12_AI_FALLBACK_TO_MOCK: "${A12_AI_FALLBACK_TO_MOCK:-false}"
       A12_AI_DEVELOPMENT_MOCK_ENABLED: "${A12_AI_DEVELOPMENT_MOCK_ENABLED:-false}"
-      APP_UPLOAD_DIR: "${APP_UPLOAD_DIR:-/app/data/uploads}"
+      # The shared volume is mounted at /app/data and at the Engine input root.
+      # Keep Java's storage root at the volume root so a TemplateSourceVersion
+      # storageKey resolves to the exact bytes and mtime the Engine validates.
+      APP_UPLOAD_DIR: "${APP_UPLOAD_DIR:-/app/data}"
       APP_MAX_UPLOAD_SIZE: "${APP_MAX_UPLOAD_SIZE:-209715200}"
       A12_FLYWAY_ENABLED: "${A12_FLYWAY_ENABLED:-true}"
       A12_SECURITY_ENABLED: "${A12_SECURITY_ENABLED:-true}"
@@ -120,6 +123,7 @@ services:
       A12_DEMO_STUDENT_PASSWORD: "${A12_DEMO_STUDENT_PASSWORD:-Student123!}"
       A12_DEMO_MULTI_PASSWORD: "${A12_DEMO_MULTI_PASSWORD:-Multi123!}"
       A12_TEMPLATE_RENDERER_EXECUTABLE: "${A12_TEMPLATE_RENDERER_EXECUTABLE:-/usr/bin/soffice}"
+      A12_TEMPLATE_RENDERER_TIMEOUT_SECONDS: "${A12_TEMPLATE_RENDERER_TIMEOUT_SECONDS:-120}"
       A12_TEMPLATE_RENDERER_OUTPUT_DIR: "${A12_TEMPLATE_RENDERER_OUTPUT_DIR:-/app/data}"
       A12_TEMPLATE_RENDERER_FIXTURE_ENABLED: "${A12_TEMPLATE_RENDERER_FIXTURE_ENABLED:-false}"
       A12_TEMPLATE_ANALYZER_ENABLED: "${A12_TEMPLATE_ANALYZER_ENABLED:-false}"

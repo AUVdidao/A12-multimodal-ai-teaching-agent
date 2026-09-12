@@ -360,6 +360,12 @@ public class PptGenerationService {
         templateSource.put("sha256", source.getSha256());
         templateSource.put("size", source.getFileSize());
         templateSource.put("lastModifiedUtc", sourceLastModified(source));
+        // The Engine validates the physical source against the persisted
+        // profile binding as well as its content identity. These values are
+        // server-owned and must come from the locked source/profile pair.
+        templateSource.put("templateId", String.valueOf(profile.getTemplateId()));
+        templateSource.put("templateVersion", source.getVersionNumber());
+        templateSource.put("sourceVersionId", source.getId());
         List<JsonNode> assetFiles = manifests.stream().map(manifest -> (JsonNode) approvedAssetFile(manifest)).toList();
         return new com.auvdidao.a12teachingagent.pptengine.PptEngineContracts.ExecutionBindings(
                 generationJob, engineSpecification, engineProfile, engineManifest, null, templateSource,

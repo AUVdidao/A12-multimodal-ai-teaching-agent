@@ -11,6 +11,7 @@ import AxiosMockAdapter from 'axios-mock-adapter';
 const frontendRoot = resolve(process.cwd());
 const teacherOne = { id: 2, username: 'teacher-one', displayName: 'Teacher One', roles: ['TEACHER'], activeRole: 'TEACHER' };
 const teacherTwo = { id: 3, username: 'teacher-two', displayName: 'Teacher Two', roles: ['TEACHER'], activeRole: 'TEACHER' };
+const researcher = { id: 4, username: 'reviewer', displayName: 'Reviewer', roles: ['RESEARCHER'], activeRole: 'RESEARCHER' };
 let dom: JSDOM;
 let viteServer: ViteDevServer;
 let mount: typeof import('@vue/test-utils')['mount'];
@@ -66,6 +67,8 @@ function router() {
       { path: '/lessonforge/new', name: 'lessonforge-new', component: LessonForgeNewMissionView },
       { path: '/lessonforge/missions', name: 'lessonforge-missions', component: LessonForgeMissionsView },
       { path: '/lessonforge/missions/:missionId', name: 'lessonforge-mission', component: { template: '<div />' } },
+      { path: '/reviewer/missions', name: 'lessonforge-researcher-reviews', component: { template: '<div />' } },
+      { path: '/reviewer/missions/:missionId', name: 'lessonforge-researcher-review', component: { template: '<div />' } },
       { path: '/lessonforge/settings/models', name: 'ai-credentials', component: { template: '<div />' } },
     ],
   });
@@ -316,6 +319,45 @@ test('top-level app navigation can be resized horizontally and persists per acco
   await settle();
   assert.match(restored.get('.lf-frame-body').attributes('style') || '', /--lf-app-nav-width:\s*252px/);
   await restored.unmount();
+});
+
+test('researcher shared navigation opens researcher queue and review detail routes', async () => {
+  localStorage.clear();
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  const auth = useAuthStore(pinia);
+  auth.applySession('token-researcher', researcher as any);
+  const appRouter = router();
+  await appRouter.push('/reviewer/missions');
+  await appRouter.isReady();
+
+  const wrapper = mount(LessonForgeFrame, {
+    props: {
+      recentMissions: [mapLessonForgeMission(mission(21, 'Review mission', 2, 'SUBMITTED'))],
+      searchMissions: [mapLessonForgeMission(mission(21, 'Review mission', 2, 'SUBMITTED'))],
+    },
+    global: { plugins: [pinia, appRouter] },
+  });
+  await settle();
+
+  await wrapper.findAll('.lf-nav-action')[1].trigger('click');
+  await settle();
+  assert.equal(appRouter.currentRoute.value.name, 'lessonforge-researcher-reviews');
+
+  await wrapper.get('.lf-recent-item').trigger('click');
+  await settle();
+  assert.equal(appRouter.currentRoute.value.name, 'lessonforge-researcher-review');
+  assert.equal(appRouter.currentRoute.value.params.missionId, '21');
+
+  await appRouter.push('/reviewer/missions');
+  await wrapper.findAll('.lf-nav-action')[2].trigger('click');
+  await wrapper.get('.lf-search-input').setValue('Review mission');
+  await wrapper.get('.lf-search-result').trigger('click');
+  await settle();
+  assert.equal(appRouter.currentRoute.value.name, 'lessonforge-researcher-review');
+  assert.equal(appRouter.currentRoute.value.params.missionId, '21');
+
+  await wrapper.unmount();
 });
 
 test('LessonForge account control logs out from both navigation surfaces', async () => {

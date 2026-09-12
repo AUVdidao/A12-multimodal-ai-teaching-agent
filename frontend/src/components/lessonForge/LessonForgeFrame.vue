@@ -85,6 +85,7 @@ const NAVIGATION_MAX_WIDTH = 320;
 const navigationWidth = ref(NAVIGATION_DEFAULT_WIDTH);
 let navigationResizeStartX = 0;
 let navigationResizeStartWidth = NAVIGATION_DEFAULT_WIDTH;
+const isResearcher = computed(() => auth.activeRole === 'RESEARCHER');
 const userName = computed(() => {
   const displayName = auth.user?.displayName?.trim();
   if (displayName && !/(?:demo|演示)/i.test(displayName)) return displayName;
@@ -140,9 +141,17 @@ function stopNavigationResize() {
 onMounted(restoreNavigationWidth);
 watch(() => auth.user?.id, restoreNavigationWidth);
 onBeforeUnmount(stopNavigationResize);
-function goMissions() { searchOpen.value = false; accountMenuOpen.value = false; router.push({ name: 'lessonforge-missions' }); }
+function goMissions() {
+  searchOpen.value = false;
+  accountMenuOpen.value = false;
+  router.push({ name: isResearcher.value ? 'lessonforge-researcher-reviews' : 'lessonforge-missions' });
+}
 function goNew() { searchOpen.value = false; accountMenuOpen.value = false; router.push({ name: 'lessonforge-new' }); }
-function goMission(id: string) { searchOpen.value = false; accountMenuOpen.value = false; router.push({ name: 'lessonforge-mission', params: { missionId: id } }); }
+function goMission(id: string) {
+  searchOpen.value = false;
+  accountMenuOpen.value = false;
+  router.push({ name: isResearcher.value ? 'lessonforge-researcher-review' : 'lessonforge-mission', params: { missionId: id } });
+}
 function goSettings() { searchOpen.value = false; accountMenuOpen.value = false; router.push({ name: 'ai-credentials' }); }
 function openSearch() { searchQuery.value = ''; searchOpen.value = true; }
 function closeSearch() { searchOpen.value = false; }

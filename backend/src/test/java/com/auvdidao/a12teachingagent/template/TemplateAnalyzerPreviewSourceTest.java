@@ -2,14 +2,19 @@ package com.auvdidao.a12teachingagent.template;
 
 import com.auvdidao.a12teachingagent.agent.model.ModelCredentialResolver;
 import com.auvdidao.a12teachingagent.agent.model.ModelGateway;
+import com.auvdidao.a12teachingagent.agent.model.ModelProvider;
+import com.auvdidao.a12teachingagent.agent.model.ModelRequest;
+import com.auvdidao.a12teachingagent.agent.model.MultimodalModelResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 class TemplateAnalyzerPreviewSourceTest {
@@ -95,6 +100,48 @@ class TemplateAnalyzerPreviewSourceTest {
         assertTrue(result.candidateProfile().path("pageRoles").size() <= 20);
         assertEquals("COVER", result.candidateProfile().path("pageRoles").get(0).asText());
         assertEquals("CONTENT", result.candidateProfile().path("pageRoles").get(1).asText());
+    }
+
+    @Test
+    void realAnalyzerProjectsLargeNativeSnapshotBeforeGatewayCall() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        var snapshot = mapper.createObjectNode().put("slideCount", 24).put("pageWidth", 960).put("pageHeight", 540);
+        var slides = snapshot.putArray("slides");
+        for (int page = 1; page <= 24; page++) {
+            var slide = slides.addObject().put("pageNumber", page).put("shapeCount", 120);
+            var shapes = slide.putArray("shapes");
+            for (int shape = 1; shape <= 120; shape++) {
+                shapes.addObject()
+                        .put("reference", "slide-" + page + "/shape-" + shape)
+                        .put("type", shape % 2 == 0 ? "XSLFTextBox" : "XSLFPictureShape")
+                        .put("x", shape * 1.0).put("y", shape * 2.0)
+                        .put("width", 400).put("height", 200)
+                        .put("text", shape % 2 == 0).put("textContent", shape % 2 == 0)
+                        .put("picture", shape % 2 != 0).put("table", false).put("chart", false);
+            }
+        }
+        ModelGateway gateway = mock(ModelGateway.class);
+        when(gateway.completeMultimodal(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    ModelRequest request = invocation.getArgument(1);
+                    assertTrue(request.messages().get(0).content().length() < 50_000);
+                    assertTrue(request.messages().get(0).content().contains("shapeTypeCounts"));
+                    assertFalse(request.messages().get(0).content().contains("slide-1/shape-1"));
+                    return new MultimodalModelResult(ModelProvider.DEEPSEEK, "reviewed-model", "request-1",
+                            "{\"displayName\":\"Reviewed template\",\"pageRoles\":[\"CONTENT\"],\"semanticLayouts\":[{\"name\":\"CONTENT\",\"description\":\"bounded\",\"minCapacity\":1,\"maxCapacity\":20}],\"imageCapability\":null,\"tableCapability\":null,\"chartCapability\":null,\"fixedBrandAreas\":[],\"limitations\":[]}",
+                            "stop", null, 1);
+                });
+        UnavailableTemplateAnalyzerAdapter adapter = new UnavailableTemplateAnalyzerAdapter(
+                mapper, gateway, mock(ModelCredentialResolver.class), true,
+                "https://preview.example.test/base/", "KIMI", "reviewed-model", 100, 1_000
+        );
+
+        TemplateAnalyzer.AnalysisResult result = adapter.analyze(new TemplateAnalyzer.AnalysisRequest(
+                snapshot, "template-renders/fixture.pdf", 1, 2, 3, SOURCE_SHA, "template-analysis-projection"
+        ));
+
+        assertTrue(result.implemented(), result.adapter() + ":" + result.message());
+        assertEquals("DEEPSEEK", result.provider());
     }
 
     @Test

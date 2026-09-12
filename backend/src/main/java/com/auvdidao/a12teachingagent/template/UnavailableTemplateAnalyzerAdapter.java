@@ -19,8 +19,10 @@ import org.springframework.stereotype.Component;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,8 +34,8 @@ import java.util.Set;
 @Component
 public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
     private static final Set<String> REQUIRED_FIELDS = Set.of(
-            "semanticRoles", "layout", "capacity", "imagePolicy", "tablePolicy",
-            "chartPolicy", "fixedBrand", "limitations", "source"
+            "displayName", "pageRoles", "semanticLayouts", "imageCapability",
+            "tableCapability", "chartCapability", "fixedBrandAreas", "limitations"
     );
     private static final Set<String> FORBIDDEN_NAME_PARTS = Set.of(
             "native", "shape", "group", "slot", "coordinate", "ooxml", "xml"
@@ -179,7 +181,7 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
 
         String snapshotJson;
         try {
-            snapshotJson = objectMapper.writeValueAsString(request.structuralSnapshot());
+            snapshotJson = objectMapper.writeValueAsString(buildBoundedAnalyzerSnapshot(request.structuralSnapshot()));
         } catch (Exception exception) {
             return AnalysisResult.notImplemented("multimodal-analyzer-input-invalid",
                     "结构快照无法序列化，已 fail closed。" );
@@ -192,8 +194,13 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
                 + request.sourceVersionId() + "\n" + request.ownerUserId() + "\n"
                 + request.previewReference() + "\n" + snapshotJson);
         String instruction = "Analyze this rendered teaching-template preview and structural snapshot. "
-                + "Return JSON only with exactly the semantic profile fields: " + REQUIRED_FIELDS
-                + ". Do not return native PowerPoint object names, shape/group/slot IDs, coordinates, or OOXML.\n"
+                + "Return JSON only with exactly the Profile Candidate fields: " + REQUIRED_FIELDS
+                + ". Use the bounded CandidateProfileRequest schema: displayName is a short string; "
+                + "pageRoles has at most 20 short semantic role strings; semanticLayouts has at most 30 "
+                + "objects with name, optional description, minCapacity and maxCapacity; each capability is "
+                + "null or an object with supported, optional minCount/maxCount and notes; fixedBrandAreas "
+                + "has at most 30 short strings; limitations has at most 50 short strings. Do not add any "
+                + "other fields or use native PowerPoint object names, shape/group/slot IDs, coordinates, or OOXML.\n"
                 + "sourceSha256=" + request.sourceSha256() + ", inputSha256=" + inputSha256 + "\n"
                 + "snapshot=" + snapshotJson;
         ModelRequest modelRequest = new ModelRequest(
@@ -205,7 +212,7 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
                 List.of("template-profile-candidate", "semantic-only")
         );
         MultimodalModelResult result = modelGateway.completeMultimodal(context, modelRequest);
-        JsonNode candidate = parseJson(result.content());
+        JsonNode candidate = normalizeExecutionRoles(normalizeCandidate(parseJson(result.content())));
         if (!isSemanticCandidate(candidate)) {
             return new AnalysisResult(false, "multimodal-analyzer-integrity-gate", null,
                     "ANALYZER_OUTPUT_INVALID: candidate is not a bounded semantic profile", null, null,
@@ -226,7 +233,7 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
         }
         String snapshotJson;
         try {
-            snapshotJson = objectMapper.writeValueAsString(request.structuralSnapshot());
+            snapshotJson = objectMapper.writeValueAsString(buildBoundedAnalyzerSnapshot(request.structuralSnapshot()));
         } catch (Exception exception) {
             return AnalysisResult.notImplemented("multimodal-analyzer-input-invalid",
                     "结构快照无法序列化，已 fail closed。" );
@@ -244,8 +251,13 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
                     + request.renderedSlideSetId() + "\n" + request.processingRunId() + "\n"
                     + request.previewReference() + "\n" + preview.sha256() + "\n" + snapshotJson);
             String instruction = "Analyze this rendered teaching-template preview and structural snapshot. "
-                    + "Return JSON only with exactly the semantic profile fields: " + REQUIRED_FIELDS + ". "
-                    + "Do not return native PowerPoint object names, shape/group/slot IDs, coordinates, or OOXML.\n"
+                    + "Return JSON only with exactly the Profile Candidate fields: " + REQUIRED_FIELDS
+                    + ". Use the bounded CandidateProfileRequest schema: displayName is a short string; "
+                    + "pageRoles has at most 20 short semantic role strings; semanticLayouts has at most 30 "
+                    + "objects with name, optional description, minCapacity and maxCapacity; each capability is "
+                    + "null or an object with supported, optional minCount/maxCount and notes; fixedBrandAreas "
+                    + "has at most 30 short strings; limitations has at most 50 short strings. Do not add any "
+                    + "other fields or use native PowerPoint object names, shape/group/slot IDs, coordinates, or OOXML.\n"
                     + "sourceSha256=" + request.sourceSha256() + ", inputSha256=" + inputSha256 + "\n"
                     + "snapshot=" + snapshotJson;
             String promptSha256 = digest(instruction);
@@ -271,7 +283,7 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
                     || result.modelConnectionId() == null || !lease.modelConnectionId().equals(result.modelConnectionId())) {
                 throw new LessonForgeModelExecutionClient.ModelExecutionException("MODEL_EXECUTION_RESULT_BINDING_INVALID");
             }
-            JsonNode candidate = parseJson(result.content());
+            JsonNode candidate = normalizeExecutionRoles(normalizeCandidate(parseJson(result.content())));
             if (!isSemanticCandidate(candidate)) {
                 return new AnalysisResult(false, "multimodal-analyzer-integrity-gate", null,
                         "ANALYZER_OUTPUT_INVALID: candidate is not a bounded semantic profile", null, null,
@@ -282,6 +294,71 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
                     digest(result.content()));
         } finally {
             previewImageService.delete(preview);
+        }
+    }
+
+    /**
+     * Keep the multimodal prompt bounded without exposing native object
+     * records. The rendered preview remains the visual source of truth; this
+     * summary only supplies stable page-level structure and content counts.
+     */
+    private ObjectNode buildBoundedAnalyzerSnapshot(JsonNode snapshot) {
+        ObjectNode bounded = objectMapper.createObjectNode();
+        if (snapshot == null || !snapshot.isObject()) {
+            return bounded;
+        }
+        copyNumber(snapshot, bounded, "slideCount");
+        copyNumber(snapshot, bounded, "pageWidth");
+        copyNumber(snapshot, bounded, "pageHeight");
+
+        ArrayNode boundedSlides = bounded.putArray("slides");
+        JsonNode slides = snapshot.path("slides");
+        if (!slides.isArray()) {
+            return bounded;
+        }
+        for (JsonNode slide : slides) {
+            if (!slide.isObject()) {
+                continue;
+            }
+            ObjectNode boundedSlide = boundedSlides.addObject();
+            copyNumber(slide, boundedSlide, "pageNumber");
+            copyNumber(slide, boundedSlide, "shapeCount");
+
+            ObjectNode shapeTypes = boundedSlide.putObject("shapeTypeCounts");
+            ObjectNode contentCounts = boundedSlide.putObject("contentCounts");
+            JsonNode shapes = slide.path("shapes");
+            if (!shapes.isArray()) {
+                continue;
+            }
+            for (JsonNode shape : shapes) {
+                if (!shape.isObject()) {
+                    continue;
+                }
+                String type = shape.path("type").asText("");
+                if (!type.isBlank()) {
+                    shapeTypes.put(type, shapeTypes.path(type).asInt(0) + 1);
+                }
+                countBoolean(shape, contentCounts, "text", "textShapes");
+                countBoolean(shape, contentCounts, "textContent", "textContentShapes");
+                countBoolean(shape, contentCounts, "picture", "pictures");
+                countBoolean(shape, contentCounts, "table", "tables");
+                countBoolean(shape, contentCounts, "chart", "charts");
+                countBoolean(shape, contentCounts, "placeholder", "placeholders");
+            }
+        }
+        return bounded;
+    }
+
+    private void copyNumber(JsonNode source, ObjectNode target, String field) {
+        JsonNode value = source.get(field);
+        if (value != null && value.isNumber()) {
+            target.set(field, value);
+        }
+    }
+
+    private void countBoolean(JsonNode source, ObjectNode target, String sourceField, String targetField) {
+        if (source.path(sourceField).asBoolean(false)) {
+            target.put(targetField, target.path(targetField).asInt(0) + 1);
         }
     }
 
@@ -403,8 +480,205 @@ public class UnavailableTemplateAnalyzerAdapter implements TemplateAnalyzer {
 
     private boolean isSemanticCandidate(JsonNode candidate) {
         if (candidate == null || !candidate.isObject() || !candidate.fieldNames().hasNext()) return false;
+        if (candidate.size() != REQUIRED_FIELDS.size()) return false;
         for (String field : REQUIRED_FIELDS) if (!candidate.has(field)) return false;
-        return !containsForbiddenName(candidate);
+        if (containsForbiddenName(candidate)) return false;
+        if (!candidate.path("displayName").isTextual()
+                || candidate.path("displayName").asText().isBlank()
+                || candidate.path("displayName").asText().length() > 200) return false;
+        if (!boundedStringArray(candidate.path("pageRoles"), 20, 80)
+                || !boundedStringArray(candidate.path("fixedBrandAreas"), 30, 120)
+                || !boundedStringArray(candidate.path("limitations"), 50, 300)) return false;
+        JsonNode layouts = candidate.path("semanticLayouts");
+        if (!layouts.isArray() || layouts.size() > 30) return false;
+        for (JsonNode layout : layouts) {
+            if (!layout.isObject() || !layout.path("name").isTextual()
+                    || layout.path("name").asText().isBlank() || layout.path("name").asText().length() > 120
+                    || (layout.has("description") && !layout.path("description").isNull()
+                    && (!layout.path("description").isTextual() || layout.path("description").asText().length() > 500))
+                    || !nonNegativeInteger(layout, "minCapacity") || !nonNegativeInteger(layout, "maxCapacity")) return false;
+        }
+        return validCapability(candidate.path("imageCapability"))
+                && validCapability(candidate.path("tableCapability"))
+                && validCapability(candidate.path("chartCapability"));
+    }
+
+    private boolean boundedStringArray(JsonNode node, int maxItems, int maxLength) {
+        if (!node.isArray() || node.size() > maxItems) return false;
+        for (JsonNode value : node) {
+            if (!value.isTextual() || value.asText().isBlank() || value.asText().length() > maxLength) return false;
+        }
+        return true;
+    }
+
+    private boolean nonNegativeInteger(JsonNode node, String field) {
+        return !node.has(field) || (node.path(field).isIntegralNumber() && node.path(field).asLong() >= 0);
+    }
+
+    private boolean validCapability(JsonNode node) {
+        if (node.isNull()) return true;
+        if (!node.isObject() || !node.path("supported").isBoolean()
+                || !nonNegativeInteger(node, "minCount") || !nonNegativeInteger(node, "maxCount")) return false;
+        return !node.has("notes") || node.path("notes").isNull()
+                || (node.path("notes").isTextual() && node.path("notes").asText().length() <= 300);
+    }
+
+    /**
+     * Keep compatibility with the earlier semantic-only provider vocabulary.
+     * The normalized result is still validated against the persisted Profile
+     * DTO contract before it can become an Analyzer Candidate.
+     */
+    private JsonNode normalizeCandidate(JsonNode candidate) {
+        if (candidate == null || isSemanticCandidate(candidate)
+                || !candidate.isObject() || containsForbiddenName(candidate)) {
+            return candidate;
+        }
+        boolean recognized = candidate.has("displayName") || candidate.has("pageRoles")
+                || candidate.has("semanticLayouts") || candidate.has("semanticRoles")
+                || candidate.has("layout") || candidate.has("source");
+        if (!recognized) return candidate;
+
+        ObjectNode normalized = objectMapper.createObjectNode();
+        String displayName = candidate.path("displayName").asText("").strip();
+        if (displayName.isBlank()) displayName = candidate.path("source").asText("").strip();
+        normalized.put("displayName", displayName.isBlank()
+                ? "Analyzed teaching template" : displayName.substring(0, Math.min(200, displayName.length())));
+
+        ArrayNode pageRoles = normalized.putArray("pageRoles");
+        addTextValues(candidate.path("pageRoles"), pageRoles, 20, 80);
+        JsonNode semanticRoles = candidate.path("semanticRoles");
+        if (pageRoles.isEmpty() && semanticRoles.isObject()) {
+            semanticRoles.fieldNames().forEachRemaining(name -> {
+                if (pageRoles.size() < 20) pageRoles.add(name.toUpperCase(Locale.ROOT));
+            });
+        } else if (pageRoles.isEmpty()) {
+            addTextValues(semanticRoles, pageRoles, 20, 80);
+        }
+        if (pageRoles.isEmpty()) pageRoles.add("CONTENT");
+
+        ArrayNode layouts = normalized.putArray("semanticLayouts");
+        JsonNode rawLayouts = candidate.path("semanticLayouts");
+        if (rawLayouts.isArray()) {
+            for (JsonNode rawLayout : rawLayouts) {
+                if (layouts.size() >= 30) break;
+                ObjectNode layout = layouts.addObject();
+                String name = rawLayout.isTextual() ? rawLayout.asText().strip() : rawLayout.path("name").asText("").strip();
+                if (name.isBlank()) {
+                    layouts.remove(layouts.size() - 1);
+                    continue;
+                }
+                layout.put("name", name.substring(0, Math.min(120, name.length())));
+                String description = rawLayout.isTextual() ? "" : rawLayout.path("description").asText("").strip();
+                layout.put("description", description.substring(0, Math.min(500, description.length())));
+                layout.put("minCapacity", nonNegativeCapacity(rawLayout, "minCapacity", 1));
+                layout.put("maxCapacity", nonNegativeCapacity(rawLayout, "maxCapacity", 20));
+            }
+        }
+        if (layouts.isEmpty()) {
+            ObjectNode layout = layouts.addObject();
+            layout.put("name", "CONTENT");
+            String description = candidate.path("layout").asText("Inferred semantic layout").strip();
+            layout.put("description", description.substring(0, Math.min(500, description.length())));
+            layout.put("minCapacity", 1);
+            layout.put("maxCapacity", 20);
+        }
+        normalized.set("imageCapability", normalizedCapability(candidate.path("imageCapability"), candidate.path("imagePolicy")));
+        normalized.set("tableCapability", normalizedCapability(candidate.path("tableCapability"), candidate.path("tablePolicy")));
+        normalized.set("chartCapability", normalizedCapability(candidate.path("chartCapability"), candidate.path("chartPolicy")));
+
+        ArrayNode brandAreas = normalized.putArray("fixedBrandAreas");
+        addTextValues(candidate.path("fixedBrandAreas"), brandAreas, 30, 120);
+        addTextValue(candidate.path("fixedBrand"), brandAreas, 30, 120);
+        ArrayNode limitations = normalized.putArray("limitations");
+        addTextValues(candidate.path("limitations"), limitations, 50, 300);
+        return normalized;
+    }
+
+    private void addTextValues(JsonNode source, ArrayNode target, int maxItems, int maxLength) {
+        if (source == null || source.isMissingNode() || source.isNull()) return;
+        if (source.isArray()) {
+            for (JsonNode value : source) addTextValue(value, target, maxItems, maxLength);
+        } else {
+            addTextValue(source, target, maxItems, maxLength);
+        }
+    }
+
+    private void addTextValue(JsonNode value, ArrayNode target, int maxItems, int maxLength) {
+        if (target.size() >= maxItems || value == null || !value.isTextual() || value.asText().isBlank()) return;
+        String text = value.asText().strip();
+        target.add(text.substring(0, Math.min(maxLength, text.length())));
+    }
+
+    private int nonNegativeCapacity(JsonNode value, String field, int fallback) {
+        JsonNode node = value == null ? null : value.path(field);
+        return node != null && node.isIntegralNumber() && node.asLong() >= 0 && node.asLong() <= Integer.MAX_VALUE
+                ? node.asInt() : fallback;
+    }
+
+    private JsonNode normalizedCapability(JsonNode direct, JsonNode policy) {
+        if (direct != null && !direct.isMissingNode() && validCapability(direct)) return direct.deepCopy();
+        return capabilityFromPolicy(policy);
+    }
+
+    /**
+     * The Candidate DTO intentionally accepts human-readable role vocabulary,
+     * while the Engine's exact-role resolver needs the two grounded roles that
+     * the service can prove from the source snapshot. Preserve the model's
+     * vocabulary but add only those bounded canonical aliases when applicable.
+     */
+    private JsonNode normalizeExecutionRoles(JsonNode candidate) {
+        if (candidate == null || !candidate.isObject() || !isSemanticCandidate(candidate)) {
+            return candidate;
+        }
+        ObjectNode normalized = candidate.deepCopy();
+        ArrayNode roles = normalized.putArray("pageRoles");
+        boolean cover = false;
+        boolean content = false;
+        boolean nonBlank = false;
+        List<String> rawRoleValues = new ArrayList<>();
+        JsonNode rawRoles = candidate.path("pageRoles");
+        if (rawRoles.isArray()) {
+            for (JsonNode rawRole : rawRoles) {
+                if (!rawRole.isTextual() || rawRole.asText().isBlank()) continue;
+                String value = rawRole.asText().strip();
+                String lower = value.toLowerCase(Locale.ROOT);
+                nonBlank = true;
+                if (lower.contains("cover") || lower.equals("title") || lower.contains("title page")
+                        || lower.contains("opening")) cover = true;
+                if (lower.equals("content") || lower.contains("content")
+                        || lower.contains("lecture") || lower.contains("body")) content = true;
+                rawRoleValues.add(value);
+            }
+        }
+        List<String> freeRoleValues = rawRoleValues.stream()
+                .filter(value -> !"COVER".equalsIgnoreCase(value) && !"CONTENT".equalsIgnoreCase(value))
+                .toList();
+        boolean needsCoverAlias = cover;
+        boolean needsContentAlias = content || nonBlank;
+        int rawLimit = Math.max(0, 20 - (needsCoverAlias ? 1 : 0) - (needsContentAlias ? 1 : 0));
+        freeRoleValues.stream().limit(rawLimit).forEach(roles::add);
+        if (needsCoverAlias) roles.add("COVER");
+        if (needsContentAlias) roles.add("CONTENT");
+        if (roles.isEmpty()) roles.add("CONTENT");
+        return normalized;
+    }
+
+    private boolean containsRole(ArrayNode roles, String expected) {
+        for (JsonNode role : roles) {
+            if (expected.equalsIgnoreCase(role.asText(""))) return true;
+        }
+        return false;
+    }
+
+    private JsonNode capabilityFromPolicy(JsonNode policy) {
+        if (policy == null || policy.isMissingNode() || policy.isNull()) return objectMapper.nullNode();
+        ObjectNode capability = objectMapper.createObjectNode();
+        capability.put("supported", true);
+        capability.put("minCount", 0);
+        capability.put("maxCount", 20);
+        String notes = policy.asText("Inferred from rendered preview").strip();
+        capability.put("notes", notes.substring(0, Math.min(300, notes.length())));
+        return capability;
     }
 
     private boolean containsForbiddenName(JsonNode node) {

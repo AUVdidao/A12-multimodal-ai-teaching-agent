@@ -324,8 +324,9 @@ func (s *Server) executeModelExecution(w http.ResponseWriter, r *http.Request) {
 	modelCtx, cancel = context.WithTimeout(modelCtx, requestTimeout)
 	defer cancel()
 	response, callErr := s.models.Chat(modelCtx, resolved, model.ChatRequest{
-		Messages:  []model.ChatMessage{{Role: "user", Content: req.Prompt, Images: []model.ChatImage{{URL: "data:" + lease.PreviewMediaType + ";base64," + base64.StdEncoding.EncodeToString(preview), MediaType: lease.PreviewMediaType}}}},
-		MaxTokens: req.MaxCompletionTokens,
+		Messages:        []model.ChatMessage{{Role: "user", Content: req.Prompt, Images: []model.ChatImage{{URL: "data:" + lease.PreviewMediaType + ";base64," + base64.StdEncoding.EncodeToString(preview), MediaType: lease.PreviewMediaType}}}},
+		MaxTokens:       req.MaxCompletionTokens,
+		DisableThinking: true,
 	})
 	auditStatus := response.RawStatus
 	if callErr != nil && auditStatus == 0 {

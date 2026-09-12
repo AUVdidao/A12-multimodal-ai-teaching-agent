@@ -269,7 +269,15 @@ public class TemplateProfileService {
                             && profile.getEngineNativeProfileChecksum() != null)
                     .forEach(profile -> matches.add(new Match(source, profile)));
         }
-        if (matches.size() != 1) {
+        if (matches.isEmpty()) {
+            throw new ConflictException("ENGINE_NATIVE_PROFILE_NOT_UNIQUE");
+        }
+        // A source may legitimately have several READY profile versions as the
+        // teacher re-runs analysis. The repository orders versions newest first;
+        // select that newest version for one source, but keep different source
+        // rows fail-closed because a digest alone cannot disambiguate them.
+        Long sourceId = matches.get(0).source().getId();
+        if (matches.stream().anyMatch(match -> !sourceId.equals(match.source().getId()))) {
             throw new ConflictException("ENGINE_NATIVE_PROFILE_NOT_UNIQUE");
         }
         Match match = matches.get(0);

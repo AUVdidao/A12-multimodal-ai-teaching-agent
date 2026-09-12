@@ -106,7 +106,8 @@ public class PptSpecificationService {
             if (proposal.operation() == PptSpecificationDtos.ProposalOperation.INITIAL_PROPOSAL) {
                 throw new ConflictException("INITIAL_PROPOSAL is only allowed for a project without a Specification");
             }
-            if (proposal.baseVersion() == null || !proposal.baseVersion().equals(latest.getVersionNumber())) {
+            if (proposal.baseVersion() == null
+                    || proposal.baseVersion().longValue() != latest.getVersionNumber().longValue()) {
                 throw new ConflictException("The Planning proposal base version is stale");
             }
             if (proposal.baseChecksum() == null || !proposal.baseChecksum().equalsIgnoreCase(latest.getChecksum())) {

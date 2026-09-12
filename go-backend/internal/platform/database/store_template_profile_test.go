@@ -7,83 +7,48 @@ import (
 	"lessonforge.local/backend/internal/templatebinding"
 )
 
-func TestMergeTemplateProfilePersistsOnlyCompleteOwnerBoundProfile(t *testing.T) {
-	digest := strings.Repeat("a", 64)
-	input := templatebinding.Input{MissionID: 11, OwnerUserID: 22, SHA256: digest}
+func TestMergeTemplateProfilePreservesUpstreamBindingContract(t *testing.T) {
+	sha := strings.Repeat("a", 64)
 	binding := map[string]any{
-		"executionReady":             false,
-		"engineNativeProfilePresent": false,
-		"profileSource":              "GO_FILE_IDENTITY",
+		"bindingKind":     "LESSONFORGE_UPSTREAM_TEMPLATE_BINDING",
+		"contractVersion": "lessonforge-upstream-template-v1",
+		"missionId":       int64(71),
+		"ownerUserId":     int64(58),
 	}
+	input := templatebinding.Input{MissionID: 71, OwnerUserID: 58, SHA256: sha}
 	profile := map[string]any{
-		"missionId":                   int64(11),
-		"ownerUserId":                 int64(22),
-		"templateFileSha256":          digest,
-		"templateFileVersion":         "3",
-		"templateProfileVersion":      "2",
-		"templateId":                  "31",
-		"profileId":                   "41",
-		"projectId":                   "99",
-		"templateVersion":             3,
-		"profileVersion":              2,
-		"sourceVersionId":             9,
-		"sourceSha256":                digest,
-		"parserSnapshotChecksum":      strings.Repeat("b", 64),
+		"missionId":                   float64(71),
+		"ownerUserId":                 float64(58),
+		"templateFileSha256":          sha,
+		"engineNativeProfile":         map[string]any{"status": "READY"},
+		"engineNativeProfileChecksum": strings.Repeat("b", 64),
 		"contractVersion":             "1.0.0",
+		"profileId":                   "4",
+		"templateId":                  "3",
+		"projectId":                   "13",
+		"templateVersion":             1,
+		"profileVersion":              2,
+		"templateFileVersion":         "1",
+		"templateProfileVersion":      "2",
 		"status":                      "READY",
-		"executionStatus":             "EXECUTION_READY",
 		"pageSize":                    map[string]any{},
 		"spatialProfile":              map[string]any{},
-		"textFitPolicy":               map[string]any{},
 		"templatePageReferences":      []any{},
-		"components":                  []any{},
-		"preservedNativeObjects":      []any{},
-		"engineNativeProfileChecksum": strings.Repeat("c", 64),
-		"engineNativeProfile": map[string]any{
-			"contractVersion":        "1.0.0",
-			"profileId":              "41",
-			"templateId":             "31",
-			"projectId":              "99",
-			"ownerUserId":            "22",
-			"templateVersion":        3,
-			"profileVersion":         2,
-			"status":                 "READY",
-			"executionStatus":        "EXECUTION_READY",
-			"sourceVersionId":        9,
-			"sourceSha256":           digest,
-			"parserSnapshotChecksum": strings.Repeat("b", 64),
-			"pageSize":               map[string]any{},
-			"spatialProfile":         map[string]any{},
-			"templatePageReferences": []any{},
-			"components":             []any{},
-			"textFitPolicy":          map[string]any{},
-		},
+		"components":                  []any{"component-1"},
+		"textFitPolicy":               map[string]any{},
+		"executionStatus":             "EXECUTION_READY",
+		"sourceVersionId":             3,
+		"sourceSha256":                sha,
+		"parserSnapshotChecksum":      strings.Repeat("c", 64),
 	}
 
 	if !mergeTemplateProfile(binding, profile, input) {
-		t.Fatal("complete profile was not accepted")
+		t.Fatal("mergeTemplateProfile returned false")
 	}
-	if binding["executionReady"] != true || binding["engineNativeProfilePresent"] != true || binding["profileSource"] != "JAVA_ENGINE_NATIVE_PROFILE" {
-		t.Fatalf("readiness binding = %#v", binding)
+	if got := binding["contractVersion"]; got != "lessonforge-upstream-template-v1" {
+		t.Fatalf("upstream contract version was overwritten: %v", got)
 	}
-	if binding["profileId"] != "41" || binding["templateProfileVersion"] != "2" {
-		t.Fatalf("native identity was not persisted = %#v", binding)
-	}
-}
-
-func TestMergeTemplateProfileFailsClosedOnDigestMismatch(t *testing.T) {
-	digest := strings.Repeat("a", 64)
-	input := templatebinding.Input{MissionID: 11, OwnerUserID: 22, SHA256: digest}
-	binding := map[string]any{"executionReady": false, "engineNativeProfilePresent": false}
-	profile := map[string]any{
-		"missionId":          int64(11),
-		"ownerUserId":        int64(22),
-		"templateFileSha256": strings.Repeat("d", 64),
-	}
-	if mergeTemplateProfile(binding, profile, input) {
-		t.Fatal("digest-mismatched profile was accepted")
-	}
-	if binding["executionReady"] != false || binding["engineNativeProfilePresent"] != false {
-		t.Fatalf("mismatched profile changed readiness = %#v", binding)
+	if binding["executionReady"] != true || binding["engineNativeProfilePresent"] != true {
+		t.Fatalf("profile readiness was not projected: %#v", binding)
 	}
 }

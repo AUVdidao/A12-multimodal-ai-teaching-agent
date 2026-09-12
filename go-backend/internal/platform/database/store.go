@@ -2513,7 +2513,7 @@ func mergeTemplateProfile(binding, profile map[string]any, input templatebinding
 	for _, key := range []string{
 		"templateId", "profileId", "templateVersion", "profileVersion", "templateFileVersion",
 		"templateProfileVersion", "projectId", "sourceVersionId", "sourceSha256", "parserSnapshotChecksum",
-		"contractVersion", "status", "executionStatus", "pageSize", "spatialProfile",
+		"status", "executionStatus", "pageSize", "spatialProfile",
 		"templatePageReferences", "components", "preservedNativeObjects", "textFitPolicy",
 	} {
 		if value, exists := profile[key]; exists {

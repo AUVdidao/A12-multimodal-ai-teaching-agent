@@ -181,7 +181,8 @@ public class TemplateProcessingService {
                         source.getSha256(),
                         analysisRunId,
                         missionId,
-                        resolveLessonForgeMissionFileId(source.getProjectId(), source.getCreatedByUserId(), missionId),
+                        resolveLessonForgeMissionFileId(source.getProjectId(), source.getCreatedByUserId(), missionId,
+                                source.getSha256()),
                         rendered.getId(),
                         run.getId()
                 ));
@@ -261,15 +262,30 @@ public class TemplateProcessingService {
         return missionId;
     }
 
-    private Long resolveLessonForgeMissionFileId(Long projectId, Long ownerUserId, Long missionId) {
+    private Long resolveLessonForgeMissionFileId(Long projectId, Long ownerUserId, Long missionId,
+                                                 String sourceSha256) {
         if (lessonForgeBindingRepository == null || projectId == null || ownerUserId == null || missionId == null) return null;
-        return lessonForgeBindingRepository.findByRagProjectIdAndOwnerUserIdOrderByCreatedAtAscIdAsc(projectId, ownerUserId).stream()
-                .filter(binding -> "BOUND".equalsIgnoreCase(binding.getBindingStatus()))
-                .filter(binding -> Objects.equals(binding.getMissionId(), missionId))
-                .map(LessonForgeMaterialBinding::getMissionFileId)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
+        if (sourceSha256 == null || !sourceSha256.matches("[0-9a-fA-F]{64}")) return null;
+        return resolveUniqueMissionFileId(
+                lessonForgeBindingRepository.findByRagProjectIdAndOwnerUserIdOrderByCreatedAtAscIdAsc(projectId, ownerUserId),
+                missionId, sourceSha256);
+    }
+
+    static Long resolveUniqueMissionFileId(List<LessonForgeMaterialBinding> bindings, Long missionId,
+                                           String sourceSha256) {
+        if (bindings == null || missionId == null || sourceSha256 == null
+                || !sourceSha256.matches("[0-9a-fA-F]{64}")) return null;
+        Long missionFileId = null;
+        for (LessonForgeMaterialBinding binding : bindings) {
+            if (!"BOUND".equalsIgnoreCase(binding.getBindingStatus())
+                    || !Objects.equals(binding.getMissionId(), missionId)
+                    || binding.getMissionFileId() == null
+                    || binding.getSourceSha256() == null
+                    || !sourceSha256.equalsIgnoreCase(binding.getSourceSha256())) continue;
+            if (missionFileId == null) missionFileId = binding.getMissionFileId();
+            else if (!Objects.equals(missionFileId, binding.getMissionFileId())) return null;
+        }
+        return missionFileId;
     }
 
     private boolean isValidAnalysisResult(TemplateAnalyzer.AnalysisResult result, String analysisRunId,
