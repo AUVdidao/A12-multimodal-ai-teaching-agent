@@ -15,6 +15,8 @@ describe('Electron desktop shell contract', () => {
 
   it('prevents duplicate desktop launches and focuses the existing window', () => {
     const source = readFileSync(resolve(root, 'electron/main.cjs'), 'utf8');
+    assert.match(source, /app\.setName\(['"]LessonForge['"]\)/);
+    assert.match(source, /app\.setPath\(['"]userData['"],\s*path\.join\(app\.getPath\(['"]appData['"]\),\s*['"]LessonForge['"]\)\)/);
     assert.match(source, /requestSingleInstanceLock\(\)/);
     assert.match(source, /second-instance/);
     assert.match(source, /mainWindow\.focus\(\)/);

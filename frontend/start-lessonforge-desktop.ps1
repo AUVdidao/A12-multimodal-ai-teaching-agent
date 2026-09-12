@@ -1,6 +1,28 @@
 $ErrorActionPreference = 'Stop'
 
 $frontendRoot = $PSScriptRoot
+$logRoot = Join-Path $env:LOCALAPPDATA 'LessonForge'
+$logFile = Join-Path $logRoot 'desktop-launcher.log'
+New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
+
+trap {
+    $message = $_.Exception.Message
+    Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] $message"
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+        [System.Windows.Forms.MessageBox]::Show(
+            "LessonForge 桌面端启动失败：`n`n$message`n`n日志：$logFile",
+            'LessonForge',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        ) | Out-Null
+    } catch {
+        # The launcher is normally hidden; logging is the fallback if the
+        # desktop notification subsystem is unavailable.
+    }
+    exit 1
+}
+
 $devUrl = 'http://127.0.0.1:5173/'
 $lessonForgeRoot = 'D:\pri_work\A12-ppt-stage34-integration'
 $goComposeProject = Join-Path $lessonForgeRoot 'deploy\lessonforge'
