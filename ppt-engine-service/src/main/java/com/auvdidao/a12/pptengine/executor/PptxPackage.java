@@ -131,6 +131,20 @@ final class PptxPackage {
                 throw new IOException("template slide relationships are missing");
             }
             put(targetRels, bytes(sourceRels).clone());
+            // A notesSlide relationship is bidirectional: the copied notes
+            // part still points back to the original source slide. Reusing it
+            // for a materialized slide makes PowerPoint reject the package as
+            // corrupt even though the ZIP and the slide XML are readable.
+            // Generated slides do not yet carry editable speaker notes, so
+            // omit that stale relationship until a notes part is cloned with
+            // its back-reference rewritten as well.
+            Document targetRelationships = document(targetRels);
+            for (Element relationship : elements(targetRelationships, REL_NS, "Relationship")) {
+                if (relationship.getAttribute("Type").endsWith("/notesSlide")) {
+                    targetRelationships.getDocumentElement().removeChild(relationship);
+                }
+            }
+            saveDocument(targetRels, targetRelationships);
             targetSlides.add(targetPath);
         }
         replacePresentationSlides(targetSlides);
