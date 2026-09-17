@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,33 @@ type Runtime struct {
 	// uses the provider-neutral model client; tests can still drive the full
 	// worker/runtime/store output path without a real Provider or API key.
 	chat func(context.Context, model.ResolvedConnection, model.ChatRequest) (model.ChatResponse, error)
+}
+
+type materialSectionScopeKey struct{}
+
+var materialSectionPattern = regexp.MustCompile(`(?:第\s*)?(\d+\.\d+)`)
+
+func withMaterialSectionScope(ctx context.Context, section string) context.Context {
+	section = strings.TrimSpace(section)
+	if section == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, materialSectionScopeKey{}, section)
+}
+
+func materialSectionScope(ctx context.Context) string {
+	if value, ok := ctx.Value(materialSectionScopeKey{}).(string); ok {
+		return value
+	}
+	return ""
+}
+
+func materialSectionFromText(value string) string {
+	match := materialSectionPattern.FindStringSubmatch(value)
+	if len(match) != 2 {
+		return ""
+	}
+	return match[1]
 }
 
 type CapabilityResolver interface {
@@ -145,6 +173,12 @@ func (r *Runtime) Run(ctx context.Context, run model.AgentRun) error {
 	})
 	if err != nil {
 		return err
+	}
+	for _, message := range messages {
+		if section := materialSectionFromText(message.Content); section != "" {
+			ctx = withMaterialSectionScope(ctx, section)
+			break
+		}
 	}
 	if r.EnableSubagentChain {
 		return r.runSubagentChain(ctx, run, owner, mission, resolved, frozen, messages, files, questions, currentDraft, historicalSummary)
@@ -472,7 +506,7 @@ func (r *Runtime) tool(ctx context.Context, missionID, owner int64, call model.T
 		if err != nil {
 			return `{"error":"TOOL_FILE_SCOPE_UNAVAILABLE"}`
 		}
-		snippets, err := r.RAG.Search(ctx, missionID, query, fileIDs)
+		snippets, err := r.RAG.SearchScoped(ctx, missionID, query, fileIDs, materialSectionScope(ctx))
 		if err != nil {
 			_ = r.Store.AddActivity(ctx, missionID, "RAG_SEARCH_FAILED", "RAG search failed", "RAG_SEARCH", safeToolError(err))
 			return safeToolError(err)
@@ -490,7 +524,7 @@ func (r *Runtime) tool(ctx context.Context, missionID, owner int64, call model.T
 			return `{"error":"RAG_NOT_CONFIGURED"}`
 		}
 		locator, _ := args["locator"].(string)
-		content, err := r.RAG.Read(ctx, missionID, readFileID, strings.TrimSpace(locator))
+		content, err := r.RAG.ReadScoped(ctx, missionID, readFileID, strings.TrimSpace(locator), materialSectionScope(ctx))
 		if err != nil {
 			return safeToolError(err)
 		}
@@ -519,7 +553,7 @@ func (r *Runtime) tool(ctx context.Context, missionID, owner int64, call model.T
 
 func (r *Runtime) recordToolResult(ctx context.Context, missionID int64, name, arguments, result string) {
 	hash := sha256.Sum256([]byte(result))
-	summary := fmt.Sprintf("tool=%s input=%s outputSha256=%x outputBytes=%d", name, toolInputAudit(arguments), hash, len(result))
+	summary := fmt.Sprintf("tool=%s scope=%s input=%s outputSha256=%x outputBytes=%d", name, materialSectionScope(ctx), toolInputAudit(arguments), hash, len(result))
 	if name == "search_materials" {
 		var hits []struct {
 			ChunkID    int64 `json:"chunkId"`

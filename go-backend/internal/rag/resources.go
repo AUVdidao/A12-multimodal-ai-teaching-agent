@@ -56,6 +56,10 @@ type CredentialDecryptor interface {
 }
 
 func (b *MissionResourceBinder) Search(ctx context.Context, missionID int64, query string, fileIDs []int64) ([]Snippet, error) {
+	return b.SearchScoped(ctx, missionID, query, fileIDs, "")
+}
+
+func (b *MissionResourceBinder) SearchScoped(ctx context.Context, missionID int64, query string, fileIDs []int64, section string) ([]Snippet, error) {
 	if b == nil || b.Client == nil || b.Store == nil || b.Storage == nil {
 		return nil, ErrResourceMappingNotConfigured
 	}
@@ -119,7 +123,7 @@ func (b *MissionResourceBinder) Search(ctx context.Context, missionID int64, que
 	if b.Embedding != nil || b.Models != nil || b.Crypto != nil {
 		queryVector, embeddingFallbackReason = b.embedQuery(ctx, owner, missionID, strings.TrimSpace(query))
 	}
-	return b.Client.searchJava(ctx, projectID, missionID, strings.TrimSpace(query), allowedRAGMaterials, queryVector, embeddingFallbackReason)
+	return b.Client.searchJava(ctx, projectID, missionID, strings.TrimSpace(query), allowedRAGMaterials, queryVector, embeddingFallbackReason, section)
 }
 
 func (b *MissionResourceBinder) embedQuery(ctx context.Context, owner, missionID int64, query string) ([]float64, string) {
@@ -167,6 +171,10 @@ func safeEmbeddingError(err error) string {
 }
 
 func (b *MissionResourceBinder) Read(ctx context.Context, missionID, fileID int64, locator string) (string, error) {
+	return b.ReadScoped(ctx, missionID, fileID, locator, "")
+}
+
+func (b *MissionResourceBinder) ReadScoped(ctx context.Context, missionID, fileID int64, locator, section string) (string, error) {
 	if b == nil || b.Client == nil || b.Store == nil || b.Storage == nil {
 		return "", ErrResourceMappingNotConfigured
 	}
@@ -203,7 +211,7 @@ func (b *MissionResourceBinder) Read(ctx context.Context, missionID, fileID int6
 	if err != nil {
 		return "", err
 	}
-	content, err := b.Client.readJava(ctx, projectID, missionID, materialID, locator, MaterialIdentity{
+	content, err := b.Client.readJava(ctx, projectID, missionID, materialID, locator, section, MaterialIdentity{
 		MissionID:     target.MissionID,
 		MissionFileID: target.ID,
 		OwnerUserID:   owner,

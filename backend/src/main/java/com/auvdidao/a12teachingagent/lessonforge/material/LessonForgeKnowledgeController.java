@@ -51,7 +51,8 @@ public class LessonForgeKnowledgeController {
                         request.materialIds() == null ? null : new LinkedHashSet<>(request.materialIds())
                 ),
                 request.queryEmbedding(),
-                request.embeddingFallbackReason()
+                request.embeddingFallbackReason(),
+                request.section()
         ));
     }
 
@@ -61,6 +62,7 @@ public class LessonForgeKnowledgeController {
             @PathVariable @Positive Long missionId,
             @PathVariable @Positive Long materialId,
             @RequestParam(required = false) String locator,
+            @RequestParam(required = false) String section,
             @RequestParam("missionId") @Positive Long identityMissionId,
             @RequestParam("missionFileId") @Positive Long missionFileId,
             @RequestParam("ownerUserId") @Positive Long ownerUserId,
@@ -74,6 +76,6 @@ public class LessonForgeKnowledgeController {
                 materialId,
                 new PipelineRequest(identityMissionId, missionFileId, ownerUserId, actorUserId, sourceSha256, sourceSize)
         );
-        return ApiResponse.success(knowledgeSearchService.readMaterial(projectId, materialId, locator));
+        return ApiResponse.success(knowledgeSearchService.readMaterial(projectId, materialId, locator, section));
     }
 }

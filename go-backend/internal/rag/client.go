@@ -188,11 +188,15 @@ type javaEnvelope struct {
 }
 
 func (c *Client) Search(ctx context.Context, missionID int64, query string, fileIDs []int64) ([]Snippet, error) {
+	return c.SearchScoped(ctx, missionID, query, fileIDs, "")
+}
+
+func (c *Client) SearchScoped(ctx context.Context, missionID int64, query string, fileIDs []int64, section string) ([]Snippet, error) {
 	if c.java {
 		if c.resources == nil {
 			return nil, ErrNotConfigured
 		}
-		return c.resources.Search(ctx, missionID, query, fileIDs)
+		return c.resources.SearchScoped(ctx, missionID, query, fileIDs, section)
 	}
 	if c.baseURL == "" || strings.TrimSpace(c.searchPath) == "" {
 		return nil, ErrNotConfigured
@@ -200,10 +204,10 @@ func (c *Client) Search(ctx context.Context, missionID int64, query string, file
 	if isLegacyWorkflowPath(c.searchPath) {
 		return nil, ErrLegacyWorkflowPath
 	}
-	return c.post(ctx, c.searchPath, map[string]any{"missionId": missionID, "query": query, "fileIds": fileIDs})
+	return c.post(ctx, c.searchPath, map[string]any{"missionId": missionID, "query": query, "fileIds": fileIDs, "section": section})
 }
 
-func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, query string, allowedMaterialIDs map[int64]struct{}, queryVector []float64, embeddingFallbackReason string) ([]Snippet, error) {
+func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, query string, allowedMaterialIDs map[int64]struct{}, queryVector []float64, embeddingFallbackReason, section string) ([]Snippet, error) {
 	if c.baseURL == "" {
 		return nil, ErrNotConfigured
 	}
@@ -223,6 +227,9 @@ func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, 
 	}
 	if embeddingFallbackReason != "" {
 		body["embeddingFallbackReason"] = embeddingFallbackReason
+	}
+	if strings.TrimSpace(section) != "" {
+		body["section"] = strings.TrimSpace(section)
 	}
 	if err := c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/knowledge/search", body, &result); err != nil {
 		return nil, err
@@ -246,11 +253,15 @@ func hasReadableMaterialContent(value string) bool {
 }
 
 func (c *Client) Read(ctx context.Context, missionID int64, fileID int64, locator string) (string, error) {
+	return c.ReadScoped(ctx, missionID, fileID, locator, "")
+}
+
+func (c *Client) ReadScoped(ctx context.Context, missionID int64, fileID int64, locator, section string) (string, error) {
 	if c.java {
 		if c.resources == nil {
 			return "", ErrNotConfigured
 		}
-		return c.resources.Read(ctx, missionID, fileID, locator)
+		return c.resources.ReadScoped(ctx, missionID, fileID, locator, section)
 	}
 	if c.baseURL == "" || strings.TrimSpace(c.readPath) == "" {
 		return "", ErrNotConfigured
@@ -261,13 +272,13 @@ func (c *Client) Read(ctx context.Context, missionID int64, fileID int64, locato
 	var result struct {
 		Content string `json:"content"`
 	}
-	if err := c.postInto(ctx, c.readPath, map[string]any{"missionId": missionID, "fileId": fileID, "locator": locator}, &result); err != nil {
+	if err := c.postInto(ctx, c.readPath, map[string]any{"missionId": missionID, "fileId": fileID, "locator": locator, "section": section}, &result); err != nil {
 		return "", err
 	}
 	return result.Content, nil
 }
 
-func (c *Client) readJava(ctx context.Context, projectID, missionID, materialID int64, locator string, identity MaterialIdentity) (string, error) {
+func (c *Client) readJava(ctx context.Context, projectID, missionID, materialID int64, locator, section string, identity MaterialIdentity) (string, error) {
 	var result struct {
 		Content string `json:"content"`
 	}
@@ -281,6 +292,9 @@ func (c *Client) readJava(ctx context.Context, projectID, missionID, materialID 
 	values.Set("sourceSize", strconv.FormatInt(identity.SourceSize, 10))
 	if strings.TrimSpace(locator) != "" {
 		values.Set("locator", strings.TrimSpace(locator))
+	}
+	if strings.TrimSpace(section) != "" {
+		values.Set("section", strings.TrimSpace(section))
 	}
 	requestPath += "?" + values.Encode()
 	if err := c.javaJSON(ctx, http.MethodGet, requestPath, nil, &result); err != nil {
