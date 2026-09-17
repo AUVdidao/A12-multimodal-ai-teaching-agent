@@ -42,12 +42,13 @@ type EmbeddingAuditStore interface {
 // not infer Java IDs from Mission/File IDs and only records IDs returned by
 // the Java API.
 type MissionResourceBinder struct {
-	Client    *Client
-	Store     ResourceStore
-	Storage   ResourceStorage
-	Models    *model.Client
-	Crypto    CredentialDecryptor
-	Embedding EmbeddingConnectionStore
+	Client            *Client
+	Store             ResourceStore
+	Storage           ResourceStorage
+	Models            *model.Client
+	Crypto            CredentialDecryptor
+	Embedding         EmbeddingConnectionStore
+	EmbeddingRequired bool
 }
 
 type CredentialDecryptor interface {
@@ -202,7 +203,7 @@ func (b *MissionResourceBinder) Read(ctx context.Context, missionID, fileID int6
 	if err != nil {
 		return "", err
 	}
-	return b.Client.readJava(ctx, projectID, missionID, materialID, locator, MaterialIdentity{
+	content, err := b.Client.readJava(ctx, projectID, missionID, materialID, locator, MaterialIdentity{
 		MissionID:     target.MissionID,
 		MissionFileID: target.ID,
 		OwnerUserID:   owner,
@@ -210,6 +211,13 @@ func (b *MissionResourceBinder) Read(ctx context.Context, missionID, fileID int6
 		SourceSHA256:  target.FileObject.SHA256,
 		SourceSize:    target.FileObject.Size,
 	})
+	if err != nil {
+		return "", err
+	}
+	if !hasReadableMaterialContent(content) {
+		return "", errors.New("RAG_MATERIAL_CONTENT_PLACEHOLDER")
+	}
+	return content, nil
 }
 
 func (b *MissionResourceBinder) ensureProject(ctx context.Context, owner, missionID int64) (int64, error) {
@@ -293,8 +301,22 @@ func (b *MissionResourceBinder) ensureMaterial(ctx context.Context, owner, proje
 	if err := b.Client.ParseMaterial(ctx, projectID, material.ID, identity); err != nil {
 		return 0, err
 	}
-	if err := b.Client.IndexMaterial(ctx, projectID, material.ID, identity); err != nil {
-		return 0, err
+	if b.EmbeddingRequired || b.Embedding != nil {
+		if b.Embedding == nil || b.Models == nil || b.Crypto == nil {
+			return 0, errors.New("EMBEDDING_INDEX_NOT_READY")
+		}
+		chunks, err := b.Client.IndexMaterialWithChunks(ctx, projectID, material.ID, identity)
+		if err != nil {
+			return 0, err
+		}
+		adapter := &LessonForgeParserAdapter{Client: b.Client, Store: b.Store, Models: b.Models, Embedding: b.Embedding, Crypto: b.Crypto, RequireEmbedding: true}
+		if err := adapter.embedAndPersist(ctx, owner, file.MissionID, projectID, material.ID, identity, chunks); err != nil {
+			return 0, fmt.Errorf("EMBEDDING_INDEX_NOT_READY: %w", err)
+		}
+	} else {
+		if err := b.Client.IndexMaterial(ctx, projectID, material.ID, identity); err != nil {
+			return 0, err
+		}
 	}
 	if err := b.Store.SaveRAGMaterialBinding(ctx, owner, file.MissionID, file.ID, projectID, material.ID, file.FileObject.SHA256); err != nil {
 		return 0, err

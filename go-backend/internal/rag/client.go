@@ -88,6 +88,7 @@ func (c *Client) ConfigureEmbedding(store EmbeddingConnectionStore, models *mode
 	c.resources.Embedding = store
 	c.resources.Models = models
 	c.resources.Crypto = crypt
+	c.resources.EmbeddingRequired = true
 }
 
 type Snippet struct {
@@ -231,9 +232,17 @@ func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, 
 		if _, ok := allowedMaterialIDs[hit.MaterialID]; !ok {
 			continue
 		}
+		if !hasReadableMaterialContent(hit.Content) {
+			return nil, errors.New("RAG_MATERIAL_CONTENT_PLACEHOLDER")
+		}
 		snippets = append(snippets, Snippet{ChunkID: hit.ChunkID, MaterialID: hit.MaterialID, ChunkNo: hit.ChunkNo, Title: hit.Title, Source: hit.Source, Content: hit.Content, Score: hit.Score, RetrievalMode: result.RetrievalMode})
 	}
 	return snippets, nil
+}
+
+func hasReadableMaterialContent(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return trimmed != "" && !looksLikeParserPlaceholder(trimmed)
 }
 
 func (c *Client) Read(ctx context.Context, missionID int64, fileID int64, locator string) (string, error) {

@@ -105,6 +105,41 @@ public class JdbcKnowledgeVectorStore implements KnowledgeVectorStore {
     }
 
     @Override
+    public boolean hasCompleteIndex(Long projectId, List<Long> materialIds, int dimension) {
+        requirePostgres();
+        if (projectId == null || projectId <= 0 || materialIds == null || materialIds.isEmpty() || dimension <= 0) {
+            return false;
+        }
+        List<Long> scopedMaterials = materialIds.stream().filter(Objects::nonNull).distinct().toList();
+        String placeholders = "?, ".repeat(Math.max(0, scopedMaterials.size() - 1)) + "?";
+        String sql = """
+                select exists (
+                    select 1
+                    from knowledge_chunks c
+                    where c.project_id=? and c.material_id in (%s)
+                )
+                and not exists (
+                    select 1
+                    from knowledge_chunks c
+                    where c.project_id=? and c.material_id in (%s)
+                      and not exists (
+                          select 1 from lessonforge_chunk_embeddings e
+                          where e.chunk_id=c.id and e.project_id=c.project_id
+                            and e.material_id=c.material_id and e.status='READY' and e.dimension=?
+                      )
+                )
+                """.formatted(placeholders, placeholders);
+        return Boolean.TRUE.equals(jdbcTemplate.query(sql, statement -> {
+            int index = 1;
+            statement.setLong(index++, projectId);
+            for (Long materialId : scopedMaterials) statement.setLong(index++, materialId);
+            statement.setLong(index++, projectId);
+            for (Long materialId : scopedMaterials) statement.setLong(index++, materialId);
+            statement.setInt(index, dimension);
+        }, resultSet -> resultSet.next() && resultSet.getBoolean(1)));
+    }
+
+    @Override
     public boolean available() {
         return postgres;
     }

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -481,7 +482,9 @@ func (r *Runtime) tool(ctx context.Context, missionID, owner int64, call model.T
 			mode = snippets[0].RetrievalMode
 		}
 		_ = r.Store.AddActivity(ctx, missionID, "RAG_SEARCH_COMPLETED", fmt.Sprintf("mode=%s hits=%d chunks=%s materials=%s", mode, len(snippets), ragChunkIDs(snippets), ragMaterialIDs(snippets)), "RAG_SEARCH", mode)
-		return marshal(snippets)
+		result := marshal(snippets)
+		r.recordToolResult(ctx, missionID, call.Function.Name, call.Function.Arguments, result)
+		return result
 	case "read_material":
 		if r.RAG == nil {
 			return `{"error":"RAG_NOT_CONFIGURED"}`
@@ -491,7 +494,9 @@ func (r *Runtime) tool(ctx context.Context, missionID, owner int64, call model.T
 		if err != nil {
 			return safeToolError(err)
 		}
-		return marshal(map[string]any{"fileId": readFileID, "locator": strings.TrimSpace(locator), "content": content})
+		result := marshal(map[string]any{"fileId": readFileID, "locator": strings.TrimSpace(locator), "content": content})
+		r.recordToolResult(ctx, missionID, call.Function.Name, call.Function.Arguments, result)
+		return result
 	case "get_current_plan":
 		draft, err := r.Store.CurrentDraft(ctx, owner, missionID)
 		if err != nil {
@@ -510,6 +515,53 @@ func (r *Runtime) tool(ctx context.Context, missionID, owner int64, call model.T
 	default:
 		return `{"error":"TOOL_NOT_ALLOWED"}`
 	}
+}
+
+func (r *Runtime) recordToolResult(ctx context.Context, missionID int64, name, arguments, result string) {
+	hash := sha256.Sum256([]byte(result))
+	summary := fmt.Sprintf("tool=%s input=%s outputSha256=%x outputBytes=%d", name, toolInputAudit(arguments), hash, len(result))
+	if name == "search_materials" {
+		var hits []struct {
+			ChunkID    int64 `json:"chunkId"`
+			MaterialID int64 `json:"materialId"`
+			ChunkNo    int   `json:"chunkNo"`
+		}
+		if json.Unmarshal([]byte(result), &hits) == nil {
+			chunks := make([]string, 0, len(hits))
+			materials := make([]string, 0, len(hits))
+			for _, hit := range hits {
+				chunks = append(chunks, fmt.Sprintf("%d/%d", hit.ChunkID, hit.ChunkNo))
+				materials = append(materials, fmt.Sprint(hit.MaterialID))
+			}
+			summary += fmt.Sprintf(" sourceChunks=%s sourceMaterials=%s", strings.Join(chunks, ","), strings.Join(materials, ","))
+		}
+	}
+	if name == "read_material" {
+		var read struct {
+			FileID  int64  `json:"fileId"`
+			Locator string `json:"locator"`
+			Content string `json:"content"`
+		}
+		if json.Unmarshal([]byte(result), &read) == nil {
+			contentHash := sha256.Sum256([]byte(read.Content))
+			summary += fmt.Sprintf(" fileId=%d locator=%s contentSha256=%x contentBytes=%d", read.FileID, read.Locator, contentHash, len(read.Content))
+		}
+	}
+	_ = r.Store.AddActivity(ctx, missionID, "AGENT_TOOL_RESULT", summary, "AGENT_TOOL", name)
+}
+
+func toolInputAudit(arguments string) string {
+	var args map[string]any
+	if json.Unmarshal([]byte(arguments), &args) != nil {
+		return "invalid"
+	}
+	if query, ok := args["query"].(string); ok {
+		hash := sha256.Sum256([]byte(query))
+		return fmt.Sprintf("querySha256=%x", hash)
+	}
+	fileID, _ := args["fileId"].(float64)
+	locator, _ := args["locator"].(string)
+	return fmt.Sprintf("fileId=%d locator=%s", int64(fileID), locator)
 }
 
 func (r *Runtime) authorizeMaterialRead(ctx context.Context, owner, missionID, fileID int64) error {

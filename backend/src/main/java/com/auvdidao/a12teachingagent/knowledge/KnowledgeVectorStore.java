@@ -36,5 +36,7 @@ public interface KnowledgeVectorStore {
             int limit
     );
 
+    boolean hasCompleteIndex(Long projectId, List<Long> materialIds, int dimension);
+
     boolean available();
 }

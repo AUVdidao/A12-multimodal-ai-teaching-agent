@@ -586,3 +586,13 @@
 - Mission 85 执行审计：材料研究/需求澄清/方案编排均为 DeepSeek HTTP 200、`USER_BYOK`；RAG embedding query HTTP 200；Go 全量 Docker build/test 通过；Java backend Docker 编译通过；H2 22 迁移与 PostgreSQL migration contract 定向测试 5/5 通过。Java 全量 Maven 测试本轮未运行。
 - 本轮没有批准 Draft、没有启动 Generation/PPT Engine，也没有删除既有 Mission、文件、向量或 Large Object。当前仍有产品语义边界：关键词降级命中先返回第 3.2 目录证据，正文细节未命中时 Draft 会显式标记待补充，而不是无依据扩写。
 - 新报告：`D:\服务外包正式文档\开发结果汇报存档\LessonForge_材料研究Agent合同与真实Planning闭环修复_2026-09-17.md`。
+
+### 阶段 74：材料正文索引门禁、章节范围检索与真实 Planning 重放（2026-09-18）
+
+- 针对独立审查发现的 `READY + 0 vectors` 问题，MissionFile 材料绑定在启用 Embedding 时必须完成 Java Parse → Index → Embedding 持久化；Java 新增完整索引门禁，所有 scoped chunks 均须存在同 project/material/dimension 的 READY 向量，否则返回 `EMBEDDING_INDEX_NOT_READY`，不静默降级。
+- Java Parser/Index、Go Parser、Go RAG Read/Search 统一拒绝数字 OID 占位正文；材料研究预检按 Java `materialId` 反查对应 MissionFile，不再固定取 `fileIds[0]`，移除 `chunk:1` 回退。
+- 修复章节检索边界：按真实小节标题和下一顶层小节截取正文，排除目录点线和后文引用；修复空关键词导致的伪命中。`第3.2节` 实测关键词检索返回 chunk 176/177/179/180/182/183/184/185/186，未再返回 502/566 等跨章节片段。
+- Go AgentRun 现在只把子 Agent 自己实际执行的 Tool Call 作为材料研究证据；预检不计入子 Agent 工具证据。成功的 `search_materials/read_material` 写入带 SHA/bytes/source chunk 的 `AGENT_TOOL_RESULT` 审计元数据，不记录正文或密钥。
+- 真实 Mission 86 重放：Java material=24 共 601 chunks、601 条 1024 维 READY embeddings；AgentRun `a1860000-0000-4000-8000-000000000087` `COMPLETED`。真实事件包含子 Agent 自己的 `search_materials`、`read_material`，实际读取 fileId=29 的 chunk:176、chunk:177；Planning Draft 9 页，P4–P8 已使用正文来源，不再把五个子节标为待材料补充。未批准 Draft，未启动 Generation/PPT Engine。
+- 验证：Go Docker `go test -count=1 ./internal/agent ./internal/rag` 通过；Java Docker 定向迁移测试 5/5 通过；Java backend 镜像重新构建并健康部署；最终 Java HTTP 章节检索返回预期范围。Java 全量 Maven 测试本轮仍未运行，标记 `UNVERIFIED`。
+- 本阶段报告：`D:\服务外包正式文档\开发结果汇报存档\LessonForge_材料研究Agent合同与真实Planning闭环审查修复_2026-09-18.md`。

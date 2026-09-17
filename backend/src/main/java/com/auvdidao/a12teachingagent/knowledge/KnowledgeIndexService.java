@@ -75,6 +75,9 @@ public class KnowledgeIndexService {
         if (contents.isEmpty()) {
             throw new ConflictException("Parsed material does not contain useful text");
         }
+        if (contents.stream().anyMatch(KnowledgeIndexService::looksLikeParserPlaceholder)) {
+            throw new ConflictException("PARSED_MATERIAL_CONTENT_PLACEHOLDER");
+        }
 
         chunkRepository.deleteByMaterialId(material.getId());
         chunkRepository.flush();
@@ -169,5 +172,9 @@ public class KnowledgeIndexService {
             }
         }
         return List.copyOf(keywords);
+    }
+
+    static boolean looksLikeParserPlaceholder(String value) {
+        return value != null && value.trim().matches("\\d{5,32}");
     }
 }

@@ -1,6 +1,7 @@
 package com.auvdidao.a12teachingagent.knowledge;
 
 import com.auvdidao.a12teachingagent.common.exception.BadRequestException;
+import com.auvdidao.a12teachingagent.common.exception.ConflictException;
 import com.auvdidao.a12teachingagent.common.exception.ResourceNotFoundException;
 import com.auvdidao.a12teachingagent.domain.common.PurposeType;
 import com.auvdidao.a12teachingagent.domain.knowledge.KnowledgeChunk;
@@ -99,10 +100,20 @@ public class KnowledgeSearchService {
             throw new BadRequestException("limit must be between 1 and 20");
         }
 
+        List<KnowledgeChunk> sectionChunks = sectionChunks(projectId, allowedMaterialIds, normalizedQuery);
+        if (sectionChunks.isEmpty() && requestedSection(normalizedQuery) != null) {
+            throw new ConflictException("KNOWLEDGE_SECTION_EVIDENCE_NOT_FOUND");
+        }
+        List<Long> materialIds = allowedMaterialIds == null ? List.of() : allowedMaterialIds.stream().toList();
         if (queryEmbedding != null && !queryEmbedding.isEmpty() && vectorStore != null && vectorStore.available()) {
+            if (!materialIds.isEmpty() && !vectorStore.hasCompleteIndex(projectId, materialIds, queryEmbedding.size())) {
+                throw new ConflictException("EMBEDDING_INDEX_NOT_READY");
+            }
             try {
-                List<Long> materialIds = allowedMaterialIds == null ? List.of() : allowedMaterialIds.stream().toList();
-                List<KnowledgeVectorStore.VectorHit> vectorHits = vectorStore.search(projectId, materialIds, queryEmbedding, queryEmbedding.size(), limit);
+                List<KnowledgeVectorStore.VectorHit> vectorHits = vectorStore.search(projectId, materialIds, queryEmbedding, queryEmbedding.size(), Math.max(limit, 20));
+                java.util.Set<Long> sectionChunkIds = sectionChunks.isEmpty()
+                        ? null
+                        : sectionChunks.stream().map(KnowledgeChunk::getId).collect(java.util.stream.Collectors.toSet());
                 if (!vectorHits.isEmpty()) {
                     var chunks = chunkRepository.findAllById(vectorHits.stream().map(KnowledgeVectorStore.VectorHit::chunkId).toList())
                             .stream().collect(java.util.stream.Collectors.toMap(KnowledgeChunk::getId, chunk -> chunk));
@@ -112,6 +123,8 @@ public class KnowledgeSearchService {
                                     chunks.get(hit.chunkId()).getTitle(), chunks.get(hit.chunkId()).getContent(),
                                     hit.score(), "向量余弦相似度", chunks.get(hit.chunkId()).getUsageTypes(), chunks.get(hit.chunkId()).getKeywords()))
                             .filter(java.util.Objects::nonNull)
+                            .filter(hit -> sectionChunkIds == null || sectionChunkIds.contains(hit.chunkId()))
+                            .filter(hit -> hasReadableContent(hit.content()))
                             .toList();
                     if (!hits.isEmpty()) {
                         return new KnowledgeSearchResponse(query.trim(), hits, false, "PostgreSQL double precision[] 向量余弦相似度", "VECTOR");
@@ -125,12 +138,15 @@ public class KnowledgeSearchService {
 
         List<String> terms = queryTerms(normalizedQuery);
         List<ScoredChunk> scored = new ArrayList<>();
-        for (KnowledgeChunk chunk : chunkRepository.findByProjectIdOrderByMaterialIdAscChunkNoAsc(projectId)) {
+        List<KnowledgeChunk> searchChunks = sectionChunks.isEmpty()
+                ? chunkRepository.findByProjectIdOrderByMaterialIdAscChunkNoAsc(projectId)
+                : sectionChunks;
+        for (KnowledgeChunk chunk : searchChunks) {
             if (allowedMaterialIds != null && !allowedMaterialIds.contains(chunk.getMaterialId())) {
                 continue;
             }
             ScoredChunk value = score(chunk, terms);
-            if (value.score() > 0) {
+            if (value.score() > 0 && hasReadableContent(chunk.getContent())) {
                 scored.add(value);
             }
         }
@@ -149,6 +165,9 @@ public class KnowledgeSearchService {
                 value.chunk().getUsageTypes(),
                 value.chunk().getKeywords()
         )).toList();
+        if (requestedSection(normalizedQuery) != null && hits.isEmpty()) {
+            throw new ConflictException("KNOWLEDGE_SECTION_EVIDENCE_NOT_FOUND");
+        }
         return new KnowledgeSearchResponse(
                 query.trim(),
                 hits,
@@ -183,6 +202,9 @@ public class KnowledgeSearchService {
         List<KnowledgeChunk> selected = selectChunks(chunks, requestedLocator);
         if (selected.isEmpty()) {
             throw new ResourceNotFoundException("Knowledge locator not found: " + requestedLocator);
+        }
+        if (selected.stream().anyMatch(chunk -> !hasReadableContent(chunk.getContent()))) {
+            throw new ConflictException("KNOWLEDGE_CONTENT_PLACEHOLDER");
         }
         String content = selected.stream()
                 .map(KnowledgeChunk::getContent)
@@ -278,11 +300,77 @@ public class KnowledgeSearchService {
     }
 
     private static boolean containsEither(String left, String right) {
-        return left.contains(right) || right.contains(left);
+        return !left.isBlank() && !right.isBlank() && (left.contains(right) || right.contains(left));
     }
 
     private static String normalize(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean hasReadableContent(String value) {
+        return value != null && !value.isBlank() && !KnowledgeIndexService.looksLikeParserPlaceholder(value);
+    }
+
+    private List<KnowledgeChunk> sectionChunks(Long projectId, java.util.Set<Long> allowedMaterialIds, String query) {
+        String section = requestedSection(query);
+        if (section == null) return List.of();
+        List<KnowledgeChunk> chunks = chunkRepository.findByProjectIdOrderByMaterialIdAscChunkNoAsc(projectId).stream()
+                .filter(chunk -> allowedMaterialIds == null || allowedMaterialIds.contains(chunk.getMaterialId()))
+                .filter(chunk -> hasReadableContent(chunk.getContent()))
+                .toList();
+        String firstSubsection = section + ".1";
+        int start = -1;
+        for (int index = 0; index < chunks.size(); index++) {
+            if (containsHeading(chunks.get(index).getContent(), firstSubsection)) {
+                start = index;
+                break;
+            }
+        }
+        if (start < 0) {
+            for (int index = 0; index < chunks.size(); index++) {
+                if (containsHeading(chunks.get(index).getContent(), section)) {
+                    start = index;
+                    break;
+                }
+            }
+        }
+        if (start < 0) return List.of();
+
+        int end = chunks.size();
+        String next = nextSection(section);
+        for (int index = start + 1; index < chunks.size(); index++) {
+            if (containsHeading(chunks.get(index).getContent(), next)) {
+                end = index;
+                break;
+            }
+        }
+        return chunks.subList(start, end);
+    }
+
+    private static boolean containsHeading(String content, String label) {
+        if (content == null || content.isBlank()) return false;
+        for (String line : content.split("\\R")) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith(label)) continue;
+            if (trimmed.length() == label.length()) return true;
+            String remainder = trimmed.substring(label.length());
+            if (remainder.matches(".*(?:\\.{2,}|(?:\\.\\s*){2,}|…{2,}).*")) continue;
+            char suffix = trimmed.charAt(label.length());
+            if (suffix == '.' || Character.isDigit(suffix)) continue;
+            if (Character.isWhitespace(suffix) || suffix == ':' || suffix == '：') return true;
+        }
+        return false;
+    }
+
+    private static String requestedSection(String query) {
+        if (query == null) return null;
+        java.util.regex.Matcher matcher = Pattern.compile("(?:第)?(\\d+\\.\\d+)").matcher(query);
+        return matcher.find() ? matcher.group(1).toLowerCase(Locale.ROOT) : null;
+    }
+
+    private static String nextSection(String section) {
+        String[] parts = section.split("\\.");
+        return parts[0] + "." + (Integer.parseInt(parts[1]) + 1);
     }
 
     private record ScoredChunk(KnowledgeChunk chunk, double score, String hitReason) {

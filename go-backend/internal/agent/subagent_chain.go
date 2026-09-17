@@ -246,16 +246,13 @@ func (r *Runtime) runSubagentStageWithTrace(ctx context.Context, run model.Agent
 
 func (r *Runtime) runMaterialResearcher(ctx context.Context, run model.AgentRun, owner int64, connection model.ResolvedConnection, base string) (string, error) {
 	tools := subagentToolSet("search_materials", "read_material")
-	preflightContext, preflightTools, err := r.materialResearchPreflight(ctx, run.MissionID, owner, base)
+	preflightContext, err := r.materialResearchPreflight(ctx, run.MissionID, owner, base)
 	if err != nil {
 		return "", err
 	}
 	research, calledTools, err := r.runSubagentStageWithTrace(ctx, run, owner, connection, SubagentMaterialResearcher, preflightContext, tools)
 	if err != nil {
 		return "", err
-	}
-	for name := range preflightTools {
-		calledTools[name] = true
 	}
 	if err := validateMaterialResearchOutput(research, calledTools); err == nil {
 		return research, nil
@@ -274,15 +271,13 @@ func (r *Runtime) runMaterialResearcher(ctx context.Context, run model.AgentRun,
 	}
 	repairContext := base + "\n\nContract repair instruction:\n" +
 		"Your previous material-research response did not satisfy the server contract. " +
-		"Use the authorized tools first, then return exactly one JSON object with no prose. " +
-		"For evidence use {\"type\":\"EVIDENCE\",\"summary\":\"non-empty\",\"sources\":[{\"fileId\":1,\"locator\":\"chunk:1\",\"claim\":\"non-empty\"}]}; " +
+		"The server preflight is not your tool call evidence. You must call search_materials and read_material yourself in this retry, then return exactly one JSON object with no prose. " +
+		"Use the actual fileId and locator returned by those calls; never invent fileId, chunk number, or source claim. " +
+		"For evidence use {\"type\":\"EVIDENCE\",\"summary\":\"non-empty\",\"sources\":[{\"fileId\":123,\"locator\":\"chunk:176\",\"claim\":\"non-empty\"}]}; " +
 		"if evidence is unavailable use {\"type\":\"SKIPPED\",\"reason\":\"non-empty\"}.\nRejected response:\n" + truncateRunes(research, 8000)
 	research, calledTools, err = r.runSubagentStageWithTrace(ctx, run, owner, connection, SubagentMaterialResearcher, preflightContext+"\n\n"+repairContext, tools)
 	if err != nil {
 		return "", err
-	}
-	for name := range preflightTools {
-		calledTools[name] = true
 	}
 	if err := validateMaterialResearchOutput(research, calledTools); err != nil {
 		_ = r.Store.AddActivityIdempotent(
@@ -299,10 +294,10 @@ func (r *Runtime) runMaterialResearcher(ctx context.Context, run model.AgentRun,
 	return research, nil
 }
 
-func (r *Runtime) materialResearchPreflight(ctx context.Context, missionID, owner int64, base string) (string, map[string]bool, error) {
+func (r *Runtime) materialResearchPreflight(ctx context.Context, missionID, owner int64, base string) (string, error) {
 	fileIDs, err := r.Store.AuthorizedMaterialFileIDs(ctx, owner, missionID)
 	if err != nil || len(fileIDs) == 0 {
-		return "", nil, errors.New("SUBAGENT_MATERIAL_RESEARCHER_NO_AUTHORIZED_MATERIAL")
+		return "", errors.New("SUBAGENT_MATERIAL_RESEARCHER_NO_AUTHORIZED_MATERIAL")
 	}
 	query := researchQueryFromContext(base)
 	searchResult := r.tool(ctx, missionID, owner, model.ToolCall{
@@ -319,18 +314,23 @@ func (r *Runtime) materialResearchPreflight(ctx context.Context, missionID, owne
 		Content    string `json:"content"`
 	}
 	if err := json.Unmarshal([]byte(searchResult), &snippets); err != nil || len(snippets) == 0 || snippets[0].MaterialID <= 0 {
-		return "", nil, errors.New("SUBAGENT_MATERIAL_RESEARCHER_SEARCH_EMPTY")
+		return "", errors.New("SUBAGENT_MATERIAL_RESEARCHER_SEARCH_EMPTY")
 	}
-	fileID := fileIDs[0]
-	locator := "chunk:1"
-	if snippets[0].ChunkNo > 0 {
-		locator = fmt.Sprintf("chunk:%d", snippets[0].ChunkNo)
-	} else if content := strings.TrimSpace(snippets[0].Content); content != "" {
-		// Keep the original whitespace. Java's bounded text locator performs a
-		// literal contains check, so replacing newlines with spaces can turn a
-		// valid search hit into a false read miss.
-		locator = truncateRunes(content, 96)
+	fileID := int64(0)
+	for _, candidate := range fileIDs {
+		binding, found, bindingErr := r.Store.RAGMaterialBinding(ctx, owner, candidate)
+		if bindingErr != nil {
+			return "", bindingErr
+		}
+		if found && binding.RAGMaterialID == snippets[0].MaterialID {
+			fileID = candidate
+			break
+		}
 	}
+	if fileID <= 0 || snippets[0].ChunkNo <= 0 {
+		return "", errors.New("SUBAGENT_MATERIAL_RESEARCHER_SOURCE_SCOPE_UNRESOLVED")
+	}
+	locator := fmt.Sprintf("chunk:%d", snippets[0].ChunkNo)
 	readResult := r.tool(ctx, missionID, owner, model.ToolCall{
 		Type: "function",
 		Function: model.ToolCallFunction{
@@ -343,25 +343,10 @@ func (r *Runtime) materialResearchPreflight(ctx context.Context, missionID, owne
 		Locator string `json:"locator"`
 		Content string `json:"content"`
 	}
-	if err := json.Unmarshal([]byte(readResult), &read); err != nil || strings.TrimSpace(read.Content) == "" {
-		// A search hit may contain normalized/truncated text that is not a
-		// literal locator in Java's bounded reader. Keep the failed attempt
-		// auditable, then fall back to a bounded first chunk from the same
-		// authorized file so the preflight still proves an actual source read.
-		readResult = r.tool(ctx, missionID, owner, model.ToolCall{
-			Type: "function",
-			Function: model.ToolCallFunction{
-				Name:      "read_material",
-				Arguments: marshal(map[string]any{"fileId": fileID, "locator": "chunk:1"}),
-			},
-		})
-		if err := json.Unmarshal([]byte(readResult), &read); err != nil || strings.TrimSpace(read.Content) == "" {
-			return "", nil, errors.New("SUBAGENT_MATERIAL_RESEARCHER_READ_EMPTY")
-		}
+	if err := json.Unmarshal([]byte(readResult), &read); err != nil || read.FileID != fileID || read.Locator != locator || !hasReadableMaterialContent(read.Content) {
+		return "", errors.New("SUBAGENT_MATERIAL_RESEARCHER_READ_EMPTY")
 	}
-	return base + "\n\nServer material preflight search result:\n" + truncateRunes(searchResult, 12000) +
-			"\n\nServer material preflight read result:\n" + truncateRunes(readResult, 12000),
-		map[string]bool{"search_materials": true, "read_material": true}, nil
+	return base + fmt.Sprintf("\n\nServer preflight verified an authorized target source: materialId=%d fileId=%d locator=%s. This preflight is not subagent tool evidence; call search_materials and read_material yourself before returning EVIDENCE.", snippets[0].MaterialID, fileID, locator), nil
 }
 
 func researchQueryFromContext(base string) string {
@@ -385,6 +370,19 @@ func researchQueryFromContext(base string) string {
 		}
 	}
 	return truncateRunes(strings.TrimSpace(base), 1200)
+}
+
+func hasReadableMaterialContent(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || len(trimmed) < 5 || len(trimmed) > 32 {
+		return trimmed != ""
+	}
+	for _, char := range trimmed {
+		if char < '0' || char > '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Runtime) callModel(ctx context.Context, connection model.ResolvedConnection, request model.ChatRequest) (model.ChatResponse, error) {
