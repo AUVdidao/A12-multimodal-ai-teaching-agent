@@ -381,7 +381,9 @@ public class KnowledgeSearchService {
         while (matcher.find()) {
             int end = Math.min(content.length(), matcher.end() + 180);
             String remainder = content.substring(matcher.end(), end);
-            if (!remainder.matches(".*(?:\\.{2,}|(?:\\.\\s*){2,}|…{2,}).*")) return true;
+            String compact = remainder.replaceAll("\\s+", " ");
+            boolean contentsLeader = compact.contains(". .") || compact.contains("...") || compact.contains("……");
+            if (!contentsLeader) return true;
         }
         return false;
     }
