@@ -108,7 +108,7 @@ public class KnowledgeSearchService {
                             .stream().collect(java.util.stream.Collectors.toMap(KnowledgeChunk::getId, chunk -> chunk));
                     List<KnowledgeHitResponse> hits = vectorHits.stream()
                             .map(hit -> chunks.get(hit.chunkId()) == null ? null : new KnowledgeHitResponse(
-                                    hit.chunkId(), hit.materialId(), chunks.get(hit.chunkId()).getSourceFilename(),
+                                    hit.chunkId(), hit.materialId(), chunks.get(hit.chunkId()).getChunkNo(), chunks.get(hit.chunkId()).getSourceFilename(),
                                     chunks.get(hit.chunkId()).getTitle(), chunks.get(hit.chunkId()).getContent(),
                                     hit.score(), "向量余弦相似度", chunks.get(hit.chunkId()).getUsageTypes(), chunks.get(hit.chunkId()).getKeywords()))
                             .filter(java.util.Objects::nonNull)
@@ -140,6 +140,7 @@ public class KnowledgeSearchService {
         List<KnowledgeHitResponse> hits = scored.stream().limit(limit).map(value -> new KnowledgeHitResponse(
                 value.chunk().getId(),
                 value.chunk().getMaterialId(),
+                value.chunk().getChunkNo(),
                 value.chunk().getSourceFilename(),
                 value.chunk().getTitle(),
                 value.chunk().getContent(),

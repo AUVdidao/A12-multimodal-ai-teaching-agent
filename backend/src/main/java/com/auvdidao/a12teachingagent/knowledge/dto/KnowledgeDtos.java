@@ -46,6 +46,7 @@ public final class KnowledgeDtos {
     public record KnowledgeHitResponse(
             Long chunkId,
             Long materialId,
+            Integer chunkNo,
             String sourceFilename,
             String title,
             String content,
@@ -54,6 +55,19 @@ public final class KnowledgeDtos {
             List<PurposeType> usageTypes,
             List<String> keywords
     ) {
+        public KnowledgeHitResponse(
+                Long chunkId,
+                Long materialId,
+                String sourceFilename,
+                String title,
+                String content,
+                double score,
+                String hitReason,
+                List<PurposeType> usageTypes,
+                List<String> keywords
+        ) {
+            this(chunkId, materialId, null, sourceFilename, title, content, score, hitReason, usageTypes, keywords);
+        }
     }
 
     public record KnowledgeSearchResponse(

@@ -10,7 +10,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
@@ -35,11 +34,9 @@ public class ParseResult extends BaseAuditableEntity {
     @Column(name = "parser_snapshot_checksum", length = 64)
     private String parserSnapshotChecksum;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String summary;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String extractedText;
 
@@ -57,7 +54,6 @@ public class ParseResult extends BaseAuditableEntity {
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "parse_result_sections", joinColumns = @JoinColumn(name = "parse_result_id"))
-    @Lob
     @Column(name = "section_value", columnDefinition = "TEXT")
     @OrderColumn(name = "section_order")
     private List<String> sections = new ArrayList<>();

@@ -93,6 +93,7 @@ func (c *Client) ConfigureEmbedding(store EmbeddingConnectionStore, models *mode
 type Snippet struct {
 	ChunkID       int64   `json:"chunkId,omitempty"`
 	MaterialID    int64   `json:"materialId,omitempty"`
+	ChunkNo       int     `json:"chunkNo,omitempty"`
 	Title         string  `json:"title"`
 	Source        string  `json:"source"`
 	Content       string  `json:"content"`
@@ -154,6 +155,7 @@ type MaterialIdentity struct {
 type javaKnowledgeHit struct {
 	ChunkID    int64    `json:"chunkId"`
 	MaterialID int64    `json:"materialId"`
+	ChunkNo    int      `json:"chunkNo"`
 	Source     string   `json:"sourceFilename"`
 	Title      string   `json:"title"`
 	Content    string   `json:"content"`
@@ -229,7 +231,7 @@ func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, 
 		if _, ok := allowedMaterialIDs[hit.MaterialID]; !ok {
 			continue
 		}
-		snippets = append(snippets, Snippet{ChunkID: hit.ChunkID, MaterialID: hit.MaterialID, Title: hit.Title, Source: hit.Source, Content: hit.Content, Score: hit.Score, RetrievalMode: result.RetrievalMode})
+		snippets = append(snippets, Snippet{ChunkID: hit.ChunkID, MaterialID: hit.MaterialID, ChunkNo: hit.ChunkNo, Title: hit.Title, Source: hit.Source, Content: hit.Content, Score: hit.Score, RetrievalMode: result.RetrievalMode})
 	}
 	return snippets, nil
 }
@@ -470,8 +472,11 @@ func mimeContentDisposition(filename string) string {
 }
 
 func (c *Client) ParseMaterial(ctx context.Context, ragProjectID, materialID int64, identity MaterialIdentity) error {
-	var result any
-	return c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/materials/"+strconv.FormatInt(materialID, 10)+"/parse", identity, &result)
+	var result javaParseResult
+	if err := c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/materials/"+strconv.FormatInt(materialID, 10)+"/parse", identity, &result); err != nil {
+		return err
+	}
+	return validateJavaParseResult(result)
 }
 
 // ParseMaterialResult invokes the independent LessonForge parser contract and
@@ -482,18 +487,8 @@ func (c *Client) ParseMaterialResult(ctx context.Context, ragProjectID, material
 	if err := c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/materials/"+strconv.FormatInt(materialID, 10)+"/parse", identity, &result); err != nil {
 		return model.ParseResult{}, err
 	}
-	status := strings.ToUpper(strings.TrimSpace(result.ParseStatus))
-	if status != "SUCCEEDED" {
-		if status == "" {
-			status = "UNKNOWN"
-		}
-		return model.ParseResult{}, fmt.Errorf("RAG_PARSE_STATUS_%s", status)
-	}
-	if strings.TrimSpace(result.Summary) == "" || result.Keywords == nil || result.ApplicableTeachingStages == nil {
-		return model.ParseResult{}, errors.New("RAG_PARSE_RESULT_INVALID")
-	}
-	if looksLikeParserPlaceholder(result.Summary) || looksLikeParserPlaceholder(result.ExtractedTextPreview) {
-		return model.ParseResult{}, errors.New("RAG_PARSE_RESULT_PLACEHOLDER")
+	if err := validateJavaParseResult(result); err != nil {
+		return model.ParseResult{}, err
 	}
 	return model.ParseResult{
 		Summary:        result.Summary,
@@ -503,6 +498,23 @@ func (c *Client) ParseMaterialResult(ctx context.Context, ragProjectID, material
 		PageCount:      result.PageCount,
 		Sections:       result.Sections,
 	}, nil
+}
+
+func validateJavaParseResult(result javaParseResult) error {
+	status := strings.ToUpper(strings.TrimSpace(result.ParseStatus))
+	if status != "SUCCEEDED" {
+		if status == "" {
+			status = "UNKNOWN"
+		}
+		return fmt.Errorf("RAG_PARSE_STATUS_%s", status)
+	}
+	if strings.TrimSpace(result.Summary) == "" || result.Keywords == nil || result.ApplicableTeachingStages == nil {
+		return errors.New("RAG_PARSE_RESULT_INVALID")
+	}
+	if looksLikeParserPlaceholder(result.Summary) || looksLikeParserPlaceholder(result.ExtractedTextPreview) {
+		return errors.New("RAG_PARSE_RESULT_PLACEHOLDER")
+	}
+	return nil
 }
 
 func looksLikeParserPlaceholder(value string) bool {

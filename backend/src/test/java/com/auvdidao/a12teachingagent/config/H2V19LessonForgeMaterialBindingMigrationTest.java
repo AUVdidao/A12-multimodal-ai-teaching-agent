@@ -13,15 +13,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class H2V19LessonForgeMaterialBindingMigrationTest {
 
     @Test
-    void freshH2MigratesThroughV19AndEnforcesSourceIdentity() {
+    void freshH2MigratesThroughV22AndEnforcesSourceIdentity() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 "jdbc:h2:mem:h2_v19_lessonforge_" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
                 "sa", "");
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         Flyway flyway = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load();
 
-        assertEquals(19, flyway.migrate().migrationsExecuted);
-        assertEquals("19", flyway.info().current().getVersion().getVersion());
+        assertEquals(22, flyway.migrate().migrationsExecuted);
+        assertEquals("22", flyway.info().current().getVersion().getVersion());
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'LESSONFORGE_MATERIAL_BINDINGS'",
                 Integer.class));
@@ -32,6 +32,9 @@ class H2V19LessonForgeMaterialBindingMigrationTest {
         jdbc.update("INSERT INTO lessonforge_material_bindings (mission_id, mission_file_id, owner_user_id, actor_user_id, rag_project_id, rag_material_id, source_sha256, source_size, original_filename, binding_status) VALUES (7, 9, 101, 101, 1, 1, ?, 4, 'source.pdf', 'BOUND')", sha);
 
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM lessonforge_material_bindings", Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'LESSONFORGE_TEXT_LOB_MIGRATION_AUDIT'",
+                Integer.class));
         assertThrows(RuntimeException.class, () -> jdbc.update(
                 "INSERT INTO lessonforge_material_bindings (mission_id, mission_file_id, owner_user_id, actor_user_id, rag_project_id, rag_material_id, source_sha256, source_size, original_filename, binding_status) VALUES (7, 9, 101, 101, 1, 1, ?, 4, 'source.pdf', 'BOUND')",
                 sha));

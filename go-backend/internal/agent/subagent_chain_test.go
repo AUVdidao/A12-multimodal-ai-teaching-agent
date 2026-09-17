@@ -36,6 +36,40 @@ func TestDecodeSubagentJSONAcceptsProviderFence(t *testing.T) {
 	}
 }
 
+func TestDecodeSubagentJSONExtractsOneObjectFromProviderProse(t *testing.T) {
+	var output subagentEvidenceOutput
+	content := "Here is the result:\n```json\n{\"type\":\"SKIPPED\",\"reason\":\"NO_RELEVANT_EVIDENCE\"}\n```\n"
+	if err := decodeSubagentJSON(content, &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.Type != "SKIPPED" || output.Reason != "NO_RELEVANT_EVIDENCE" {
+		t.Fatalf("decoded output = %#v", output)
+	}
+}
+
+func TestValidateSubagentEvidenceOutputKeepsStrictContract(t *testing.T) {
+	valid := `{"type":"EVIDENCE","summary":"RAG section evidence","sources":[{"fileId":21,"locator":"chunk:3","claim":"The section defines hybrid retrieval."}]}`
+	if err := validateSubagentEvidenceOutput(valid); err != nil {
+		t.Fatalf("valid evidence rejected: %v", err)
+	}
+	if err := validateSubagentEvidenceOutput(`{"type":"EVIDENCE","summary":"free text"}`); err == nil {
+		t.Fatal("evidence without sources was accepted")
+	}
+	if err := validateSubagentEvidenceOutput(`{"type":"EVIDENCE","summary":"evidence","sources":[{"fileId":21,"locator":"chunk:3","claim":"claim"}],"extra":"ignored"}`); err == nil {
+		t.Fatal("unknown evidence field was accepted")
+	}
+}
+
+func TestValidateMaterialResearchOutputRequiresSearchAndRead(t *testing.T) {
+	valid := `{"type":"EVIDENCE","summary":"RAG section evidence","sources":[{"fileId":21,"locator":"chunk:3","claim":"The section defines hybrid retrieval."}]}`
+	if err := validateMaterialResearchOutput(valid, map[string]bool{"search_materials": true}); err == nil {
+		t.Fatal("material evidence was accepted without read_material")
+	}
+	if err := validateMaterialResearchOutput(valid, map[string]bool{"search_materials": true, "read_material": true}); err != nil {
+		t.Fatalf("material evidence rejected after both tools: %v", err)
+	}
+}
+
 func TestSubagentMaterialAndTemplateRouting(t *testing.T) {
 	material := model.MissionFile{Role: "MATERIAL", FileObject: model.FileObject{OriginalName: "lesson.docx"}}
 	template := model.MissionFile{Role: "TEMPLATE", FileObject: model.FileObject{OriginalName: "theme.pptx"}}

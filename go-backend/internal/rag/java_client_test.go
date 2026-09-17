@@ -122,7 +122,14 @@ func TestJavaSearchCreatesExplicitMappingsAndUsesReturnedIDs(t *testing.T) {
 			}
 			writeEnvelope(map[string]any{"bindingId": 71, "missionId": 7, "missionFileId": 9, "projectId": 44, "materialId": 55, "sourceSha256": "sha-material", "sourceSize": len(content), "originalFilename": "textbook.pdf", "bindingStatus": "BOUND"})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/internal/lessonforge/projects/44/materials/55/parse":
-			writeEnvelope(map[string]any{})
+			writeEnvelope(javaParseResult{
+				ParseStatus:              "SUCCEEDED",
+				Summary:                  "Parsed material",
+				Keywords:                 []string{"material"},
+				ApplicableTeachingStages: []string{"EXPLAIN"},
+				ExtractedTextPreview:     "A bounded material preview.",
+				Sections:                 []string{"A bounded material section."},
+			})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/internal/lessonforge/projects/44/materials/55/index":
 			writeEnvelope(map[string]any{})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/internal/lessonforge/projects/44/knowledge/search":

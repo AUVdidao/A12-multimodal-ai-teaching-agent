@@ -567,3 +567,22 @@
 - 真实 Mission 77 / MissionFile 20 / Java project 14 / material 15 重跑：PDF 实际解析为 601 chunks；Go 使用 EMBEDDING connection 29（`BAAI/bge-m3`，1024 维）完成 601 次批量调用审计，Java 表中 601 行向量均为 READY，向量首值为真实浮点数且非伪随机占位。
 - 真实 Java HTTP 检索返回 `retrievalMode=VECTOR`、`prototype=false`、`PostgreSQL double precision[] 向量余弦相似度`；同一接口无 query embedding 时返回 `retrievalMode=KEYWORD_FALLBACK`，并携带 `EMBEDDING_HTTP_429` 示例降级原因。未删除 Mission 77、文件或数据卷。
 - 当前边界：本轮完整 Java 全量 Maven 测试尚未重新跑完；已通过 Spring 上下文测试、Docker 编译/打包、Go 全量测试和真实 PostgreSQL/Java/Go 链路。真实主动 Agent 是否在每次对话中触发 `search_materials`，仍需用教师实际对话或独立 Provider 回归继续验证。
+
+### 阶段 72：产品方向真实验收失败——PDF正文占位与材料研究合同（2026-09-17）
+
+- 按产品入口创建隔离 Mission 78，使用真实 PDF、真实 Go 用户 58、PLANNING connection 28 和 EMBEDDING connection 29；没有输入预写大纲，没有批准草案，没有生成 PPT。
+- Go MissionFile 21 最终 READY；Java binding 为 project=15/material=16；Embedding 真实 HTTP 200 共 19 次，Java 向量表有 601 行 1024 维 READY 向量。
+- 两次真实 AgentRun（`5d48e324-5dd8-42ab-89e4-e0eddf903ad9`、`e5484267-df79-43f6-9222-88cb804c431a`）均 FAILED，错误为 `AGENT_FAILED`，运行日志为 `SUBAGENT_MATERIAL_RESEARCHER_INVALID`。DeepSeek HTTP 200，但材料研究子智能体 JSON 合同不合格。
+- 两次运行都没有 `AGENT_TOOL_CALLED/search_materials`、`RAG_SEARCH_COMPLETED`、`RAG_EMBEDDING_QUERY`、`read_material` 或 Planning Draft，不能声称本次真正读取了第 3.2 节。
+- 产品数据质量核验发现 Java `parse_results.material_id=16` 的 extracted_text 为 5 位数字 `69496`，唯一 section 为 `68892`；601 个 knowledge chunks 正文全部为 5 位数字（`69498`—`70098`）。原始 PDF 第 89—97 页经 pypdf 可读出真实第 3.2 节正文，故问题在 Java 解析/分块结果，不在源 PDF。
+- 验收结论：FAIL。当前 `READY + 向量 READY` 不代表教材正文可用；必须先修复 Java 正文持久化及数字占位门禁，再修复材料研究子智能体 JSON 合同并重跑真实 `search_materials → read_material → Planning Draft` 闭环。
+- 报告：`D:\服务外包正式文档\开发结果汇报存档\LessonForge_产品方向真实验收_第3章3.2_RAG基础_2026-09-17.md`。
+
+### 阶段 73：Java TEXT/OID 历史恢复与材料研究 Agent 合同修复（2026-09-17）
+
+- 修复 Java `ParseResult`、`KnowledgeChunk` 的 PostgreSQL `@Lob` 到 `TEXT` 映射；新增 V21/V22 PostgreSQL 恢复迁移，按真实 `pg_largeobject` OID 校验后用 `lo_get` 恢复 `parse_results`、sections、knowledge chunks，写审计表，不删除 Large Object。生产库 V22 已应用；material=16 的 601 chunks 长度为 610–1000、数字占位数为 0，V22 恢复审计 1275 行且均 readable。
+- Go Parser 入口统一拒绝数字 OID 占位；材料研究子智能体改为严格 EVIDENCE/SKIPPED 合同，支持一次受控合同重试；新增真实材料预检，实际执行授权 `search_materials`、`read_material`，并把 Java 搜索结果的 `chunkNo` 返回给 Go 以按命中 chunk 读取。搜索失败时保留审计并使用同一授权文件的 bounded `chunk:1` 回退，不伪造材料证据。
+- 真实 Mission 79/80 验证了此前合同和工具调用边界：79 曾完成 search 但未完成 read，80 拒绝无工具调用的模型证据；均未被误报为成功。最终 Mission 85 / AgentRun `a1850000-0000-4000-8000-000000000085` 在真实 DeepSeek `deepseek-chat` + SiliconFlow `BAAI/bge-m3` 环境完成：`AGENT_TOOL_CALLED/search_materials`、`RAG_SEARCH_COMPLETED`、`AGENT_TOOL_CALLED/read_material`、材料研究、需求澄清、方案编排、`PLAN_DRAFT_CREATED`，状态 `COMPLETED`；Draft 9 页、3150 字符，来源边界明确标注，未把第 2 章命中冒充第 3.2 节正文。
+- Mission 85 执行审计：材料研究/需求澄清/方案编排均为 DeepSeek HTTP 200、`USER_BYOK`；RAG embedding query HTTP 200；Go 全量 Docker build/test 通过；Java backend Docker 编译通过；H2 22 迁移与 PostgreSQL migration contract 定向测试 5/5 通过。Java 全量 Maven 测试本轮未运行。
+- 本轮没有批准 Draft、没有启动 Generation/PPT Engine，也没有删除既有 Mission、文件、向量或 Large Object。当前仍有产品语义边界：关键词降级命中先返回第 3.2 目录证据，正文细节未命中时 Draft 会显式标记待补充，而不是无依据扩写。
+- 新报告：`D:\服务外包正式文档\开发结果汇报存档\LessonForge_材料研究Agent合同与真实Planning闭环修复_2026-09-17.md`。

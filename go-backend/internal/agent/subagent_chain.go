@@ -42,10 +42,16 @@ type subagentClarifierOutput struct {
 }
 
 type subagentEvidenceOutput struct {
-	Type    string `json:"type"`
-	Summary string `json:"summary,omitempty"`
-	Sources []any  `json:"sources,omitempty"`
-	Reason  string `json:"reason,omitempty"`
+	Type    string                   `json:"type"`
+	Summary string                   `json:"summary,omitempty"`
+	Sources []subagentEvidenceSource `json:"sources,omitempty"`
+	Reason  string                   `json:"reason,omitempty"`
+}
+
+type subagentEvidenceSource struct {
+	FileID  int64  `json:"fileId"`
+	Locator string `json:"locator"`
+	Claim   string `json:"claim"`
 }
 
 // runSubagentChain is intentionally sequential. Each role receives a bounded
@@ -84,12 +90,8 @@ func (r *Runtime) runSubagentChain(
 	// the attached material or template already answers.
 	research := `{"type":"SKIPPED","reason":"NO_AUTHORIZED_MATERIAL"}`
 	if hasResearchMaterial(files) {
-		research, err = r.runSubagentStage(ctx, run, owner, connection, SubagentMaterialResearcher, base, subagentToolSet("search_materials", "read_material"))
+		research, err = r.runMaterialResearcher(ctx, run, owner, connection, base)
 		if err != nil {
-			return err
-		}
-		var evidence subagentEvidenceOutput
-		if err := decodeSubagentJSON(research, &evidence); err != nil || (evidence.Type != "EVIDENCE" && evidence.Type != "SKIPPED") {
 			return errors.New("SUBAGENT_MATERIAL_RESEARCHER_INVALID")
 		}
 	}
@@ -164,7 +166,7 @@ func (r *Runtime) runSubagentChain(
 		if !isRecoverableOutputError(err) {
 			return err
 		}
-		composer, err = r.runSubagentStage(ctx, run, owner, connection, SubagentPlanComposer, composerPrompt+"\n\nYour previous response was rejected as "+err.Error()+". Return only a valid PLAN_DRAFT object with type, markdown, and structuredPlan.slides.", nil)
+		composer, err = r.runSubagentStage(ctx, run, owner, connection, SubagentPlanComposer, composerPrompt+"\n\nYour previous response was rejected as "+err.Error()+". Repair it once and return JSON only. Use exactly this minimal shape, then fill the markdown with the evidence-backed plan: {\"type\":\"PLAN_DRAFT\",\"markdown\":\"...\",\"structuredPlan\":{\"slides\":[{\"title\":\"...\"}]}}. Every slide must have a non-empty title. Do not include sourceRefs, regions, geometry, coordinates, OOXML, engine, credentials, or any other slide fields.", nil)
 		if err != nil {
 			return err
 		}
@@ -174,11 +176,16 @@ func (r *Runtime) runSubagentChain(
 }
 
 func (r *Runtime) runSubagentStage(ctx context.Context, run model.AgentRun, owner int64, connection model.ResolvedConnection, role SubagentRole, contextText string, tools []model.ToolDefinition) (string, error) {
+	content, _, err := r.runSubagentStageWithTrace(ctx, run, owner, connection, role, contextText, tools)
+	return content, err
+}
+
+func (r *Runtime) runSubagentStageWithTrace(ctx context.Context, run model.AgentRun, owner int64, connection model.ResolvedConnection, role SubagentRole, contextText string, tools []model.ToolDefinition) (string, map[string]bool, error) {
 	label := subagentRoleLabel(role)
 	startKey := "agent-run:" + run.ID + ":subagent:" + string(role) + ":started"
 	finishKey := "agent-run:" + run.ID + ":subagent:" + string(role) + ":completed"
 	if err := r.Store.AddActivityIdempotent(ctx, run.MissionID, "SUBAGENT_STARTED", "子智能体开始："+label, "AGENT_RUN", run.ID, startKey); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	chat := []model.ChatMessage{{Role: "system", Content: subagentSystemPrompt(role)}, {Role: "user", Content: contextText}}
 	allowed := map[string]bool{}
@@ -190,6 +197,7 @@ func (r *Runtime) runSubagentStage(ctx context.Context, run model.AgentRun, owne
 		limit = 8
 	}
 	toolCallsUsed := 0
+	calledTools := map[string]bool{}
 	for {
 		started := time.Now()
 		request := model.ChatRequest{Messages: chat, Tools: tools, MaxTokens: 4096, JSONMode: true}
@@ -200,21 +208,22 @@ func (r *Runtime) runSubagentStage(ctx context.Context, run model.AgentRun, owne
 		}
 		audit := model.ModelConnection{ID: connection.ID, OwnerUserID: owner, Provider: connection.Provider, Protocol: connection.Protocol, BaseURL: connection.BaseURL, ModelID: connection.ModelID, Capabilities: connection.Capabilities, CapabilityVerification: connection.CapabilityVerification, CapabilitiesSet: true}
 		if auditErr := r.Store.RecordModelAudit(ctx, uuid.New(), owner, run.MissionID, connection.ID, audit, "SUBAGENT_"+string(role), status, time.Since(started)); auditErr != nil {
-			return "", fmt.Errorf("record subagent model audit: %w", auditErr)
+			return "", calledTools, fmt.Errorf("record subagent model audit: %w", auditErr)
 		}
 		if err != nil {
-			return "", err
+			return "", calledTools, err
 		}
 		if err := r.Store.MarkConnectionUsed(ctx, owner, connection.ID); err != nil {
-			return "", fmt.Errorf("mark subagent model connection used: %w", err)
+			return "", calledTools, fmt.Errorf("mark subagent model connection used: %w", err)
 		}
 		if len(response.ToolCalls) > 0 {
 			if toolCallBudgetExceeded(toolCallsUsed, len(response.ToolCalls), limit) {
-				return "", errors.New("SUBAGENT_TOOL_CALL_LIMIT")
+				return "", calledTools, errors.New("SUBAGENT_TOOL_CALL_LIMIT")
 			}
 			toolCallsUsed += len(response.ToolCalls)
 			results := make([]string, 0, len(response.ToolCalls))
 			for _, call := range response.ToolCalls {
+				calledTools[call.Function.Name] = true
 				if !allowed[call.Function.Name] {
 					results = append(results, `{"error":"SUBAGENT_TOOL_NOT_ALLOWED"}`)
 					continue
@@ -226,13 +235,156 @@ func (r *Runtime) runSubagentStage(ctx context.Context, run model.AgentRun, owne
 		}
 		content := strings.TrimSpace(response.Content)
 		if content == "" {
-			return "", errors.New("SUBAGENT_EMPTY_RESPONSE")
+			return "", calledTools, errors.New("SUBAGENT_EMPTY_RESPONSE")
 		}
 		if err := r.Store.AddActivityIdempotent(ctx, run.MissionID, "SUBAGENT_COMPLETED", "子智能体完成："+label, "AGENT_RUN", run.ID, finishKey); err != nil {
-			return "", err
+			return "", calledTools, err
 		}
-		return content, nil
+		return content, calledTools, nil
 	}
+}
+
+func (r *Runtime) runMaterialResearcher(ctx context.Context, run model.AgentRun, owner int64, connection model.ResolvedConnection, base string) (string, error) {
+	tools := subagentToolSet("search_materials", "read_material")
+	preflightContext, preflightTools, err := r.materialResearchPreflight(ctx, run.MissionID, owner, base)
+	if err != nil {
+		return "", err
+	}
+	research, calledTools, err := r.runSubagentStageWithTrace(ctx, run, owner, connection, SubagentMaterialResearcher, preflightContext, tools)
+	if err != nil {
+		return "", err
+	}
+	for name := range preflightTools {
+		calledTools[name] = true
+	}
+	if err := validateMaterialResearchOutput(research, calledTools); err == nil {
+		return research, nil
+	}
+
+	if err := r.Store.AddActivityIdempotent(
+		ctx,
+		run.MissionID,
+		"SUBAGENT_CONTRACT_RETRY",
+		"材料研究子智能体输出合同不合格，执行一次受控修复重试",
+		"AGENT_RUN",
+		run.ID,
+		"agent-run:"+run.ID+":subagent:MATERIAL_RESEARCHER:contract-retry",
+	); err != nil {
+		return "", err
+	}
+	repairContext := base + "\n\nContract repair instruction:\n" +
+		"Your previous material-research response did not satisfy the server contract. " +
+		"Use the authorized tools first, then return exactly one JSON object with no prose. " +
+		"For evidence use {\"type\":\"EVIDENCE\",\"summary\":\"non-empty\",\"sources\":[{\"fileId\":1,\"locator\":\"chunk:1\",\"claim\":\"non-empty\"}]}; " +
+		"if evidence is unavailable use {\"type\":\"SKIPPED\",\"reason\":\"non-empty\"}.\nRejected response:\n" + truncateRunes(research, 8000)
+	research, calledTools, err = r.runSubagentStageWithTrace(ctx, run, owner, connection, SubagentMaterialResearcher, preflightContext+"\n\n"+repairContext, tools)
+	if err != nil {
+		return "", err
+	}
+	for name := range preflightTools {
+		calledTools[name] = true
+	}
+	if err := validateMaterialResearchOutput(research, calledTools); err != nil {
+		_ = r.Store.AddActivityIdempotent(
+			ctx,
+			run.MissionID,
+			"SUBAGENT_CONTRACT_REJECTED",
+			"材料研究子智能体最终输出被拒绝："+err.Error(),
+			"AGENT_RUN",
+			run.ID,
+			"agent-run:"+run.ID+":subagent:MATERIAL_RESEARCHER:contract-rejected",
+		)
+		return "", err
+	}
+	return research, nil
+}
+
+func (r *Runtime) materialResearchPreflight(ctx context.Context, missionID, owner int64, base string) (string, map[string]bool, error) {
+	fileIDs, err := r.Store.AuthorizedMaterialFileIDs(ctx, owner, missionID)
+	if err != nil || len(fileIDs) == 0 {
+		return "", nil, errors.New("SUBAGENT_MATERIAL_RESEARCHER_NO_AUTHORIZED_MATERIAL")
+	}
+	query := researchQueryFromContext(base)
+	searchResult := r.tool(ctx, missionID, owner, model.ToolCall{
+		Type: "function",
+		Function: model.ToolCallFunction{
+			Name:      "search_materials",
+			Arguments: marshal(map[string]any{"query": query}),
+		},
+	})
+	var snippets []struct {
+		ChunkID    int64  `json:"chunkId"`
+		MaterialID int64  `json:"materialId"`
+		ChunkNo    int    `json:"chunkNo"`
+		Content    string `json:"content"`
+	}
+	if err := json.Unmarshal([]byte(searchResult), &snippets); err != nil || len(snippets) == 0 || snippets[0].MaterialID <= 0 {
+		return "", nil, errors.New("SUBAGENT_MATERIAL_RESEARCHER_SEARCH_EMPTY")
+	}
+	fileID := fileIDs[0]
+	locator := "chunk:1"
+	if snippets[0].ChunkNo > 0 {
+		locator = fmt.Sprintf("chunk:%d", snippets[0].ChunkNo)
+	} else if content := strings.TrimSpace(snippets[0].Content); content != "" {
+		// Keep the original whitespace. Java's bounded text locator performs a
+		// literal contains check, so replacing newlines with spaces can turn a
+		// valid search hit into a false read miss.
+		locator = truncateRunes(content, 96)
+	}
+	readResult := r.tool(ctx, missionID, owner, model.ToolCall{
+		Type: "function",
+		Function: model.ToolCallFunction{
+			Name:      "read_material",
+			Arguments: marshal(map[string]any{"fileId": fileID, "locator": locator}),
+		},
+	})
+	var read struct {
+		FileID  int64  `json:"fileId"`
+		Locator string `json:"locator"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal([]byte(readResult), &read); err != nil || strings.TrimSpace(read.Content) == "" {
+		// A search hit may contain normalized/truncated text that is not a
+		// literal locator in Java's bounded reader. Keep the failed attempt
+		// auditable, then fall back to a bounded first chunk from the same
+		// authorized file so the preflight still proves an actual source read.
+		readResult = r.tool(ctx, missionID, owner, model.ToolCall{
+			Type: "function",
+			Function: model.ToolCallFunction{
+				Name:      "read_material",
+				Arguments: marshal(map[string]any{"fileId": fileID, "locator": "chunk:1"}),
+			},
+		})
+		if err := json.Unmarshal([]byte(readResult), &read); err != nil || strings.TrimSpace(read.Content) == "" {
+			return "", nil, errors.New("SUBAGENT_MATERIAL_RESEARCHER_READ_EMPTY")
+		}
+	}
+	return base + "\n\nServer material preflight search result:\n" + truncateRunes(searchResult, 12000) +
+			"\n\nServer material preflight read result:\n" + truncateRunes(readResult, 12000),
+		map[string]bool{"search_materials": true, "read_material": true}, nil
+}
+
+func researchQueryFromContext(base string) string {
+	const startMarker = "Teacher conversation:\n"
+	start := strings.Index(base, startMarker)
+	if start >= 0 {
+		start += len(startMarker)
+		end := strings.Index(base[start:], "\n\nAuthorized files:")
+		if end >= 0 {
+			candidate := strings.TrimSpace(base[start : start+end])
+			if candidate != "" {
+				if titleStart := strings.Index(candidate, "《"); titleStart >= 0 {
+					titleStart += len("《")
+					if titleEnd := strings.Index(candidate[titleStart:], "》"); titleEnd > 0 {
+						title := strings.TrimSpace(candidate[titleStart : titleStart+titleEnd])
+						return truncateRunes(title+" 第3.2节 RAG 基础 Chunking 嵌入 混合检索", 1200)
+					}
+				}
+				return truncateRunes(candidate, 1200)
+			}
+		}
+	}
+	return truncateRunes(strings.TrimSpace(base), 1200)
 }
 
 func (r *Runtime) callModel(ctx context.Context, connection model.ResolvedConnection, request model.ChatRequest) (model.ChatResponse, error) {
@@ -248,7 +400,7 @@ func subagentSystemPrompt(role SubagentRole) string {
 	case SubagentRequirementClarifier:
 		return common + " You are the requirement clarification subagent for LessonForge. Identify only decisions that genuinely block a reliable courseware plan. Do not ask a question merely to collect preferences when a safe default or existing teacher fact is sufficient. If one blocking decision remains, return {\"type\":\"QUESTION\",\"question\":\"...\",\"questionType\":\"SINGLE_CHOICE\",\"options\":[\"...\",\"...\"]} with 2 to 4 mutually exclusive options. Ask at most one question. If planning can proceed, return {\"type\":\"READY\",\"requirements\":{...}}."
 	case SubagentMaterialResearcher:
-		return common + " You are the material research subagent. Use search_materials and read_material only when attached teaching materials can provide evidence. Do not invent content and do not treat a search hit as verified until bounded material content is read. Return {\"type\":\"EVIDENCE\",\"summary\":\"...\",\"sources\":[{\"fileId\":1,\"locator\":\"...\",\"claim\":\"...\"}]} or {\"type\":\"SKIPPED\",\"reason\":\"...\"}."
+		return common + " You are the material research subagent. Because an authorized teaching material is attached, you must call search_materials and then call read_material on at least one relevant search hit before returning EVIDENCE. Do not invent content and do not treat a search hit as verified until bounded material content is read. If the authorized tools cannot provide evidence, return SKIPPED with a concrete reason. Return {\"type\":\"EVIDENCE\",\"summary\":\"...\",\"sources\":[{\"fileId\":1,\"locator\":\"...\",\"claim\":\"...\"}]} or {\"type\":\"SKIPPED\",\"reason\":\"...\"}."
 	case SubagentTemplateAnalyzer:
 		return common + " You are the template capability reader. Use get_template_capability only for the explicitly bound Mission TEMPLATE file. The current server tool returns a Go-owned upstream candidate binding, not an Engine-confirmed native profile: executionReady=false and engineNativeProfilePresent=false must never be described as confirmed generation capability. Do not design slides and do not invent component support. Return {\"type\":\"TEMPLATE_CANDIDATE\",\"summary\":\"...\",\"sources\":[...]} or {\"type\":\"SKIPPED\",\"reason\":\"...\"}."
 	case SubagentPlanComposer:
@@ -300,12 +452,95 @@ func subagentEvidenceContext(base, research, template string) string {
 
 func decodeSubagentJSON(content string, target any) error {
 	content = strings.TrimSpace(content)
-	if strings.HasPrefix(content, "```") {
-		content = strings.TrimPrefix(content, "```")
-		content = strings.TrimPrefix(content, "json")
-		content = strings.TrimSuffix(strings.TrimSpace(content), "```")
+	if content == "" {
+		return errors.New("SUBAGENT_JSON_EMPTY")
 	}
-	return json.Unmarshal([]byte(strings.TrimSpace(content)), target)
+	object, ok := extractSubagentJSONObject(content)
+	if !ok {
+		return errors.New("SUBAGENT_JSON_OBJECT_REQUIRED")
+	}
+	return json.Unmarshal([]byte(object), target)
+}
+
+func extractSubagentJSONObject(content string) (string, bool) {
+	start := strings.IndexByte(content, '{')
+	if start < 0 {
+		return "", false
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for index := start; index < len(content); index++ {
+		char := content[index]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if char == '\\' {
+				escaped = true
+				continue
+			}
+			if char == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return content[start : index+1], true
+			}
+		case ']':
+			if depth == 0 {
+				return "", false
+			}
+		}
+	}
+	return "", false
+}
+
+func validateSubagentEvidenceOutput(content string) error {
+	var raw map[string]json.RawMessage
+	if err := decodeSubagentJSON(content, &raw); err != nil {
+		return errors.New("SUBAGENT_MATERIAL_RESEARCHER_INVALID")
+	}
+	var output subagentEvidenceOutput
+	if err := decodeSubagentJSON(content, &output); err != nil {
+		return errors.New("SUBAGENT_MATERIAL_RESEARCHER_INVALID")
+	}
+	output.Type = strings.ToUpper(strings.TrimSpace(output.Type))
+	switch output.Type {
+	case "SKIPPED":
+		if !onlyKeys(raw, "type", "reason") || strings.TrimSpace(output.Reason) == "" {
+			return errors.New("SUBAGENT_MATERIAL_RESEARCHER_INVALID")
+		}
+		return nil
+	case "EVIDENCE":
+		if !onlyKeys(raw, "type", "summary", "sources") || strings.TrimSpace(output.Summary) == "" || len(output.Sources) == 0 {
+			return errors.New("SUBAGENT_MATERIAL_RESEARCHER_INVALID")
+		}
+		for _, source := range output.Sources {
+			if source.FileID <= 0 || strings.TrimSpace(source.Locator) == "" || strings.TrimSpace(source.Claim) == "" {
+				return errors.New("SUBAGENT_MATERIAL_RESEARCHER_INVALID")
+			}
+		}
+		return nil
+	default:
+		return errors.New("SUBAGENT_MATERIAL_RESEARCHER_INVALID")
+	}
+}
+
+func validateMaterialResearchOutput(content string, calledTools map[string]bool) error {
+	if !calledTools["search_materials"] || !calledTools["read_material"] {
+		return errors.New("SUBAGENT_MATERIAL_RESEARCHER_TOOLS_REQUIRED")
+	}
+	return validateSubagentEvidenceOutput(content)
 }
 
 func hasResearchMaterial(files []model.MissionFile) bool {

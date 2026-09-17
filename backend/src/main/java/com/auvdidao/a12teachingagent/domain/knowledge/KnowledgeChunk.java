@@ -10,7 +10,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -33,7 +32,6 @@ public class KnowledgeChunk extends BaseCreatedEntity {
     private Integer chunkNo;
     private String title;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String content;
 
