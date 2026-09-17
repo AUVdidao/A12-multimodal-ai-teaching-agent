@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"lessonforge.local/backend/internal/model"
 )
@@ -94,7 +95,6 @@ func TestBuildEngineV2PackageRejectsRequiredAssetWithoutRealFile(t *testing.T) {
 
 func TestEngineSpecificationUnwrapsCompiledPlan(t *testing.T) {
 	raw := map[string]any{
-		"compiler": "lessonforge-semantic-v1",
 		"plan": map[string]any{
 			"contractVersion":        "1.0.0",
 			"projectId":              "7",
@@ -113,12 +113,76 @@ func TestEngineSpecificationUnwrapsCompiledPlan(t *testing.T) {
 			"slides":                 []any{},
 		},
 	}
-	got, err := engineSpecification(raw, "spec-1", 1, 7, map[string]any{"profileId": "profile-1", "profileVersion": 2})
+	got, err := engineSpecification(raw, "spec-1", 1, 7, 101, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC), map[string]any{"profileId": "profile-1", "profileVersion": 2})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got["projectId"] != "7" || got["specificationId"] != "spec-1" {
 		t.Fatalf("compiled plan was not unwrapped and bound: %#v", got)
+	}
+}
+
+func TestEngineSpecificationProjectsSemanticPlanAtGenerationBoundary(t *testing.T) {
+	raw := map[string]any{
+		"compiler": "lessonforge-semantic-v1",
+		"plan": map[string]any{
+			"lessonTitle": "受控生成验收",
+			"slides": []any{map[string]any{
+				"title":     "课程目标",
+				"purpose":   "明确本页的教学目标",
+				"keyPoints": []any{"第一项", "第二项"},
+			}},
+		},
+	}
+	profile := map[string]any{
+		"profileId":      "profile-1",
+		"profileVersion": 2,
+		"templatePageReferences": []any{
+			map[string]any{"semanticRole": "UNMAPPED"},
+			map[string]any{"semanticRole": "CONTENT"},
+		},
+	}
+	got, err := engineSpecification(raw, "spec-1", 4, 7, 101, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC), profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["projectId"] != "7" || got["specificationId"] != "spec-1" || got["version"] != 4 || got["status"] != "LOCKED" {
+		t.Fatalf("server-owned bindings = %#v", got)
+	}
+	if got["templateProfileId"] != "profile-1" || got["templateProfileVersion"] != 2 {
+		t.Fatalf("profile binding = %#v", got)
+	}
+	slides, ok := got["slides"].([]any)
+	if !ok || len(slides) != 1 {
+		t.Fatalf("projected slides = %#v", got["slides"])
+	}
+	slide := slides[0].(map[string]any)
+	if slide["teachingGoal"] != "明确本页的教学目标" {
+		t.Fatalf("teaching goal = %#v", slide["teachingGoal"])
+	}
+	layout := slide["semanticLayout"].(map[string]any)
+	if layout["primaryRole"] != "CONTENT" {
+		t.Fatalf("semantic role = %#v", layout["primaryRole"])
+	}
+	blocks := slide["contentBlocks"].([]any)
+	if len(blocks) != 3 || blocks[2].(map[string]any)["type"] != "BULLETS" {
+		t.Fatalf("projected content blocks = %#v", blocks)
+	}
+}
+
+func TestEngineSpecificationRejectsIncompleteSemanticSlide(t *testing.T) {
+	raw := map[string]any{
+		"compiler": "lessonforge-semantic-v1",
+		"plan": map[string]any{
+			"slides": []any{map[string]any{"title": "只有标题"}},
+		},
+	}
+	_, err := engineSpecification(raw, "spec-1", 1, 7, 101, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC), map[string]any{
+		"profileId": "profile-1", "profileVersion": 1,
+		"templatePageReferences": []any{map[string]any{"semanticRole": "CONTENT"}},
+	})
+	if err == nil || err.Error() != "PPT_ENGINE_SPECIFICATION_INCOMPLETE" {
+		t.Fatalf("error = %v", err)
 	}
 }
 
@@ -140,5 +204,24 @@ func TestEngineProfileStripsBridgeEnvelopeFields(t *testing.T) {
 		if _, exists := got[key]; exists {
 			t.Fatalf("bridge-only field %q leaked into Engine profile: %#v", key, got)
 		}
+	}
+}
+
+func TestEngineProfileChecksumProjectsJavaCanonicalIdentityWithoutReserializing(t *testing.T) {
+	const nativeJSON = `{"ownerUserId":"58","projectId":"13"}`
+	binding := map[string]any{
+		"missionId":                   "71",
+		"engineNativeProfile":         map[string]any{"ownerUserId": "58", "projectId": "13"},
+		"engineNativeProfileJson":     nativeJSON,
+		"engineNativeProfileChecksum": "6dff0ade080e02215850b2da0b0ab6b24dae82d187fa1aa84b098e25405fd286",
+	}
+	profile := map[string]any{"ownerUserId": "58", "projectId": "71"}
+	got, err := engineProfileChecksum(binding, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "f9851e235489d3aa7c585d6088d3e04526ed84dbfe2e2b42a3bb3e9163e0230c"
+	if got != want {
+		t.Fatalf("projected checksum = %s, want %s", got, want)
 	}
 }

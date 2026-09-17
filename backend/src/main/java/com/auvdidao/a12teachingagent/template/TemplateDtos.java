@@ -52,7 +52,8 @@ public final class TemplateDtos {
             String templateFileVersion,
             String templateProfileVersion,
             JsonNode engineNativeProfile,
-            String engineNativeProfileChecksum
+            String engineNativeProfileChecksum,
+            String engineNativeProfileJson
     ) { }
 
     public record SourceVersionResponse(

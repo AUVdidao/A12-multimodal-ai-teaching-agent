@@ -81,11 +81,44 @@ func (c *Client) ConfigureResources(store ResourceStore, files ResourceStorage) 
 	c.resources = &MissionResourceBinder{Client: c, Store: store, Storage: files}
 }
 
+func (c *Client) ConfigureEmbedding(store EmbeddingConnectionStore, models *model.Client, crypt CredentialDecryptor) {
+	if c == nil || c.resources == nil {
+		return
+	}
+	c.resources.Embedding = store
+	c.resources.Models = models
+	c.resources.Crypto = crypt
+}
+
 type Snippet struct {
-	Title   string  `json:"title"`
-	Source  string  `json:"source"`
-	Content string  `json:"content"`
-	Score   float64 `json:"score"`
+	ChunkID       int64   `json:"chunkId,omitempty"`
+	MaterialID    int64   `json:"materialId,omitempty"`
+	Title         string  `json:"title"`
+	Source        string  `json:"source"`
+	Content       string  `json:"content"`
+	Score         float64 `json:"score"`
+	RetrievalMode string  `json:"retrievalMode,omitempty"`
+}
+
+type IndexedChunk struct {
+	ChunkID        int64  `json:"chunkId"`
+	MaterialID     int64  `json:"materialId"`
+	ChunkNo        int    `json:"chunkNo"`
+	SourceFilename string `json:"sourceFilename"`
+	Title          string `json:"title"`
+	Content        string `json:"content"`
+}
+
+type ChunkEmbedding struct {
+	ChunkID int64     `json:"chunkId"`
+	Vector  []float64 `json:"vector"`
+}
+
+type EmbeddingIdentity struct {
+	MaterialIdentity
+	ModelConnectionID int64  `json:"modelConnectionId"`
+	ModelID           string `json:"modelId"`
+	Dimension         int    `json:"dimension"`
 }
 
 type JavaProject struct {
@@ -129,7 +162,9 @@ type javaKnowledgeHit struct {
 }
 
 type javaSearchResponse struct {
-	Hits []javaKnowledgeHit `json:"hits"`
+	Hits          []javaKnowledgeHit `json:"hits"`
+	RetrievalMode string             `json:"retrievalMode"`
+	Algorithm     string             `json:"algorithm"`
 }
 
 type javaParseResult struct {
@@ -165,7 +200,7 @@ func (c *Client) Search(ctx context.Context, missionID int64, query string, file
 	return c.post(ctx, c.searchPath, map[string]any{"missionId": missionID, "query": query, "fileIds": fileIDs})
 }
 
-func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, query string, allowedMaterialIDs map[int64]struct{}) ([]Snippet, error) {
+func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, query string, allowedMaterialIDs map[int64]struct{}, queryVector []float64, embeddingFallbackReason string) ([]Snippet, error) {
 	if c.baseURL == "" {
 		return nil, ErrNotConfigured
 	}
@@ -174,12 +209,19 @@ func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, 
 	for materialID := range allowedMaterialIDs {
 		materialIDs = append(materialIDs, materialID)
 	}
-	if err := c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/knowledge/search", map[string]any{
+	body := map[string]any{
 		"missionId":   missionID,
 		"materialIds": materialIDs,
 		"query":       query,
 		"limit":       10,
-	}, &result); err != nil {
+	}
+	if len(queryVector) > 0 {
+		body["queryEmbedding"] = queryVector
+	}
+	if embeddingFallbackReason != "" {
+		body["embeddingFallbackReason"] = embeddingFallbackReason
+	}
+	if err := c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/knowledge/search", body, &result); err != nil {
 		return nil, err
 	}
 	snippets := make([]Snippet, 0, len(result.Hits))
@@ -187,7 +229,7 @@ func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, 
 		if _, ok := allowedMaterialIDs[hit.MaterialID]; !ok {
 			continue
 		}
-		snippets = append(snippets, Snippet{Title: hit.Title, Source: hit.Source, Content: hit.Content, Score: hit.Score})
+		snippets = append(snippets, Snippet{ChunkID: hit.ChunkID, MaterialID: hit.MaterialID, Title: hit.Title, Source: hit.Source, Content: hit.Content, Score: hit.Score, RetrievalMode: result.RetrievalMode})
 	}
 	return snippets, nil
 }
@@ -450,6 +492,9 @@ func (c *Client) ParseMaterialResult(ctx context.Context, ragProjectID, material
 	if strings.TrimSpace(result.Summary) == "" || result.Keywords == nil || result.ApplicableTeachingStages == nil {
 		return model.ParseResult{}, errors.New("RAG_PARSE_RESULT_INVALID")
 	}
+	if looksLikeParserPlaceholder(result.Summary) || looksLikeParserPlaceholder(result.ExtractedTextPreview) {
+		return model.ParseResult{}, errors.New("RAG_PARSE_RESULT_PLACEHOLDER")
+	}
 	return model.ParseResult{
 		Summary:        result.Summary,
 		Keywords:       result.Keywords,
@@ -460,9 +505,59 @@ func (c *Client) ParseMaterialResult(ctx context.Context, ragProjectID, material
 	}, nil
 }
 
+func looksLikeParserPlaceholder(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) < 5 || len(value) > 32 {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *Client) IndexMaterial(ctx context.Context, ragProjectID, materialID int64, identity MaterialIdentity) error {
 	var result any
 	return c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/materials/"+strconv.FormatInt(materialID, 10)+"/index", identity, &result)
+}
+
+func (c *Client) IndexMaterialWithChunks(ctx context.Context, ragProjectID, materialID int64, identity MaterialIdentity) ([]IndexedChunk, error) {
+	var result []IndexedChunk
+	if err := c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/materials/"+strconv.FormatInt(materialID, 10)+"/index", identity, &result); err != nil {
+		return nil, err
+	}
+	if len(result) == 0 {
+		return nil, errors.New("RAG_INDEX_EMPTY")
+	}
+	for _, chunk := range result {
+		if chunk.ChunkID <= 0 || chunk.MaterialID != materialID || strings.TrimSpace(chunk.Content) == "" {
+			return nil, errors.New("RAG_INDEX_RESPONSE_INVALID")
+		}
+	}
+	return result, nil
+}
+
+func (c *Client) PersistMaterialEmbeddings(ctx context.Context, ragProjectID, materialID int64, identity EmbeddingIdentity, embeddings []ChunkEmbedding) (int, error) {
+	if len(embeddings) == 0 || identity.ModelConnectionID <= 0 || strings.TrimSpace(identity.ModelID) == "" || identity.Dimension <= 0 {
+		return 0, errors.New("RAG_EMBEDDING_REQUEST_INVALID")
+	}
+	var result struct {
+		PersistedCount int `json:"persistedCount"`
+		Dimension      int `json:"dimension"`
+	}
+	body := struct {
+		EmbeddingIdentity
+		Embeddings []ChunkEmbedding `json:"embeddings"`
+	}{EmbeddingIdentity: identity, Embeddings: embeddings}
+	if err := c.javaJSON(ctx, http.MethodPut, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/materials/"+strconv.FormatInt(materialID, 10)+"/embeddings", body, &result); err != nil {
+		return 0, err
+	}
+	if result.PersistedCount != len(embeddings) || result.Dimension != identity.Dimension {
+		return 0, errors.New("RAG_EMBEDDING_PERSISTENCE_INVALID")
+	}
+	return result.PersistedCount, nil
 }
 
 func (c *Client) javaJSON(ctx context.Context, method, requestPath string, body any, out any) error {

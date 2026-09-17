@@ -13,6 +13,7 @@ import com.auvdidao.a12teachingagent.knowledge.dto.KnowledgeDtos.KnowledgeSearch
 import com.auvdidao.a12teachingagent.material.MaterialLabels;
 import com.auvdidao.a12teachingagent.security.ProjectAccessService;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -31,15 +32,27 @@ public class KnowledgeSearchService {
     private final ProjectRepository projectRepository;
     private final KnowledgeChunkRepository chunkRepository;
     private final ProjectAccessService projectAccessService;
+    private final KnowledgeVectorStore vectorStore;
 
     public KnowledgeSearchService(
             ProjectRepository projectRepository,
             KnowledgeChunkRepository chunkRepository,
             ProjectAccessService projectAccessService
     ) {
+        this(projectRepository, chunkRepository, projectAccessService, null);
+    }
+
+    @Autowired
+    public KnowledgeSearchService(
+            ProjectRepository projectRepository,
+            KnowledgeChunkRepository chunkRepository,
+            ProjectAccessService projectAccessService,
+            KnowledgeVectorStore vectorStore
+    ) {
         this.projectRepository = projectRepository;
         this.chunkRepository = chunkRepository;
         this.projectAccessService = projectAccessService;
+        this.vectorStore = vectorStore;
     }
 
     @Transactional(readOnly = true)
@@ -67,11 +80,47 @@ public class KnowledgeSearchService {
             Integer requestedLimit,
             java.util.Set<Long> allowedMaterialIds
     ) {
+        return searchWithinMaterialIds(projectId, query, requestedLimit, allowedMaterialIds, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public KnowledgeSearchResponse searchWithinMaterialIds(
+            Long projectId,
+            String query,
+            Integer requestedLimit,
+            java.util.Set<Long> allowedMaterialIds,
+            List<Double> queryEmbedding,
+            String embeddingFallbackReason
+    ) {
         requireProject(projectId);
         String normalizedQuery = normalizeQuery(query);
         int limit = requestedLimit == null ? 10 : requestedLimit;
         if (limit < 1 || limit > 20) {
             throw new BadRequestException("limit must be between 1 and 20");
+        }
+
+        if (queryEmbedding != null && !queryEmbedding.isEmpty() && vectorStore != null && vectorStore.available()) {
+            try {
+                List<Long> materialIds = allowedMaterialIds == null ? List.of() : allowedMaterialIds.stream().toList();
+                List<KnowledgeVectorStore.VectorHit> vectorHits = vectorStore.search(projectId, materialIds, queryEmbedding, queryEmbedding.size(), limit);
+                if (!vectorHits.isEmpty()) {
+                    var chunks = chunkRepository.findAllById(vectorHits.stream().map(KnowledgeVectorStore.VectorHit::chunkId).toList())
+                            .stream().collect(java.util.stream.Collectors.toMap(KnowledgeChunk::getId, chunk -> chunk));
+                    List<KnowledgeHitResponse> hits = vectorHits.stream()
+                            .map(hit -> chunks.get(hit.chunkId()) == null ? null : new KnowledgeHitResponse(
+                                    hit.chunkId(), hit.materialId(), chunks.get(hit.chunkId()).getSourceFilename(),
+                                    chunks.get(hit.chunkId()).getTitle(), chunks.get(hit.chunkId()).getContent(),
+                                    hit.score(), "向量余弦相似度", chunks.get(hit.chunkId()).getUsageTypes(), chunks.get(hit.chunkId()).getKeywords()))
+                            .filter(java.util.Objects::nonNull)
+                            .toList();
+                    if (!hits.isEmpty()) {
+                        return new KnowledgeSearchResponse(query.trim(), hits, false, "PostgreSQL double precision[] 向量余弦相似度", "VECTOR");
+                    }
+                }
+            } catch (RuntimeException ignored) {
+                // The keyword path is an explicit, observable degradation. The
+                // response below carries the fallback mode and reason.
+            }
         }
 
         List<String> terms = queryTerms(normalizedQuery);
@@ -103,8 +152,17 @@ public class KnowledgeSearchService {
                 query.trim(),
                 hits,
                 true,
-                "确定性关键词、标题、内容与资料用途加权"
+                "确定性关键词、标题、内容与资料用途加权（向量不可用或无命中时降级）" + fallbackReasonSuffix(embeddingFallbackReason),
+                "KEYWORD_FALLBACK"
         );
+    }
+
+    private static String fallbackReasonSuffix(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "";
+        }
+        String normalized = reason.replaceAll("[^A-Za-z0-9_.-]", "_");
+        return "；向量降级原因=" + normalized.substring(0, Math.min(80, normalized.length()));
     }
 
     @Transactional(readOnly = true)

@@ -8,7 +8,7 @@ const source = readFileSync(resolve(import.meta.dirname, '../src/api/go.ts'), 'u
 
 describe('Go API client contract', () => {
   it('uses the Go auth, Mission, upload, and connection routes', () => {
-    for (const path of ['/api/auth/login', '/api/auth/register', '/api/auth/me', '/api/auth/logout', '/api/model-connections', '/api/uploads', '/api/missions', '/api/missions/${id}/messages', '/api/missions/${id}/files', '/api/missions/${id}/events']) {
+    for (const path of ['/api/auth/login', '/api/auth/register', '/api/auth/me', '/api/auth/logout', '/api/model-connections', '/api/model-connection-bindings', '/api/uploads', '/api/missions', '/api/missions/${id}/messages', '/api/missions/${id}/files', '/api/missions/${id}/events']) {
       assert.ok(source.includes(path), `missing ${path}`);
     }
   });

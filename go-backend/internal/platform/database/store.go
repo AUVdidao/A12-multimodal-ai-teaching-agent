@@ -1,8 +1,10 @@
 package database
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,6 +60,14 @@ var (
 	ErrGenerationTemplateProfileNotReady = errors.New("GENERATION_TEMPLATE_PROFILE_NOT_READY")
 	ErrGenerationMaterialsNotReady       = errors.New("GENERATION_MATERIALS_NOT_READY")
 	ErrGenerationActiveConflict          = errors.New("GENERATION_ACTIVE_JOB_CONFLICT")
+	ErrGenerationFallbackPolicyInvalid   = errors.New("GENERATION_FALLBACK_POLICY_INVALID")
+)
+
+const (
+	GenerationModeTeacherTemplate  = "TEACHER_TEMPLATE"
+	GenerationModeSystemDefault    = "SYSTEM_DEFAULT_TEMPLATE"
+	GenerationFallbackPolicyAuto   = "AUTO"
+	GenerationFallbackPolicyStrict = "STRICT"
 )
 
 type GenerationJobRequestResult struct {
@@ -314,6 +324,82 @@ func (s *Store) ListConnections(ctx context.Context, owner int64) ([]model.Model
 	}
 	return result, rows.Err()
 }
+
+func (s *Store) ListConnectionBindings(ctx context.Context, owner int64) ([]model.ModelConnectionBinding, error) {
+	rows, err := s.DB.Query(ctx, `SELECT role,model_connection_id,updated_at FROM model_connection_bindings WHERE owner_user_id=$1 ORDER BY role`, owner)
+	if err != nil {
+		return nil, err
+	}
+	defer s.closeRows("rows close model connection bindings", rows)
+	var result []model.ModelConnectionBinding
+	for rows.Next() {
+		var binding model.ModelConnectionBinding
+		if err := rows.Scan(&binding.Role, &binding.ModelConnectionID, &binding.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, binding)
+	}
+	return result, rows.Err()
+}
+
+func (s *Store) SetConnectionBinding(ctx context.Context, owner int64, role string, connectionID int64) (model.ModelConnectionBinding, error) {
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return model.ModelConnectionBinding{}, err
+	}
+	defer func() { s.recordCleanupError("model connection binding transaction rollback", tx.Rollback(ctx)) }()
+	var enabled bool
+	var verificationStatus string
+	var rawCapabilities, rawVerification []byte
+	if err := tx.QueryRow(ctx, `SELECT enabled,verification_status,capabilities,capability_verification FROM model_connections WHERE id=$1 AND owner_user_id=$2 FOR SHARE`, connectionID, owner).Scan(&enabled, &verificationStatus, &rawCapabilities, &rawVerification); err != nil {
+		return model.ModelConnectionBinding{}, err
+	}
+	if !enabled || verificationStatus != "VERIFIED" {
+		return model.ModelConnectionBinding{}, errors.New("MODEL_CONNECTION_UNAVAILABLE")
+	}
+	capabilities, _, err := decodeConnectionCapabilities(rawCapabilities)
+	if err != nil {
+		return model.ModelConnectionBinding{}, err
+	}
+	verification, err := decodeCapabilityVerification(rawVerification)
+	if err != nil {
+		return model.ModelConnectionBinding{}, err
+	}
+	if !connectionSupportsRole(role, capabilities, verification) {
+		return model.ModelConnectionBinding{}, errors.New("MODEL_CONNECTION_ROLE_UNSUPPORTED")
+	}
+	var binding model.ModelConnectionBinding
+	err = tx.QueryRow(ctx, `INSERT INTO model_connection_bindings(owner_user_id,role,model_connection_id) VALUES($1,$2,$3) ON CONFLICT(owner_user_id,role) DO UPDATE SET model_connection_id=EXCLUDED.model_connection_id,updated_at=now() RETURNING role,model_connection_id,updated_at`, owner, role, connectionID).Scan(&binding.Role, &binding.ModelConnectionID, &binding.UpdatedAt)
+	if err != nil {
+		return model.ModelConnectionBinding{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return model.ModelConnectionBinding{}, err
+	}
+	return binding, nil
+}
+
+func (s *Store) DeleteConnectionBinding(ctx context.Context, owner int64, role string) error {
+	_, err := s.DB.Exec(ctx, `DELETE FROM model_connection_bindings WHERE owner_user_id=$1 AND role=$2`, owner, role)
+	return err
+}
+
+func connectionSupportsRole(role string, capabilities model.ModelCapabilities, verification model.CapabilityVerification) bool {
+	switch role {
+	case model.ModelRolePlanning:
+		// Existing connections created before capability probing can be overall
+		// VERIFIED while these fields remain DECLARED. Do not hide those legacy
+		// chat connections from the global planning-model binding; reject only
+		// capabilities explicitly known to be unsupported.
+		return capabilities.SupportsChat && capabilities.SupportsTools && capabilities.SupportsJSONMode && verification.SupportsChat != model.CapabilityUnsupported && verification.SupportsTools != model.CapabilityUnsupported && verification.SupportsJSONMode != model.CapabilityUnsupported
+	case model.ModelRoleTemplateVision:
+		return capabilities.SupportsVision && verification.SupportsVision == model.CapabilityVerified
+	case model.ModelRoleEmbedding:
+		return capabilities.SupportsEmbeddings && verification.SupportsEmbeddings == model.CapabilityVerified && capabilities.EmbeddingDimension > 0
+	default:
+		return false
+	}
+}
 func (s *Store) Connection(ctx context.Context, owner, id int64) (model.ModelConnection, string, error) {
 	var c model.ModelConnection
 	var encrypted string
@@ -334,11 +420,29 @@ func (s *Store) Connection(ctx context.Context, owner, id int64) (model.ModelCon
 	return c, encrypted, err
 }
 
-// ResolveVisionConnection binds one model execution to the Mission's current
-// selection while holding a shared row lock on the Mission. Java callers may
-// provide an expected connection id, but the Go control plane remains the
-// authority: a missing selection, owner mismatch, disabled connection,
-// unverified connection, or unverified vision capability all fail closed.
+// ResolveEmbeddingConnection resolves the teacher's global EMBEDDING binding
+// and returns only the encrypted credential to the caller. The caller must
+// decrypt it transiently for the provider request; it must never be persisted
+// in an audit or cross-service payload.
+func (s *Store) ResolveEmbeddingConnection(ctx context.Context, owner int64) (model.ModelConnection, string, error) {
+	var connectionID int64
+	if err := s.DB.QueryRow(ctx, `SELECT model_connection_id FROM model_connection_bindings WHERE owner_user_id=$1 AND role=$2`, owner, model.ModelRoleEmbedding).Scan(&connectionID); err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	connection, encrypted, err := s.Connection(ctx, owner, connectionID)
+	if err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	if !connection.Enabled || connection.VerificationStatus != "VERIFIED" || !connection.Capabilities.SupportsEmbeddings || connection.Capabilities.EmbeddingDimension <= 0 || connection.CapabilityVerification.SupportsEmbeddings != model.CapabilityVerified {
+		return model.ModelConnection{}, "", errors.New("MODEL_EMBEDDING_NOT_VERIFIED")
+	}
+	return connection, encrypted, nil
+}
+
+// ResolveVisionConnection prefers the teacher's TEMPLATE_VISION binding and
+// falls back to the Mission's selected planning connection for compatibility.
+// The selected identity is frozen into a one-use lease; a later binding change
+// therefore fails closed when the lease is consumed.
 func (s *Store) ResolveVisionConnection(ctx context.Context, owner, missionID int64, expected *int64) (model.ModelConnection, string, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
@@ -348,6 +452,12 @@ func (s *Store) ResolveVisionConnection(ctx context.Context, owner, missionID in
 
 	var selected *int64
 	if err := tx.QueryRow(ctx, `SELECT selected_model_connection_id FROM missions WHERE id=$1 AND owner_teacher_id=$2 FOR SHARE`, missionID, owner).Scan(&selected); err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	var bound int64
+	if err := tx.QueryRow(ctx, `SELECT model_connection_id FROM model_connection_bindings WHERE owner_user_id=$1 AND role=$2`, owner, model.ModelRoleTemplateVision).Scan(&bound); err == nil {
+		selected = &bound
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return model.ModelConnection{}, "", err
 	}
 	if selected == nil {
@@ -460,6 +570,9 @@ func (s *Store) UpdateConnection(ctx context.Context, owner, id int64, c model.M
 			out.CapabilityVerification, err = decodeCapabilityVerification(rawVerification)
 		}
 	}
+	if err == nil {
+		_, err = s.DB.Exec(ctx, `DELETE FROM model_connection_bindings WHERE owner_user_id=$1 AND model_connection_id=$2`, owner, id)
+	}
 	return out, err
 }
 func (s *Store) SetConnectionEnabled(ctx context.Context, owner, id int64, enabled bool) (model.ModelConnection, error) {
@@ -481,6 +594,9 @@ func (s *Store) SetConnectionEnabled(ctx context.Context, owner, id int64, enabl
 		return c, err
 	}
 	if !enabled {
+		if _, err = tx.Exec(ctx, `DELETE FROM model_connection_bindings WHERE owner_user_id=$1 AND model_connection_id=$2`, owner, id); err != nil {
+			return c, err
+		}
 		rows, queryErr := tx.Query(ctx, `SELECT id FROM missions WHERE owner_teacher_id=$1 AND selected_model_connection_id=$2 FOR UPDATE`, owner, id)
 		if queryErr != nil {
 			return c, queryErr
@@ -530,16 +646,30 @@ func (s *Store) MarkConnectionCapabilityVerification(ctx context.Context, owner,
 	if err != nil {
 		return err
 	}
+	if checks.ChatProbed {
+		capabilities.SupportsChat = checks.NormalChat
+	}
 	capabilities.SupportsTools = checks.ToolCalling
 	capabilities.SupportsJSONMode = checks.JSONMode
 	if checks.VisionProbed {
 		capabilities.SupportsVision = checks.Vision
+	}
+	if checks.EmbeddingsProbed {
+		capabilities.SupportsEmbeddings = checks.Embeddings
+		capabilities.EmbeddingDimension = checks.EmbeddingDimension
 	}
 	encodedCapabilities, err := json.Marshal(capabilities)
 	if err != nil {
 		return err
 	}
 	verification := model.DefaultCapabilityVerification()
+	if checks.ChatProbed {
+		if checks.NormalChat {
+			verification.SupportsChat = model.CapabilityVerified
+		} else {
+			verification.SupportsChat = model.CapabilityUnsupported
+		}
+	}
 	if checks.ToolCalling {
 		verification.SupportsTools = model.CapabilityVerified
 	} else {
@@ -555,6 +685,13 @@ func (s *Store) MarkConnectionCapabilityVerification(ctx context.Context, owner,
 			verification.SupportsVision = model.CapabilityVerified
 		} else {
 			verification.SupportsVision = model.CapabilityUnsupported
+		}
+	}
+	if checks.EmbeddingsProbed {
+		if checks.Embeddings {
+			verification.SupportsEmbeddings = model.CapabilityVerified
+		} else {
+			verification.SupportsEmbeddings = model.CapabilityUnsupported
 		}
 	}
 	encodedVerification, err := json.Marshal(verification)
@@ -670,6 +807,14 @@ func (s *Store) CreateMissionAtomic(ctx context.Context, owner int64, title, des
 		return 0, 0, "", err
 	}
 	defer func() { s.recordCleanupError("transaction rollback", tx.Rollback(ctx)) }()
+	if connectionID == nil {
+		var defaultConnectionID int64
+		if err := tx.QueryRow(ctx, `SELECT model_connection_id FROM model_connection_bindings WHERE owner_user_id=$1 AND role=$2`, owner, model.ModelRolePlanning).Scan(&defaultConnectionID); err == nil {
+			connectionID = &defaultConnectionID
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return 0, 0, "", err
+		}
+	}
 	snapshot := waitingSnapshot()
 	if connectionID != nil {
 		identity, err := snapshotForTx(ctx, tx, owner, connectionID, true)
@@ -1528,6 +1673,14 @@ func (s *Store) AddActivity(ctx context.Context, missionID int64, eventType, sum
 	_, err := s.DB.Exec(ctx, `INSERT INTO activity_events(mission_id,event_type,summary,reference_type,reference_id) VALUES($1,$2,$3,NULLIF($4,''),NULLIF($5,''))`, missionID, eventType, summary, refType, refID)
 	return err
 }
+
+// AddActivityIdempotent records a stage transition that may be retried after
+// a lease expiry. A replay of the same AgentRun/subagent stage is ignored.
+func (s *Store) AddActivityIdempotent(ctx context.Context, missionID int64, eventType, summary, refType, refID, key string) error {
+	_, err := s.DB.Exec(ctx, `INSERT INTO activity_events(mission_id,event_type,summary,reference_type,reference_id,idempotency_key) VALUES($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6) ON CONFLICT (mission_id,idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`, missionID, eventType, summary, refType, refID, key)
+	return err
+}
+
 func addActivityTx(ctx context.Context, tx pgx.Tx, missionID int64, eventType, summary, refType, refID string) error {
 	_, err := tx.Exec(ctx, `INSERT INTO activity_events(mission_id,event_type,summary,reference_type,reference_id) VALUES($1,$2,$3,NULLIF($4,''),NULLIF($5,''))`, missionID, eventType, summary, refType, refID)
 	return err
@@ -2344,8 +2497,26 @@ func (s *Store) ApproveDraft(ctx context.Context, owner int64, draftID string) (
 // immutable Locked Specification, while this transaction validates the exact
 // specification requested and creates a QUEUED worker input.
 func (s *Store) CreateGenerationJob(ctx context.Context, owner, missionID int64, specificationID string, specificationVersion int) (GenerationJobRequestResult, error) {
+	// Preserve the pre-fallback programmatic contract. The HTTP product action
+	// calls CreateGenerationJobWithPolicy with AUTO explicitly; direct internal
+	// callers and older integrations remain fail-closed until they opt in.
+	return s.CreateGenerationJobWithPolicy(ctx, owner, missionID, specificationID, specificationVersion, GenerationFallbackPolicyStrict)
+}
+
+// CreateGenerationJobWithPolicy creates the only production GenerationJob
+// entry. AUTO keeps the locked specification immutable while allowing the
+// worker to use the system-owned template when a teacher template profile is
+// not executable. STRICT preserves the old fail-closed behavior for audits.
+func (s *Store) CreateGenerationJobWithPolicy(ctx context.Context, owner, missionID int64, specificationID string, specificationVersion int, fallbackPolicy string) (GenerationJobRequestResult, error) {
 	if owner <= 0 || missionID <= 0 || strings.TrimSpace(specificationID) == "" || specificationVersion <= 0 {
 		return GenerationJobRequestResult{}, ErrGenerationSpecificationNotFound
+	}
+	fallbackPolicy = strings.ToUpper(strings.TrimSpace(fallbackPolicy))
+	if fallbackPolicy == "" {
+		fallbackPolicy = GenerationFallbackPolicyAuto
+	}
+	if fallbackPolicy != GenerationFallbackPolicyAuto && fallbackPolicy != GenerationFallbackPolicyStrict {
+		return GenerationJobRequestResult{}, ErrGenerationFallbackPolicyInvalid
 	}
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
@@ -2376,11 +2547,15 @@ func (s *Store) CreateGenerationJob(ctx context.Context, owner, missionID int64,
 	if storedVersion != specificationVersion {
 		return GenerationJobRequestResult{}, ErrGenerationVersionMismatch
 	}
-	if !missionFilesReadyTx(ctx, tx, missionID) {
-		return GenerationJobRequestResult{}, ErrGenerationMaterialsNotReady
+	mode, fallbackReasons, templateErr := s.resolveGenerationModeTx(ctx, tx, owner, missionID, binding, fallbackPolicy)
+	if templateErr != nil {
+		return GenerationJobRequestResult{}, templateErr
 	}
-	if err := s.validateGenerationTemplateBindingTx(ctx, tx, owner, missionID, binding); err != nil {
-		return GenerationJobRequestResult{}, err
+	// Only the teacher-template path needs every uploaded input to be parsed.
+	// The system-default path deliberately generates from the locked
+	// specification and ignores unreferenced or absent external materials.
+	if mode == GenerationModeTeacherTemplate && !missionFilesReadyTx(ctx, tx, missionID) {
+		return GenerationJobRequestResult{}, ErrGenerationMaterialsNotReady
 	}
 
 	existing, err := generationJobForMissionTx(ctx, tx, missionID)
@@ -2398,10 +2573,18 @@ func (s *Store) CreateGenerationJob(ctx context.Context, owner, missionID int64,
 	}
 
 	jobID := uuid.NewString()
-	if _, err := tx.Exec(ctx, `INSERT INTO generation_jobs(id,mission_id,specification_id,status) VALUES($1,$2,$3,'QUEUED')`, jobID, missionID, specificationID); err != nil {
+	encodedReasons, err := json.Marshal(fallbackReasons)
+	if err != nil {
 		return GenerationJobRequestResult{}, err
 	}
-	if err := addActivityTx(ctx, tx, missionID, "GENERATION_REQUESTED", "PPT generation requested", "GENERATION_JOB", jobID); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO generation_jobs(id,mission_id,specification_id,status,generation_mode,fallback_reasons) VALUES($1,$2,$3,'QUEUED',$4,$5)`, jobID, missionID, specificationID, mode, encodedReasons); err != nil {
+		return GenerationJobRequestResult{}, err
+	}
+	activitySummary := "PPT generation requested"
+	if mode == GenerationModeSystemDefault {
+		activitySummary = "PPT generation requested with system default template"
+	}
+	if err := addActivityTx(ctx, tx, missionID, "GENERATION_REQUESTED", activitySummary, "GENERATION_JOB", jobID); err != nil {
 		return GenerationJobRequestResult{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -2410,10 +2593,74 @@ func (s *Store) CreateGenerationJob(ctx context.Context, owner, missionID int64,
 	return GenerationJobRequestResult{
 		Job: model.GenerationJob{
 			ID: jobID, MissionID: missionID, SpecificationID: specificationID,
-			SpecificationVersion: specificationVersion, Status: "QUEUED",
+			SpecificationVersion: specificationVersion, GenerationMode: mode,
+			FallbackReasons: fallbackReasons, Status: "QUEUED",
 		},
 		Created: true,
 	}, nil
+}
+
+func (s *Store) resolveGenerationModeTx(ctx context.Context, tx pgx.Tx, owner, missionID int64, raw []byte, fallbackPolicy string) (string, []string, error) {
+	reasons := make([]string, 0, 2)
+	mode := GenerationModeTeacherTemplate
+	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
+		if fallbackPolicy == GenerationFallbackPolicyStrict {
+			return "", nil, ErrGenerationTemplateInvalid
+		}
+		mode = GenerationModeSystemDefault
+		reasons = append(reasons, "TEMPLATE_PROFILE_UNAVAILABLE")
+	} else if err := s.validateGenerationTemplateBindingTx(ctx, tx, owner, missionID, raw); err != nil {
+		if fallbackPolicy != GenerationFallbackPolicyAuto || !errors.Is(err, ErrGenerationTemplateProfileNotReady) {
+			return "", nil, err
+		}
+		mode = GenerationModeSystemDefault
+		reasons = append(reasons, "TEMPLATE_PROFILE_UNAVAILABLE")
+	}
+	if !hasExternalSourceReferences(raw) {
+		reasons = append(reasons, "NO_EXTERNAL_REFERENCES")
+	}
+	return mode, reasons, nil
+}
+
+func hasExternalSourceReferences(raw []byte) bool {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return false
+	}
+	var value any
+	if json.Unmarshal(raw, &value) != nil {
+		return false
+	}
+	var visit func(any) bool
+	visit = func(current any) bool {
+		switch item := current.(type) {
+		case map[string]any:
+			if refs, ok := item["sourceRefs"].([]any); ok {
+				for _, rawRef := range refs {
+					ref, ok := rawRef.(map[string]any)
+					if !ok {
+						continue
+					}
+					sourceType := strings.ToUpper(strings.TrimSpace(fmt.Sprint(ref["type"])))
+					if sourceType == "MATERIAL" || sourceType == "TEACHER" {
+						return true
+					}
+				}
+			}
+			for _, child := range item {
+				if visit(child) {
+					return true
+				}
+			}
+		case []any:
+			for _, child := range item {
+				if visit(child) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return visit(value)
 }
 
 func (s *Store) validateGenerationTemplateBindingTx(ctx context.Context, tx pgx.Tx, owner, missionID int64, raw []byte) error {
@@ -2522,6 +2769,16 @@ func mergeTemplateProfile(binding, profile map[string]any, input templatebinding
 	}
 	binding["engineNativeProfile"] = native
 	binding["engineNativeProfileChecksum"] = profileChecksum
+	if nativeJSON, ok := profile["engineNativeProfileJson"].(string); ok && strings.TrimSpace(nativeJSON) != "" {
+		// The Java service hashes this exact canonical JSON string. Preserve it
+		// in the immutable binding so the generation boundary can project only
+		// server-owned identity fields without reserializing Java Double values.
+		digest := sha256.Sum256([]byte(nativeJSON))
+		if hex.EncodeToString(digest[:]) != profileChecksum {
+			return false
+		}
+		binding["engineNativeProfileJson"] = nativeJSON
+	}
 	binding["profileSource"] = "JAVA_ENGINE_NATIVE_PROFILE"
 	binding["executionReady"] = true
 	binding["engineNativeProfilePresent"] = true
@@ -2640,11 +2897,11 @@ func validateSourceRefTx(ctx context.Context, tx pgx.Tx, owner, missionID int64,
 
 func generationJobForTx(ctx context.Context, tx pgx.Tx, missionID int64, specID string) (model.GenerationJob, error) {
 	var j model.GenerationJob
-	var feedback []byte
-	err := tx.QueryRow(ctx, `SELECT g.id,g.mission_id,g.specification_id,ls.version,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at FROM generation_jobs g JOIN locked_specifications ls ON ls.id=g.specification_id WHERE g.mission_id=$1 AND g.specification_id=$2 ORDER BY g.created_at DESC,g.id DESC LIMIT 1`, missionID, specID).Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.SpecificationVersion, &j.Status, &j.CurrentSlide, &j.TotalSlides, &j.ArtifactID, &feedback, &j.CreatedAt, &j.StartedAt, &j.FinishedAt)
-	if err == nil && len(feedback) > 0 {
-		if decodeErr := json.Unmarshal(feedback, &j.Feedback); decodeErr != nil {
-			return j, fmt.Errorf("decode generation feedback: %w", decodeErr)
+	var feedback, fallbackReasons []byte
+	err := tx.QueryRow(ctx, `SELECT g.id,g.mission_id,g.specification_id,ls.version,g.generation_mode,g.fallback_reasons,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at FROM generation_jobs g JOIN locked_specifications ls ON ls.id=g.specification_id WHERE g.mission_id=$1 AND g.specification_id=$2 ORDER BY g.created_at DESC,g.id DESC LIMIT 1`, missionID, specID).Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.SpecificationVersion, &j.GenerationMode, &fallbackReasons, &j.Status, &j.CurrentSlide, &j.TotalSlides, &j.ArtifactID, &feedback, &j.CreatedAt, &j.StartedAt, &j.FinishedAt)
+	if err == nil {
+		if decodeErr := decodeGenerationMetadata(&j, fallbackReasons, feedback); decodeErr != nil {
+			return j, decodeErr
 		}
 	}
 	return j, err
@@ -2652,38 +2909,50 @@ func generationJobForTx(ctx context.Context, tx pgx.Tx, missionID int64, specID 
 
 func generationJobForMissionTx(ctx context.Context, tx pgx.Tx, missionID int64) (model.GenerationJob, error) {
 	var j model.GenerationJob
-	var feedback []byte
-	err := tx.QueryRow(ctx, `SELECT g.id,g.mission_id,g.specification_id,ls.version,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at
+	var feedback, fallbackReasons []byte
+	err := tx.QueryRow(ctx, `SELECT g.id,g.mission_id,g.specification_id,ls.version,g.generation_mode,g.fallback_reasons,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at
 		FROM generation_jobs g JOIN locked_specifications ls ON ls.id=g.specification_id
 		WHERE g.mission_id=$1 AND g.status IN ('QUEUED','RUNNING','VERIFYING')
-		ORDER BY g.created_at DESC,g.id DESC LIMIT 1`, missionID).Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.SpecificationVersion, &j.Status, &j.CurrentSlide, &j.TotalSlides, &j.ArtifactID, &feedback, &j.CreatedAt, &j.StartedAt, &j.FinishedAt)
-	if err == nil && len(feedback) > 0 {
-		if decodeErr := json.Unmarshal(feedback, &j.Feedback); decodeErr != nil {
-			return j, fmt.Errorf("decode generation feedback: %w", decodeErr)
+		ORDER BY g.created_at DESC,g.id DESC LIMIT 1`, missionID).Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.SpecificationVersion, &j.GenerationMode, &fallbackReasons, &j.Status, &j.CurrentSlide, &j.TotalSlides, &j.ArtifactID, &feedback, &j.CreatedAt, &j.StartedAt, &j.FinishedAt)
+	if err == nil {
+		if decodeErr := decodeGenerationMetadata(&j, fallbackReasons, feedback); decodeErr != nil {
+			return j, decodeErr
 		}
 	}
 	return j, err
+}
+
+func decodeGenerationMetadata(job *model.GenerationJob, fallbackReasons, feedback []byte) error {
+	if len(fallbackReasons) > 0 {
+		if err := json.Unmarshal(fallbackReasons, &job.FallbackReasons); err != nil {
+			return fmt.Errorf("decode generation fallback reasons: %w", err)
+		}
+	}
+	if len(feedback) > 0 {
+		if err := json.Unmarshal(feedback, &job.Feedback); err != nil {
+			return fmt.Errorf("decode generation feedback: %w", err)
+		}
+	}
+	return nil
 }
 func (s *Store) ClaimGeneration(ctx context.Context) (model.GenerationJob, error) {
 	var j model.GenerationJob
 	var started time.Time
 	var artifactID *string
-	var feedback []byte
+	var feedback, fallbackReasons []byte
 	workerID, leaseSeconds := s.leaseSettings()
 	token := uuid.NewString()
 	if s.beforeGenerationClaimHook != nil {
 		s.beforeGenerationClaimHook()
 	}
-	err := s.DB.QueryRow(ctx, `WITH candidate AS (SELECT id FROM generation_jobs WHERE cancel_requested_at IS NULL AND (status='QUEUED' OR (status='RUNNING' AND lease_expires_at IS NOT NULL AND lease_expires_at<=clock_timestamp())) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE generation_jobs g SET status='RUNNING',started_at=clock_timestamp(),lease_owner=$1,lease_token=$2,lease_expires_at=clock_timestamp()+($3 * interval '1 second'),heartbeat_at=clock_timestamp() FROM candidate c WHERE g.id=c.id RETURNING g.id,g.mission_id,g.specification_id,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at,g.lease_token`, workerID, token, leaseSeconds).Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.Status, &j.CurrentSlide, &j.TotalSlides, &artifactID, &feedback, &j.CreatedAt, &started, &j.FinishedAt, &j.LeaseToken)
+	err := s.DB.QueryRow(ctx, `WITH candidate AS (SELECT id FROM generation_jobs WHERE cancel_requested_at IS NULL AND (status='QUEUED' OR (status='RUNNING' AND lease_expires_at IS NOT NULL AND lease_expires_at<=clock_timestamp())) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE generation_jobs g SET status='RUNNING',started_at=clock_timestamp(),lease_owner=$1,lease_token=$2,lease_expires_at=clock_timestamp()+($3 * interval '1 second'),heartbeat_at=clock_timestamp() FROM candidate c WHERE g.id=c.id RETURNING g.id,g.mission_id,g.specification_id,g.generation_mode,g.fallback_reasons,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at,g.lease_token`, workerID, token, leaseSeconds).Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.GenerationMode, &fallbackReasons, &j.Status, &j.CurrentSlide, &j.TotalSlides, &artifactID, &feedback, &j.CreatedAt, &started, &j.FinishedAt, &j.LeaseToken)
 	if err != nil {
 		return j, err
 	}
 	j.ArtifactID = artifactID
 	j.StartedAt = &started
-	if len(feedback) > 0 {
-		if err := json.Unmarshal(feedback, &j.Feedback); err != nil {
-			return j, fmt.Errorf("decode generation feedback: %w", err)
-		}
+	if err := decodeGenerationMetadata(&j, fallbackReasons, feedback); err != nil {
+		return j, err
 	}
 	if s.afterGenerationClaimHook != nil {
 		s.afterGenerationClaimHook(j)
@@ -2813,15 +3082,13 @@ func (s *Store) GenerationCancelRequested(ctx context.Context, id string) (bool,
 }
 func (s *Store) Job(ctx context.Context, owner, missionID int64, id string) (model.GenerationJob, error) {
 	var j model.GenerationJob
-	var feedback []byte
-	err := s.DB.QueryRow(ctx, `SELECT g.id,g.mission_id,g.specification_id,ls.version,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at FROM generation_jobs g JOIN locked_specifications ls ON ls.id=g.specification_id JOIN missions m ON m.id=g.mission_id WHERE g.id=$1 AND g.mission_id=$2 AND m.owner_teacher_id=$3`, id, missionID, owner).Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.SpecificationVersion, &j.Status, &j.CurrentSlide, &j.TotalSlides, &j.ArtifactID, &feedback, &j.CreatedAt, &j.StartedAt, &j.FinishedAt)
+	var feedback, fallbackReasons []byte
+	err := s.DB.QueryRow(ctx, `SELECT g.id,g.mission_id,g.specification_id,ls.version,g.generation_mode,g.fallback_reasons,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at FROM generation_jobs g JOIN locked_specifications ls ON ls.id=g.specification_id JOIN missions m ON m.id=g.mission_id WHERE g.id=$1 AND g.mission_id=$2 AND m.owner_teacher_id=$3`, id, missionID, owner).Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.SpecificationVersion, &j.GenerationMode, &fallbackReasons, &j.Status, &j.CurrentSlide, &j.TotalSlides, &j.ArtifactID, &feedback, &j.CreatedAt, &j.StartedAt, &j.FinishedAt)
 	if err != nil {
 		return j, err
 	}
-	if len(feedback) > 0 {
-		if err := json.Unmarshal(feedback, &j.Feedback); err != nil {
-			return j, fmt.Errorf("decode generation feedback: %w", err)
-		}
+	if err := decodeGenerationMetadata(&j, fallbackReasons, feedback); err != nil {
+		return j, err
 	}
 	return j, nil
 }
@@ -2829,7 +3096,7 @@ func (s *Store) Jobs(ctx context.Context, owner, missionID int64) ([]model.Gener
 	if err := s.requireMissionOwner(ctx, owner, missionID); err != nil {
 		return nil, err
 	}
-	rows, err := s.DB.Query(ctx, `SELECT g.id,g.mission_id,g.specification_id,ls.version,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at FROM generation_jobs g JOIN locked_specifications ls ON ls.id=g.specification_id WHERE g.mission_id=$1 ORDER BY g.created_at DESC,g.id DESC`, missionID)
+	rows, err := s.DB.Query(ctx, `SELECT g.id,g.mission_id,g.specification_id,ls.version,g.generation_mode,g.fallback_reasons,g.status,g.current_slide,g.total_slides,g.artifact_id,g.generation_feedback,g.created_at,g.started_at,g.finished_at FROM generation_jobs g JOIN locked_specifications ls ON ls.id=g.specification_id WHERE g.mission_id=$1 ORDER BY g.created_at DESC,g.id DESC`, missionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2837,14 +3104,12 @@ func (s *Store) Jobs(ctx context.Context, owner, missionID int64) ([]model.Gener
 	var out []model.GenerationJob
 	for rows.Next() {
 		var j model.GenerationJob
-		var feedback []byte
-		if err := rows.Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.SpecificationVersion, &j.Status, &j.CurrentSlide, &j.TotalSlides, &j.ArtifactID, &feedback, &j.CreatedAt, &j.StartedAt, &j.FinishedAt); err != nil {
+		var feedback, fallbackReasons []byte
+		if err := rows.Scan(&j.ID, &j.MissionID, &j.SpecificationID, &j.SpecificationVersion, &j.GenerationMode, &fallbackReasons, &j.Status, &j.CurrentSlide, &j.TotalSlides, &j.ArtifactID, &feedback, &j.CreatedAt, &j.StartedAt, &j.FinishedAt); err != nil {
 			return nil, err
 		}
-		if len(feedback) > 0 {
-			if err := json.Unmarshal(feedback, &j.Feedback); err != nil {
-				return nil, fmt.Errorf("decode generation feedback: %w", err)
-			}
+		if err := decodeGenerationMetadata(&j, fallbackReasons, feedback); err != nil {
+			return nil, err
 		}
 		out = append(out, j)
 	}

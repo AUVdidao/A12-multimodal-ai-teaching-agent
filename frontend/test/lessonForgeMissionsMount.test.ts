@@ -264,6 +264,7 @@ test('top-level LessonForge routes expose exactly one active app navigation item
   assert.equal(missionsActive.length, 1);
   assert.equal(missionsActive[0].find('.lf-nav-icon').text(), '⚑');
   assert.equal(missionsWrapper.get('.lf-nav-action--primary').classes('is-active'), false);
+  assert.equal(missionsWrapper.find('.lf-nav-section').exists(), false);
   await missionsWrapper.unmount();
 
   await appRouter.push('/lessonforge/new');
@@ -277,6 +278,7 @@ test('top-level LessonForge routes expose exactly one active app navigation item
   assert.equal(newMissionActive[0].text(), '＋New Mission');
   assert.equal(newMissionWrapper.get('.lf-nav-action--primary').classes('is-active'), true);
   assert.equal(newMissionWrapper.findAll('.lf-nav-action')[1].classes('is-active'), false);
+  assert.equal(newMissionWrapper.find('.lf-nav-section').exists(), true);
   await newMissionWrapper.unmount();
 });
 
@@ -343,11 +345,11 @@ test('researcher shared navigation opens researcher queue and review detail rout
   await wrapper.findAll('.lf-nav-action')[1].trigger('click');
   await settle();
   assert.equal(appRouter.currentRoute.value.name, 'lessonforge-researcher-reviews');
+  assert.equal(wrapper.find('.lf-nav-section').exists(), false);
 
-  await wrapper.get('.lf-recent-item').trigger('click');
+  await wrapper.get('.lf-brand').trigger('click');
   await settle();
-  assert.equal(appRouter.currentRoute.value.name, 'lessonforge-researcher-review');
-  assert.equal(appRouter.currentRoute.value.params.missionId, '21');
+  assert.equal(appRouter.currentRoute.value.name, 'lessonforge-researcher-reviews');
 
   await appRouter.push('/reviewer/missions');
   await wrapper.findAll('.lf-nav-action')[2].trigger('click');
@@ -400,6 +402,10 @@ test('model settings is a standalone full-window surface with a return path', as
   assert.match(source, /class="model-settings-sidebar"/);
   assert.equal((source.match(/class="settings-nav__item/g) || []).length, 1);
   assert.match(source, /模型配置/);
+  assert.match(source, /课件规划模型/);
+  assert.match(source, /模板视觉模型/);
+  assert.match(source, /文本嵌入模型/);
+  assert.match(source, /setModelConnectionBinding/);
   assert.match(source, /router\.push\(\{ name: 'lessonforge-missions' \}\)/);
   assert.doesNotMatch(source, /LessonForgeFrame/);
 });

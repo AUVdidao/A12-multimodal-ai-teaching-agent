@@ -102,7 +102,7 @@ Engine 返回的 ArtifactReceipt 使用其真实字段：`storageKey`、`fileSiz
 4. 将校验后的字节保存到 Go storage；
 5. 创建教师可见 `Artifact` 并完成 Job。
 
-缺少共享目录、模板绑定或 receipt 时明确失败，绝不创建假的 PPTX 或成功 Artifact。Engine payload 由 Go Compiler/worker 从锁定语义合同和模板绑定组装，不接受模型注入的 `trustedEngineRequest`。
+生成请求默认采用 `AUTO` 回退策略：如果锁定规格绑定的教师模板没有可执行的 Engine Profile，worker 会使用系统自有的默认 PPTX/版式继续生成，并在 GenerationJob 的 `generation_mode` 与 `fallback_reasons` 中留下审计记录；如果锁定规格没有外部 `MATERIAL`/`TEACHER` 来源，则只依据锁定语义规格生成，不伪造资料来源。严格审计场景仍可传入 `STRICT`，此时缺少可执行模板 Profile 会明确失败。无论哪种模式，receipt 都必须通过共享目录、路径逃逸、文件大小和 SHA-256 校验，绝不创建假的 PPTX 或成功 Artifact。Engine payload 由 Go Compiler/worker 从锁定语义合同和实际采用的模板绑定组装，不接受模型注入的 `trustedEngineRequest`。
 
 ## 7. SSE 与持久化
 

@@ -40,6 +40,7 @@ type Config struct {
 	ParserRequestTimeout          time.Duration
 	ParserInterval                time.Duration
 	PPTEngineRequestTimeout       time.Duration
+	EnableSubagentChain           bool
 	EnableGenerationWorker        bool
 	CORSOrigins                   []string
 }
@@ -80,6 +81,7 @@ func Load() (Config, error) {
 		ParserRequestTimeout:          durationEnv("LESSONFORGE_PARSER_TIMEOUT", 5*time.Minute),
 		ParserInterval:                durationEnv("LESSONFORGE_PARSER_INTERVAL", 5*time.Second),
 		PPTEngineRequestTimeout:       durationEnv("LESSONFORGE_PPT_ENGINE_TIMEOUT", 5*time.Minute),
+		EnableSubagentChain:           boolEnv("LESSONFORGE_ENABLE_SUBAGENT_CHAIN", true),
 		// Generation is an explicit downstream opt-in. The upstream Mission to
 		// Locked Specification service must not touch Generation/PPT Engine state
 		// unless a later deployment deliberately enables it.

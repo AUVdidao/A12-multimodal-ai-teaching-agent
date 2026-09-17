@@ -109,7 +109,9 @@ const router = createRouter({
 });
 
 export function roleHome(_role?: UserRole) {
-  return _role === 'RESEARCHER' ? '/reviewer/missions' : '/assistant';
+  if (_role === 'RESEARCHER') return '/reviewer/missions';
+  if (_role === 'TEACHER' || _role === 'LEADER') return '/lessonforge/new';
+  return '/assistant';
 }
 
 router.beforeEach(async (to) => {

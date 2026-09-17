@@ -1,12 +1,15 @@
-import type { ConnectionVerification, ModelConnection, ModelConnectionPayload, ModelConnectionVerificationStatus } from '@/api/aiCredentials';
+import type { ConnectionVerification, ModelCapabilities, ModelConnection, ModelConnectionPayload, ModelConnectionVerificationStatus } from '@/api/aiCredentials';
 
 export interface ConnectionSelectionCandidate {
   enabled?: boolean;
   verificationStatus?: ModelConnectionVerificationStatus;
+  capabilities?: Partial<ModelCapabilities>;
 }
 
 export function isSelectableConnection(connection: ConnectionSelectionCandidate | null | undefined) {
-  return connection?.enabled === true && connection.verificationStatus === 'VERIFIED';
+  return connection?.enabled === true
+    && connection.verificationStatus === 'VERIFIED'
+    && connection.capabilities?.supportsChat !== false;
 }
 
 export function findSelectableConnection(connections: ModelConnection[], id?: number | null) {
@@ -50,6 +53,18 @@ export interface ModelConnectionFormValues {
   baseUrl: string;
   modelId: string;
   apiKey: string;
+  capabilities?: ModelCapabilities;
+}
+
+export function defaultModelCapabilities(): ModelCapabilities {
+  return {
+    supportsChat: true,
+    supportsTools: true,
+    supportsJSONMode: true,
+    supportsVision: false,
+    supportsEmbeddings: false,
+    supportsStreaming: false,
+  };
 }
 
 export function buildModelConnectionPayload(values: ModelConnectionFormValues, mode: 'create' | 'edit'): ModelConnectionPayload | null {
@@ -59,6 +74,7 @@ export function buildModelConnectionPayload(values: ModelConnectionFormValues, m
     protocol: 'OPENAI_COMPATIBLE',
     baseUrl: values.baseUrl.trim(),
     modelId: values.modelId.trim(),
+    capabilities: values.capabilities || defaultModelCapabilities(),
   };
   if (values.apiKey.trim()) payload.apiKey = values.apiKey;
   return payload;

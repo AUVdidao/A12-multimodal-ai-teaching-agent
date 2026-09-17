@@ -12,7 +12,7 @@
         <button v-if="showNewMission" class="lf-nav-action lf-nav-action--primary" :class="{ 'is-active': active === 'new' }" @click="goNew"><span>＋</span><span>New Mission</span></button>
         <button class="lf-nav-action" :class="{ 'is-active': active === 'missions' }" @click="goMissions"><span class="lf-nav-icon">⚑</span><span>Missions</span></button>
         <button class="lf-nav-action" :class="{ 'is-active': active === 'search' }" type="button" @click="openSearch"><span class="lf-nav-icon">⌕</span><span>Search</span></button>
-        <div class="lf-nav-section">
+        <div v-if="active !== 'missions'" class="lf-nav-section">
           <div class="lf-nav-section__title"><span>Recent</span><span class="lf-nav-section__count">{{ recentMissions.length }}</span></div>
           <button v-for="mission in recentMissions" :key="mission.id" class="lf-recent-item" @click="goMission(mission.id)">{{ mission.title }}</button>
           <div v-if="!recentMissions.length" class="lf-nav-empty">No missions</div>
@@ -69,7 +69,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import type { LessonForgeMission } from '@/types/lessonForge';
-import lessonForgeLogo from '@/assets/lessonforge-logo-full.png';
+import lessonForgeLogo from '@/assets/lessonforge-logo.svg';
 import { useAuthStore } from '@/stores/auth';
 
 const props = withDefaults(defineProps<{ workspace?: boolean; active?: 'new' | 'missions' | 'search' | 'settings'; recentMissions?: LessonForgeMission[]; searchMissions?: LessonForgeMission[]; contextLabel?: string; showNewMission?: boolean }>(), { workspace: false, active: 'missions', recentMissions: () => [], searchMissions: () => [], contextLabel: 'Teacher workspace', showNewMission: true });

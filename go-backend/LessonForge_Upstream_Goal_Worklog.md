@@ -556,3 +556,14 @@
 - go test -count=1 ./... 与 go test -race -count=1 ./... 均 exit0；Go Docker build exit0。Java Maven 测试本轮未运行。
 - 本轮报告：D:\服务外包正式文档\开发结果汇报存档\0333_LessonForge上游真实闭环MIME修复与DeepSeek链路重放_开发结果汇报_2026-09-09.md。状态为开发完成候选，等待全新独立只读 Luna 复审；P0=0，本轮新上游业务 P1=0。
 - Generation Worker、Composer、Executor、ExecuteV2、Artifact、PPTX、Office 和 PPT Engine 继续冻结，未进入。
+
+### 阶段 71：真实 Embedding、持久化向量检索与关键词降级（2026-09-17）
+
+- Go `model.Client` 新增 OpenAI-compatible `/embeddings` 批量调用，限制批大小、校验返回数量/索引/维度，并保留安全供应商错误码；全局 `EMBEDDING` 绑定由数据库解析，密钥只在调用期间解密，不使用 Mission 的 PLANNING 模型。
+- Java 新增 V20 `lessonforge_chunk_embeddings` PostgreSQL/H2 迁移、`JdbcKnowledgeVectorStore` 和 Embedding 内部接口；生产 PostgreSQL 使用 `double precision[]`，按 project/material/model/dimension 隔离并在 SQL 中计算余弦相似度，写入前校验 chunk 身份、数量、维度和有限浮点数。
+- `search_materials` 在 Embedding 查询失败时明确转为 `KEYWORD_FALLBACK`，响应携带安全降级原因；成功返回 `VECTOR`、真实 chunk/material 身份和 PostgreSQL 向量算法信息。AgentRun 记录 RAG 调用成功/失败活动。
+- 修复 Go Parser 与 Java chunk/material/file 身份边界：解析结果拒绝数字占位正文；真实解析后批量生成 Embedding 并持久化，Embeddings 未配置或维度不匹配时失败关闭，不再把伪向量或解析占位数据标成 READY。
+- Docker Go 全量测试通过；Java Spring Boot 上下文测试通过；Docker 重建 `backend-api` 与 Go `server` 成功。生产 PostgreSQL Flyway 从 v19 升至 v20。
+- 真实 Mission 77 / MissionFile 20 / Java project 14 / material 15 重跑：PDF 实际解析为 601 chunks；Go 使用 EMBEDDING connection 29（`BAAI/bge-m3`，1024 维）完成 601 次批量调用审计，Java 表中 601 行向量均为 READY，向量首值为真实浮点数且非伪随机占位。
+- 真实 Java HTTP 检索返回 `retrievalMode=VECTOR`、`prototype=false`、`PostgreSQL double precision[] 向量余弦相似度`；同一接口无 query embedding 时返回 `retrievalMode=KEYWORD_FALLBACK`，并携带 `EMBEDDING_HTTP_429` 示例降级原因。未删除 Mission 77、文件或数据卷。
+- 当前边界：本轮完整 Java 全量 Maven 测试尚未重新跑完；已通过 Spring 上下文测试、Docker 编译/打包、Go 全量测试和真实 PostgreSQL/Java/Go 链路。真实主动 Agent 是否在每次对话中触发 `search_materials`，仍需用教师实际对话或独立 Provider 回归继续验证。

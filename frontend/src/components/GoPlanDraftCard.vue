@@ -7,11 +7,12 @@
       </div>
       <div class="go-plan-preview__header-actions">
         <span class="go-plan-preview__status">{{ locked ? '已锁定' : '待确认' }}</span>
-        <button v-if="!locked" class="lf-primary-button go-plan-preview__approve" type="button" :disabled="approving" data-test="approve-plan" @click="$emit('approve')">
+        <button v-if="!locked" class="lf-primary-button go-plan-preview__approve" type="button" :disabled="approving || Boolean(approvalBlocker)" :title="approvalBlocker || undefined" data-test="approve-plan" @click="$emit('approve')">
           {{ approving ? '正在锁定…' : '批准方案' }}
         </button>
       </div>
     </header>
+    <p v-if="!locked && approvalBlocker" class="go-plan-preview__approval-requirement" data-test="approval-prerequisite">{{ approvalBlocker }}</p>
     <div v-if="facts.length" class="go-plan-preview__summary">
       <span v-for="fact in facts" :key="fact">{{ fact }}</span>
     </div>
@@ -41,7 +42,7 @@ import { computed } from 'vue';
 import { presentPlanSlides } from '@/utils/conversationPresentation';
 import type { GoPlanningDraft } from '@/api/go';
 
-const props = defineProps<{ draft: GoPlanningDraft; locked: boolean; facts: string[]; approving: boolean }>();
+const props = defineProps<{ draft: GoPlanningDraft; locked: boolean; facts: string[]; approving: boolean; approvalBlocker: string }>();
 defineEmits<{ approve: [] }>();
 const slides = computed(() => presentPlanSlides(props.draft));
 const intro = computed(() => {

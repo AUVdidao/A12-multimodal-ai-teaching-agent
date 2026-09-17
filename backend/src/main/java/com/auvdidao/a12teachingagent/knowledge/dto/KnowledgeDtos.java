@@ -60,8 +60,12 @@ public final class KnowledgeDtos {
             String query,
             List<KnowledgeHitResponse> hits,
             boolean prototype,
-            String algorithm
+            String algorithm,
+            String retrievalMode
     ) {
+        public KnowledgeSearchResponse(String query, List<KnowledgeHitResponse> hits, boolean prototype, String algorithm) {
+            this(query, hits, prototype, algorithm, "KEYWORD_FALLBACK");
+        }
     }
 
     public record KnowledgeMaterialReadResponse(

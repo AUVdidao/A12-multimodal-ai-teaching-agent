@@ -49,7 +49,9 @@ public class LessonForgeKnowledgeController {
                         projectId,
                         request.missionId(),
                         request.materialIds() == null ? null : new LinkedHashSet<>(request.materialIds())
-                )
+                ),
+                request.queryEmbedding(),
+                request.embeddingFallbackReason()
         ));
     }
 

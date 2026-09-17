@@ -184,6 +184,98 @@ func TestVerifyConnectionProbesVisionOnlyWhenDeclared(t *testing.T) {
 	}
 }
 
+func TestVerifyConnectionSupportsEmbeddingOnlyModel(t *testing.T) {
+	var requestPath string
+	client := NewClientWithTransport(time.Second, 4096, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requestPath = request.URL.Path
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"embedding":[0.1,0.2,0.3]}]}`)),
+			Header:     make(http.Header),
+		}, nil
+	}))
+	checks, err := client.VerifyConnection(context.Background(), ResolvedConnection{
+		Protocol: "OPENAI_COMPATIBLE", BaseURL: "https://8.8.8.8/v1", ModelID: "embedding-model", APIKey: "secret",
+		Capabilities: ModelCapabilities{SupportsEmbeddings: true},
+	})
+	if err != nil {
+		t.Fatalf("VerifyConnection() error = %v", err)
+	}
+	if requestPath != "/v1/embeddings" || !checks.EmbeddingsProbed || !checks.Embeddings || checks.EmbeddingDimension != 3 {
+		t.Fatalf("embedding check = %#v, requestPath=%q", checks, requestPath)
+	}
+	if checks.ChatProbed {
+		t.Fatalf("embedding-only connection unexpectedly probed chat: %#v", checks)
+	}
+}
+
+func TestEmbedBatchPreservesProviderIndexesAndRequestOrder(t *testing.T) {
+	var requestBody struct {
+		Model string   `json:"model"`
+		Input []string `json:"input"`
+	}
+	client := NewClientWithTransport(time.Second, 4096, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		data, err := io.ReadAll(request.Body)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &requestBody); err != nil {
+			return nil, err
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"index":1,"embedding":[0.2,0.3]},{"index":0,"embedding":[0.1,0.2]}]}`)),
+			Header:     make(http.Header),
+		}, nil
+	}))
+	vectors, status, err := client.EmbedBatch(context.Background(), ResolvedConnection{
+		Protocol: "OPENAI_COMPATIBLE", BaseURL: "https://8.8.8.8/v1", ModelID: "embed-model", APIKey: "secret",
+	}, []string{"first", "second"})
+	if err != nil {
+		t.Fatalf("EmbedBatch() error = %v", err)
+	}
+	if status != http.StatusOK || requestBody.Model != "embed-model" || strings.Join(requestBody.Input, ",") != "first,second" {
+		t.Fatalf("request/status = %#v, %d", requestBody, status)
+	}
+	if len(vectors) != 2 || vectors[0][0] != 0.1 || vectors[1][0] != 0.2 {
+		t.Fatalf("vectors = %#v, want provider indexes restored to input order", vectors)
+	}
+}
+
+func TestEmbedBatchRejectsCountMismatch(t *testing.T) {
+	client := NewClientWithTransport(time.Second, 4096, roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"embedding":[0.1,0.2]}]}`)),
+			Header:     make(http.Header),
+		}, nil
+	}))
+	_, status, err := client.EmbedBatch(context.Background(), ResolvedConnection{
+		Protocol: "OPENAI_COMPATIBLE", BaseURL: "https://8.8.8.8", ModelID: "embed-model", APIKey: "secret",
+	}, []string{"first", "second"})
+	if err == nil || !strings.Contains(err.Error(), "count mismatch") || status != http.StatusOK {
+		t.Fatalf("EmbedBatch() = status %d, err %v; want count mismatch", status, err)
+	}
+}
+
+func TestEmbedBatchClassifiesProviderFailureWithoutLeakingSecret(t *testing.T) {
+	const secret = "sk-embedding-secret"
+	client := NewClientWithTransport(time.Second, 4096, roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Body:       io.NopCloser(strings.NewReader(`{"error":{"code":"rate_limit","message":"` + secret + `"}}`)),
+			Header:     make(http.Header),
+		}, nil
+	}))
+	_, status, err := client.EmbedBatch(context.Background(), ResolvedConnection{
+		Protocol: "OPENAI_COMPATIBLE", BaseURL: "https://8.8.8.8", ModelID: "embed-model", APIKey: secret,
+	}, []string{"first"})
+	httpErr, ok := err.(*HTTPError)
+	if err == nil || !ok || status != http.StatusTooManyRequests || httpErr.Body != "rate_limit" || strings.Contains(httpErr.Body, secret) {
+		t.Fatalf("EmbedBatch() = status %d, err %v; want safe rate-limit error", status, err)
+	}
+}
+
 func TestChatClassifiesProviderTimeout(t *testing.T) {
 	client := NewClientWithTransport(time.Second, 1024, roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return nil, context.DeadlineExceeded

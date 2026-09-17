@@ -98,6 +98,7 @@ func main() {
 	ragClient := rag.NewJavaClient(cfg.RAGBaseURL, cfg.ModelRequestTimeout, cfg.MaxModelResponseBytes)
 	ragClient.SetServiceBearerToken(cfg.RAGBearerToken)
 	ragClient.ConfigureResources(store, files)
+	ragClient.ConfigureEmbedding(store, models, crypt)
 	var parserAdapter parser.Adapter
 	if cfg.RAGBaseURL != "" {
 		// 配置了 LessonForge Java RAG 时，Parser 优先走该独立契约。
@@ -105,7 +106,9 @@ func main() {
 		// LessonForge's independent Java intake/parser/index contract has
 		// precedence whenever RAG is configured. This is not a fallback to the
 		// old Parser URL and never invokes the RequirementSummary-gated route.
-		parserAdapter = rag.NewLessonForgeParserAdapter(ragClient, store)
+		lessonForgeParser := rag.NewLessonForgeParserAdapter(ragClient, store)
+		lessonForgeParser.ConfigureEmbedding(store, models, crypt, true)
+		parserAdapter = lessonForgeParser
 	} else {
 		// 未配置 Java RAG 时才使用兼容 Parser 适配器；该模式不会把未配置
 		// 或失败伪装成解析成功，文件状态仍由 Parser Worker 按结果推进。
@@ -121,7 +124,7 @@ func main() {
 	// Runtime 是 Agent 的依赖集合：Agent 通过它访问 Store、模型、RAG、
 	// 模板能力和加密服务。Agent Worker 再从数据库领取 AgentRun 执行，
 	// 因此 HTTP 请求本身不直接承担长时间模型调用。
-	runtime := &agent.Runtime{Store: store, Crypto: crypt, Models: models, RAG: ragClient, Capability: templatebinding.Resolver{Files: store, StorageRoot: cfg.StorageRoot}, MaxToolCalls: 8, ToolTimeout: cfg.ToolRequestTimeout}
+	runtime := &agent.Runtime{Store: store, Crypto: crypt, Models: models, RAG: ragClient, Capability: templatebinding.Resolver{Files: store, StorageRoot: cfg.StorageRoot}, MaxToolCalls: 8, ToolTimeout: cfg.ToolRequestTimeout, EnableSubagentChain: cfg.EnableSubagentChain}
 	agent.StartWorker(ctx, store, runtime, cfg.AgentRunTimeout)
 	agent.StartMaintenance(ctx, store, files)
 

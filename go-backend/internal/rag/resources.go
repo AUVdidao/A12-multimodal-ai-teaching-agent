@@ -7,7 +7,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"lessonforge.local/backend/internal/model"
 )
 
@@ -27,13 +29,29 @@ type ResourceStorage interface {
 	Open(context.Context, string) (*os.File, error)
 }
 
+type EmbeddingConnectionStore interface {
+	ResolveEmbeddingConnection(context.Context, int64) (model.ModelConnection, string, error)
+}
+
+type EmbeddingAuditStore interface {
+	RecordModelAudit(context.Context, uuid.UUID, int64, int64, int64, model.ModelConnection, string, int, time.Duration) error
+	MarkConnectionUsed(context.Context, int64, int64) error
+}
+
 // MissionResourceBinder owns only the cross-system identity mapping. It does
 // not infer Java IDs from Mission/File IDs and only records IDs returned by
 // the Java API.
 type MissionResourceBinder struct {
-	Client  *Client
-	Store   ResourceStore
-	Storage ResourceStorage
+	Client    *Client
+	Store     ResourceStore
+	Storage   ResourceStorage
+	Models    *model.Client
+	Crypto    CredentialDecryptor
+	Embedding EmbeddingConnectionStore
+}
+
+type CredentialDecryptor interface {
+	Decrypt(string) (string, error)
 }
 
 func (b *MissionResourceBinder) Search(ctx context.Context, missionID int64, query string, fileIDs []int64) ([]Snippet, error) {
@@ -95,7 +113,56 @@ func (b *MissionResourceBinder) Search(ctx context.Context, missionID int64, que
 	if len(allowedRAGMaterials) == 0 {
 		return []Snippet{}, nil
 	}
-	return b.Client.searchJava(ctx, projectID, missionID, strings.TrimSpace(query), allowedRAGMaterials)
+	var queryVector []float64
+	var embeddingFallbackReason string
+	if b.Embedding != nil || b.Models != nil || b.Crypto != nil {
+		queryVector, embeddingFallbackReason = b.embedQuery(ctx, owner, missionID, strings.TrimSpace(query))
+	}
+	return b.Client.searchJava(ctx, projectID, missionID, strings.TrimSpace(query), allowedRAGMaterials, queryVector, embeddingFallbackReason)
+}
+
+func (b *MissionResourceBinder) embedQuery(ctx context.Context, owner, missionID int64, query string) ([]float64, string) {
+	if b.Embedding == nil || b.Models == nil || b.Crypto == nil {
+		return nil, "EMBEDDING_NOT_CONFIGURED"
+	}
+	connection, encrypted, err := b.Embedding.ResolveEmbeddingConnection(ctx, owner)
+	if err != nil {
+		return nil, safeEmbeddingError(err)
+	}
+	apiKey, err := b.Crypto.Decrypt(encrypted)
+	if err != nil {
+		return nil, "EMBEDDING_CREDENTIAL_UNAVAILABLE"
+	}
+	resolved := model.ResolvedConnection{ID: connection.ID, OwnerUserID: owner, Provider: connection.Provider, Protocol: connection.Protocol, BaseURL: connection.BaseURL, ModelID: connection.ModelID, Capabilities: connection.Capabilities, CapabilityVerification: connection.CapabilityVerification, APIKey: apiKey}
+	started := time.Now()
+	vectors, status, embedErr := b.Models.EmbedBatch(ctx, resolved, []string{query})
+	if audit, ok := b.Store.(EmbeddingAuditStore); ok {
+		_ = audit.RecordModelAudit(ctx, uuid.New(), owner, missionID, connection.ID, connection, "RAG_EMBEDDING_QUERY", status, time.Since(started))
+		if embedErr == nil {
+			_ = audit.MarkConnectionUsed(ctx, owner, connection.ID)
+		}
+	}
+	if embedErr != nil {
+		return nil, safeEmbeddingError(embedErr)
+	}
+	if len(vectors) != 1 || len(vectors[0]) == 0 || connection.Capabilities.EmbeddingDimension != len(vectors[0]) {
+		return nil, "EMBEDDING_DIMENSION_MISMATCH"
+	}
+	return vectors[0], ""
+}
+
+func safeEmbeddingError(err error) string {
+	if err == nil {
+		return ""
+	}
+	if httpErr, ok := err.(*model.HTTPError); ok {
+		return fmt.Sprintf("EMBEDDING_HTTP_%d", httpErr.Status)
+	}
+	code := strings.TrimSpace(strings.SplitN(err.Error(), ":", 2)[0])
+	if code == "" || len(code) > 80 {
+		return "EMBEDDING_FAILED"
+	}
+	return code
 }
 
 func (b *MissionResourceBinder) Read(ctx context.Context, missionID, fileID int64, locator string) (string, error) {

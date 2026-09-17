@@ -54,14 +54,17 @@
           </div>
         </div>
 
-        <div ref="conversationScroll" class="lf-conversation-scroll">
-          <template v-for="message in renderedMessages" :key="message.id">
-            <article v-if="!isStructuredMessage(message)" class="lf-message" :class="message.role === 'USER' ? 'lf-message--teacher' : 'lf-message--assistant'">
+        <div ref="conversationScroll" class="lf-conversation-scroll" @scroll.passive="handleConversationScroll">
+          <template v-for="item in conversationTimeline" :key="item.key">
+            <article v-if="item.kind === 'message'" class="lf-message" :class="item.message.role === 'USER' ? 'lf-message--teacher' : 'lf-message--assistant'">
               <div class="lf-message-body">
-                <div class="lf-message-meta">{{ message.role === 'USER' ? 'You' : 'LessonForge' }}<time>{{ formatDateTime(message.createdAt) }}</time></div>
-                <p>{{ message.content }}</p>
+                <div class="lf-message-meta">{{ item.message.role === 'USER' ? 'You' : 'LessonForge' }}<time>{{ formatDateTime(item.message.createdAt) }}</time></div>
+                <p>{{ item.message.content }}</p>
               </div>
             </article>
+            <GoQuestionCard v-else-if="item.kind === 'question' && item.question.id === activeQuestion?.id" :question="item.question" :question-index="questionIndex(item.question.id)" :question-total="renderedQuestions.length" :mission-id="missionId" :user-id="auth.user?.id ?? undefined" @submitted="handleQuestionSubmitted" />
+            <GoQuestionHistoryCard v-else-if="item.kind === 'question'" :questions="[item.question]" />
+            <GoPlanDraftCard v-else :draft="item.draft" :locked="Boolean(renderedLockedSpecification)" :facts="planFacts" :approving="approving" :approval-blocker="approvalBlocker" @approve="approveDraft" />
           </template>
 
           <section v-if="showInitialConversation" class="go-initial-conversation" data-test="go-initial-conversation">
@@ -71,7 +74,7 @@
             <p>告诉我这节课要教什么、面向哪些学生，以及你希望重点讲清楚的内容。</p>
             <div class="go-initial-conversation__prompts"><button v-for="prompt in starterPrompts" :key="prompt" type="button" @click="useStarterPrompt(prompt)">{{ prompt }}</button></div>
           </section>
-          <section v-if="!renderedMessages.length && !showInitialConversation" class="go-empty-message">还没有消息。</section>
+          <section v-if="!conversationTimeline.length && !showInitialConversation" class="go-empty-message">还没有消息。</section>
 
           <section v-if="currentRun" class="go-agent-run-card" :class="`go-agent-run-card--${statusClass(currentRun.status)}`" data-test="go-agent-run-status">
             <div class="go-agent-run-card__header"><div><div class="lf-card-kicker">AGENT RUN</div><h2>{{ statusLabel(currentRun.status) }}</h2></div><span class="lf-status-chip"><i class="lf-status-dot" :class="`lf-status-dot--${statusClass(currentRun.status)}`" />{{ statusLabel(currentRun.status) }}</span></div>
@@ -81,9 +84,6 @@
             <small v-else-if="currentRun.status === 'FAILED' && currentRun.errorMessage">{{ currentRun.errorMessage }}</small>
           </section>
 
-          <GoQuestionCard v-if="activeQuestion" :key="activeQuestion.id" :question="activeQuestion" :question-index="activeQuestionIndex + 1" :question-total="renderedQuestions.length" :mission-id="missionId" :user-id="auth.user?.id ?? undefined" @submitted="handleQuestionSubmitted" />
-          <GoQuestionHistoryCard v-if="historyQuestions.length" :questions="historyQuestions" />
-          <GoPlanDraftCard v-if="renderedDraft" :draft="renderedDraft" :locked="Boolean(renderedLockedSpecification)" :facts="planFacts" :approving="approving" @approve="approveDraft" />
           <GoFeedbackCard v-if="renderedFeedback.length" :feedback="renderedFeedback" @continue-editing="focusComposer" />
 
           <section v-if="renderedLockedSpecification" class="go-locked-spec lf-plan-card" data-test="go-locked-specification">
@@ -94,19 +94,22 @@
           <section v-if="renderedLockedSpecification" class="go-generation-card go-generation-card--waiting" data-test="go-generation-waiting">
             <header class="go-generation-card__header"><div><div class="lf-card-kicker">COURSEWARE GENERATION</div><h2>{{ generationIsActive ? '正在生成' : currentGenerationJob?.status === 'FAILED' || currentGenerationJob?.status === 'CANCELLED' || currentGenerationJob?.status === 'SUCCEEDED' ? '可以再次生成' : '等待生成' }}</h2></div><span class="go-generation-card__status">{{ currentGenerationJob ? statusLabel(currentGenerationJob.status) : 'READY CHECK' }}</span></header>
             <p v-if="generationIsActive">生成任务已提交，页面会持续读取服务端任务状态；完成后保留并展示课件产物。</p>
+            <p v-else-if="currentGenerationJob?.generationMode === 'SYSTEM_DEFAULT_TEMPLATE'">本次生成使用系统默认版式；教师模板组件或外部资料不可用的部分已记录在任务回退原因中。</p>
             <p v-else-if="currentGenerationJob?.status === 'FAILED'">上次生成失败：{{ generationFeedbackLabel(currentGenerationJob) }}。修正输入或服务后，可以针对同一锁定规格重试。</p>
             <p v-else-if="currentGenerationJob?.status === 'CANCELLED'">上次生成已取消，可以针对同一锁定规格重新发起。</p>
             <p v-else-if="currentGenerationJob?.status === 'SUCCEEDED'">上次生成已完成。历史 Artifact 保留在下方，满足条件后仍可再次生成同一锁定规格。</p>
-            <p v-else>方案已批准。模板具备 Engine 可执行配置且材料就绪后，教师可单独启动 PPT 生成。</p>
+            <p v-else>方案已批准。教师可直接启动 PPT 生成；若模板组件或外部资料暂不可用，服务端会记录原因并切换系统默认版式。</p>
             <div v-if="generationBlockers.length" class="go-generation-card__requirements" data-test="generation-prerequisites"><span>开始前还需要：</span><ul><li v-for="blocker in generationBlockers" :key="blocker">{{ blocker }}</li></ul></div>
             <button v-if="generationButtonVisible" class="lf-primary-button" type="button" data-test="request-generation" :disabled="!generationCanRequest" @click="requestGeneration">{{ generationRequesting ? '提交生成请求…' : generationIsActive ? '生成中…' : currentGenerationJob ? '再次生成 PPT' : '生成 PPT' }}</button>
             <div v-else class="go-generation-card__track" aria-hidden="true"><span /></div>
           </section>
           <section v-for="job in detail.generationJobs" :key="job.id" class="lf-run-card" :data-test="`generation-job-${job.id}`"><span class="lf-status-dot" :class="`lf-status-dot--${statusClass(job.status)}`" />课件生成 · {{ statusLabel(job.status) }} · 规格 v{{ job.specificationVersion }}<span v-if="job.totalSlides">{{ job.currentSlide }}/{{ job.totalSlides }}</span><small v-if="job.status === 'FAILED'">{{ generationFeedbackLabel(job) }}</small></section>
           <section v-for="artifact in detail.artifacts" :key="artifact.id" class="go-artifact-card"><div class="go-artifact-card__main"><span class="go-artifact-card__icon" aria-hidden="true">▣</span><div><div class="lf-card-kicker">PPT OUTPUT · v{{ artifact.version }}</div><h2>{{ artifact.file.originalName }}</h2><p>{{ artifact.file.size }} bytes · {{ artifact.status || 'ready' }}</p></div></div><div class="go-artifact-card__actions"><a class="lf-secondary-button" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">预览</a><a class="lf-primary-button" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">下载</a></div></section>
+          <div ref="conversationEnd" class="go-conversation-end" aria-hidden="true" />
         </div>
 
-        <LessonForgeComposer v-model="draft" :files="composerFiles" :connections="connections" :selected-connection="selectedConnection" :working="sending || uploading" placeholder="继续补充课件需求…" @send="sendMessage" @files-selected="handleFilesSelected" @select-connection="handleConnectionSelection" @manage-connections="connectionDrawerOpen = true" />
+        <button v-if="showJumpToLatest" class="go-jump-to-latest" type="button" data-test="jump-to-latest" @click="scrollToLatest('smooth')">回到最新消息 ↓</button>
+        <LessonForgeComposer v-if="!activeQuestion" v-model="draft" :files="composerFiles" :connections="connections" :selected-connection="selectedConnection" :working="sending || uploading" placeholder="继续补充课件需求…" @send="sendMessage" @files-selected="handleFilesSelected" @select-connection="handleConnectionSelection" @manage-connections="connectionDrawerOpen = true" />
         <p v-if="error" class="go-inline-error" role="alert">{{ error }}</p>
       </main>
 
@@ -124,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import LessonForgeFrame from '@/components/lessonForge/LessonForgeFrame.vue';
 import LessonForgeComposer from '@/components/lessonForge/LessonForgeComposer.vue';
@@ -157,6 +160,11 @@ const approving = ref(false);
 const generationRequesting = ref(false);
 const error = ref('');
 const viewActive = ref(false);
+const conversationScroll = ref<HTMLElement | null>(null);
+const conversationEnd = ref<HTMLElement | null>(null);
+const followingLatest = ref(true);
+const hasNewActivityBelow = ref(false);
+let initialConversationScroll = true;
 let source: EventSource | null = null;
 let reloadTimer: number | undefined;
 let eventReconnectTimer: number | undefined;
@@ -184,20 +192,37 @@ const renderedMessages = computed<GoMessage[]>(() => detail.value?.messages || [
 const renderedFeedback = computed(() => detail.value?.feedback || []);
 const renderedQuestions = computed<GoQuestion[]>(() => questions.value);
 const renderedEvents = computed<GoActivityEvent[]>(() => events.value);
+type ConversationTimelineItem =
+  | { key: string; kind: 'message'; createdAt: string; message: GoMessage }
+  | { key: string; kind: 'question'; createdAt: string; question: GoQuestion }
+  | { key: string; kind: 'draft'; createdAt: string; draft: GoPlanningDraft };
+const conversationTimeline = computed<ConversationTimelineItem[]>(() => {
+  const items: ConversationTimelineItem[] = renderedMessages.value
+    .filter((message) => !isStructuredMessage(message))
+    .map((message) => ({ key: `message-${message.id}`, kind: 'message', createdAt: message.createdAt, message }));
+  items.push(...renderedQuestions.value.map((question) => ({ key: `question-${question.id}`, kind: 'question' as const, createdAt: question.createdAt, question })));
+  if (renderedDraft.value) items.push({ key: `draft-${renderedDraft.value.id}`, kind: 'draft', createdAt: renderedDraft.value.createdAt, draft: renderedDraft.value });
+  return items.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.key.localeCompare(right.key));
+});
 const currentGenerationJob = computed(() => {
   const jobs = detail.value?.generationJobs || [];
   return jobs[0] || null;
 });
 const generationIsActive = computed(() => ['QUEUED', 'RUNNING', 'VERIFYING'].includes(currentGenerationJob.value?.status || ''));
 const generationBlockers = computed(() => {
-  const blockers: string[] = [];
-  const binding = renderedLockedSpecification.value?.templateBinding;
-  if (!bindingIsUsable(binding)) blockers.push('锁定规格的模板绑定无效，请重新准备模板并锁定新规格。');
-  else if (!engineProfileIsUsable(binding)) blockers.push('模板尚未具备 PPT Engine 可执行配置，暂不能生成 PPT。');
-  const files = detail.value?.files || [];
-  if (!files.length || files.some((file) => file.parseStatus !== 'READY')) blockers.push('所有已绑定材料都必须先完成解析。');
-  if (!files.some((file) => file.role === 'TEMPLATE' && file.parseStatus === 'READY')) blockers.push('需要一份已解析完成的 PPTX 模板。');
-  return blockers;
+  // The server resolves AUTO fallback after it checks the immutable
+  // specification. A missing Engine profile, template component set, or
+  // external reference is therefore not a client-side blocker: the worker
+  // may switch to the system-owned default template and generate from the
+  // locked semantic specification.
+  return [] as string[];
+});
+const approvalBlocker = computed(() => {
+  const template = (detail.value?.files || []).find((file) => file.role === 'TEMPLATE');
+  if (!template) return '批准前需要先上传一份 PPTX 模板。';
+  if (template.parseStatus === 'FAILED') return 'PPTX 模板解析失败，请重新上传或处理模板。';
+  if (template.parseStatus !== 'READY') return 'PPTX 模板仍在解析，完成后才能批准方案。';
+  return '';
 });
 const generationButtonVisible = computed(() => Boolean(renderedLockedSpecification.value && (!currentGenerationJob.value || generationIsActive.value || ['FAILED', 'CANCELLED', 'SUCCEEDED'].includes(currentGenerationJob.value.status))));
 const generationCanRequest = computed(() => Boolean(renderedLockedSpecification.value && !generationIsActive.value && (!currentGenerationJob.value || ['FAILED', 'CANCELLED', 'SUCCEEDED'].includes(currentGenerationJob.value.status)) && !generationBlockers.value.length && !generationRequesting.value));
@@ -256,16 +281,36 @@ const runDescription = computed(() => {
 const starterPrompts = ['制作一节高中物理课件，重点讲清核心概念', '把这份教材整理成一套课堂课件', '沿用我的模板，增加案例和课后练习'];
 const showInitialConversation = computed(() => Boolean(detail.value && !renderedMessages.value.length && !renderedQuestions.value.length && !renderedDraft.value && !detail.value.generationJobs.length && !detail.value.artifacts.length));
 const activeQuestion = computed(() => { const latest = renderedQuestions.value[renderedQuestions.value.length - 1]; if (!latest || latest.latestAnswer) return null; if (detail.value?.currentDraft && Date.parse(detail.value.currentDraft.createdAt) >= Date.parse(latest.createdAt)) return null; return latest; });
-const activeQuestionIndex = computed(() => activeQuestion.value ? renderedQuestions.value.findIndex((question) => question.id === activeQuestion.value?.id) : -1);
-const historyQuestions = computed(() => renderedQuestions.value.filter((question) => question.id !== activeQuestion.value?.id));
+const showJumpToLatest = computed(() => hasNewActivityBelow.value && conversationTimeline.value.length > 0);
+const conversationTailKey = computed(() => [
+  conversationTimeline.value.map((item) => item.key).join('|'),
+  currentRun.value ? `${currentRun.value.id}:${currentRun.value.status}` : '',
+  renderedLockedSpecification.value?.id || '',
+  currentGenerationJob.value ? `${currentGenerationJob.value.id}:${currentGenerationJob.value.status}:${currentGenerationJob.value.currentSlide}` : '',
+  detail.value?.artifacts.map((artifact) => artifact.id).join('|') || '',
+].join('::'));
 
 function contextIsCurrent(id: number, userId: number | null, version?: number) { return viewActive.value && missionId.value === id && auth.user?.id === userId && (version === undefined || requestVersion === version); }
 function isStructuredMessage(message: GoMessage) { return message.messageType === 'QUESTION' || message.messageType === 'PLAN_DRAFT' || message.outputStage === 'QUESTION_MESSAGE' || message.outputStage === 'PLAN_DRAFT'; }
+function questionIndex(questionId: string) { return Math.max(1, renderedQuestions.value.findIndex((question) => question.id === questionId) + 1); }
+function handleConversationScroll() {
+  const element = conversationScroll.value;
+  if (!element) return;
+  followingLatest.value = element.scrollHeight - element.scrollTop - element.clientHeight <= 96;
+  if (followingLatest.value) hasNewActivityBelow.value = false;
+}
+function scrollToLatest(behavior: ScrollBehavior = 'auto') {
+  const element = conversationScroll.value;
+  if (!element) return;
+  if (behavior === 'smooth' && typeof element.scrollTo === 'function') element.scrollTo({ top: element.scrollHeight, behavior });
+  else element.scrollTop = element.scrollHeight;
+  followingLatest.value = true;
+  hasNewActivityBelow.value = false;
+}
 function fileStatusLabel(status: string) { return ({ PENDING: '等待解析', PARSING: '解析中', INDEXING: '建立索引', READY: '已就绪', FAILED: '解析失败' } as Record<string, string>)[status] || status || '等待处理'; }
 function shortHash(value: string) { return value ? `${value.slice(0, 12)}…` : '—'; }
 function templateBindingLabel(value: unknown) { if (!bindingIsUsable(value)) return '未完成'; const record = value as Record<string, unknown>; return typeof record.templateOriginalName === 'string' ? record.templateOriginalName : '已绑定模板'; }
 function bindingIsUsable(value: unknown) { if (!value || typeof value !== 'object' || Array.isArray(value)) return false; const record = value as Record<string, unknown>; return record.bindingKind === 'LESSONFORGE_UPSTREAM_TEMPLATE_BINDING' && typeof record.templateStorageKey === 'string' && record.templateStorageKey.length > 0 && typeof record.templateFileSha256 === 'string' && record.templateFileSha256.length === 64 && Number(record.missionFileId) > 0 && Number(record.fileObjectId) > 0; }
-function engineProfileIsUsable(value: unknown) { if (!value || typeof value !== 'object' || Array.isArray(value)) return false; const record = value as Record<string, unknown>; return record.executionReady === true && record.engineNativeProfilePresent === true; }
 function generationFeedbackLabel(job: GoGenerationJob) { const feedback = job.generationFeedback; if (!feedback || typeof feedback !== 'object' || Array.isArray(feedback)) return '服务端未返回详细原因'; const code = (feedback as Record<string, unknown>).code; return typeof code === 'string' ? code : '服务端未返回详细原因'; }
 function useStarterPrompt(prompt: string) { draft.value = prompt; }
 function focusComposer() { document.querySelector<HTMLTextAreaElement>('[data-test="composer"] textarea')?.focus(); }
@@ -294,9 +339,9 @@ async function loadConnections(id: number, userId: number | null, version: numbe
 function handleConnectionsLoaded(value: ModelConnection[]) { connections.value = value; const id = detail.value?.mission.selectedModelConnectionId; selectedConnection.value = id == null ? null : value.find((item) => item.id === id) || null; }
 async function handleConnectionSelection(value: { id: number } | ModelConnection | null) { const id = value?.id ?? null; const full = id == null ? null : connections.value.find((item) => item.id === id && item.enabled && item.verificationStatus === 'VERIFIED') || null; if (id !== null && !full) return; const mission = missionId.value; const userId = auth.user?.id ?? null; if (!contextIsCurrent(mission, userId)) return; selectedConnection.value = full; try { await selectGoMissionConnection(mission, id); if (contextIsCurrent(mission, userId)) await load(); } catch (reason) { if (contextIsCurrent(mission, userId)) error.value = goErrorMessage(reason, 'Model Connection 选择失败。'); } }
 async function handleFilesSelected(value: ComposerFile[]) { const mission = missionId.value; const userId = auth.user?.id ?? null; if (!contextIsCurrent(mission, userId)) return; const additions = value.filter((item) => item.file && !composerFiles.value.some((old) => composerFileIdentity(old) === composerFileIdentity(item))); composerFiles.value = value; if (!additions.length) return; uploading.value = true; try { for (const item of additions) { if (!contextIsCurrent(mission, userId)) return; if (item.file) await uploadGoMissionFile(mission, item.file); } if (contextIsCurrent(mission, userId)) { composerFiles.value = []; await load(); } } catch (reason) { if (contextIsCurrent(mission, userId)) error.value = goErrorMessage(reason, '文件绑定失败。'); } finally { if (contextIsCurrent(mission, userId)) uploading.value = false; } }
-async function sendMessage(payload: { text: string; files: ComposerFile[] }) { if (!payload.text.trim()) return; const mission = missionId.value; const userId = auth.user?.id ?? null; if (!contextIsCurrent(mission, userId)) return; sending.value = true; error.value = ''; try { await sendGoMissionMessage(mission, payload.text); if (contextIsCurrent(mission, userId)) { draft.value = ''; composerFiles.value = []; await load(); } } catch (reason) { if (contextIsCurrent(mission, userId)) error.value = goErrorMessage(reason, '消息发送失败；未伪造 Agent 结果。'); } finally { if (contextIsCurrent(mission, userId)) sending.value = false; } }
-async function handleQuestionSubmitted() { const mission = missionId.value; const userId = auth.user?.id ?? null; if (contextIsCurrent(mission, userId)) await load(false); }
-async function approveDraft() { const draftToApprove = renderedDraft.value; const mission = missionId.value; const userId = auth.user?.id ?? null; const version = requestVersion; if (!draftToApprove || renderedLockedSpecification.value || !contextIsCurrent(mission, userId, version) || approving.value) return; approving.value = true; error.value = ''; try { const locked = await approveGoPlanningDraft(draftToApprove.id); if (!contextIsCurrent(mission, userId, version)) return; if (!detail.value) return; detail.value = { ...detail.value, lockedSpecification: locked }; await load(false); } catch (reason) { if (contextIsCurrent(mission, userId, version)) error.value = goErrorMessage(reason, '方案锁定失败；当前方案仍保持草稿状态。'); } finally { approving.value = false; } }
+async function sendMessage(payload: { text: string; files: ComposerFile[] }) { if (!payload.text.trim()) return; const mission = missionId.value; const userId = auth.user?.id ?? null; if (!contextIsCurrent(mission, userId)) return; followingLatest.value = true; hasNewActivityBelow.value = false; sending.value = true; error.value = ''; try { await sendGoMissionMessage(mission, payload.text); if (contextIsCurrent(mission, userId)) { draft.value = ''; composerFiles.value = []; await load(); } } catch (reason) { if (contextIsCurrent(mission, userId)) error.value = goErrorMessage(reason, '消息发送失败；未伪造 Agent 结果。'); } finally { if (contextIsCurrent(mission, userId)) sending.value = false; } }
+async function handleQuestionSubmitted() { const mission = missionId.value; const userId = auth.user?.id ?? null; followingLatest.value = true; hasNewActivityBelow.value = false; if (contextIsCurrent(mission, userId)) await load(false); }
+async function approveDraft() { const draftToApprove = renderedDraft.value; const mission = missionId.value; const userId = auth.user?.id ?? null; const version = requestVersion; if (!draftToApprove || renderedLockedSpecification.value || !contextIsCurrent(mission, userId, version) || approving.value) return; if (approvalBlocker.value) { error.value = approvalBlocker.value; return; } approving.value = true; error.value = ''; try { const locked = await approveGoPlanningDraft(draftToApprove.id); if (!contextIsCurrent(mission, userId, version)) return; if (!detail.value) return; detail.value = { ...detail.value, lockedSpecification: locked }; await load(false); } catch (reason) { if (contextIsCurrent(mission, userId, version)) error.value = goErrorMessage(reason, '方案锁定失败；当前方案仍保持草稿状态。'); } finally { approving.value = false; } }
 async function requestGeneration() {
   const specification = renderedLockedSpecification.value;
   const mission = missionId.value;
@@ -378,8 +423,17 @@ function artifactDownloadUrl(id: string) { return `${goApiBaseUrl}/api/artifacts
 function statusClass(status: string) { return status.toLowerCase().replaceAll('_', '-'); }
 function statusLabel(status: string) { return ({ ASSIGNED: '待开始', IN_PROGRESS: '进行中', SUBMITTED: '已提交', COMPLETED: '已完成', WAITING_INPUTS: '等待补充', QUEUED: '排队中', RUNNING: '运行中', VERIFYING: '校验中', FAILED: '失败', CANCELLED: '已取消', FEEDBACK: '待修改', QUESTION: '需求确认', PLAN_DRAFT: '待确认', LOCKED: '已锁定', GENERATION_WAITING: '等待生成' } as Record<string, string>)[status] || status; }
 function formatDateTime(value: string) { const date = new Date(value); return Number.isNaN(date.valueOf()) ? '—' : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-watch(() => route.params.missionId, () => { stopGenerationPolling(); source?.close(); source = null; if (eventReconnectTimer !== undefined) { window.clearTimeout(eventReconnectTimer); eventReconnectTimer = undefined; } lastEventId = 0; void load(); });
-watch(() => auth.user?.id, (next, previous) => { if (next === previous) return; stopGenerationPolling(); restoreWorkspaceLayout(); source?.close(); source = null; if (eventReconnectTimer !== undefined) { window.clearTimeout(eventReconnectTimer); eventReconnectTimer = undefined; } lastEventId = 0; requestVersion++; detail.value = null; questions.value = []; agentRuns.value = []; events.value = []; error.value = ''; if (next != null) void load(); });
+watch(conversationTailKey, async (next, previous) => {
+  if (!next || next === previous) return;
+  const shouldFollow = initialConversationScroll || followingLatest.value;
+  const behavior: ScrollBehavior = initialConversationScroll ? 'auto' : 'smooth';
+  initialConversationScroll = false;
+  await nextTick();
+  if (shouldFollow) scrollToLatest(behavior);
+  else hasNewActivityBelow.value = true;
+});
+watch(() => route.params.missionId, () => { stopGenerationPolling(); source?.close(); source = null; if (eventReconnectTimer !== undefined) { window.clearTimeout(eventReconnectTimer); eventReconnectTimer = undefined; } lastEventId = 0; initialConversationScroll = true; followingLatest.value = true; hasNewActivityBelow.value = false; void load(); });
+watch(() => auth.user?.id, (next, previous) => { if (next === previous) return; stopGenerationPolling(); restoreWorkspaceLayout(); source?.close(); source = null; if (eventReconnectTimer !== undefined) { window.clearTimeout(eventReconnectTimer); eventReconnectTimer = undefined; } lastEventId = 0; initialConversationScroll = true; followingLatest.value = true; hasNewActivityBelow.value = false; requestVersion++; detail.value = null; questions.value = []; agentRuns.value = []; events.value = []; error.value = ''; if (next != null) void load(); });
 watch([() => auth.user?.id, missionId], restoreComposerDraft, { immediate: true });
 watch(draft, persistComposerDraft);
 onMounted(() => { viewActive.value = true; restoreWorkspaceLayout(); void load(); });

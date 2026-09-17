@@ -15,7 +15,12 @@ public final class LessonForgeKnowledgeDtos {
             @NotNull Long missionId,
             @NotBlank String query,
             @Min(1) @Max(20) Integer limit,
-            List<@NotNull Long> materialIds
+            List<@NotNull Long> materialIds,
+            List<Double> queryEmbedding,
+            @jakarta.validation.constraints.Size(max = 120) String embeddingFallbackReason
     ) {
+        public SearchRequest(Long missionId, String query, Integer limit, List<Long> materialIds) {
+            this(missionId, query, limit, materialIds, null, null);
+        }
     }
 }

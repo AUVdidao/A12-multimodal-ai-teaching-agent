@@ -79,6 +79,10 @@ test('real Vue Router resolves only the LessonForge app surface', async () => {
   const routerModule = await loadSource('/src/router/index.ts');
   const router = routerModule.default;
 
+  assert.equal(routerModule.roleHome('TEACHER'), '/lessonforge/new');
+  assert.equal(routerModule.roleHome('LEADER'), '/lessonforge/new');
+  assert.equal(routerModule.roleHome('RESEARCHER'), '/reviewer/missions');
+  assert.equal(routerModule.roleHome('STUDENT'), '/assistant');
   const assistant = router.resolve('/assistant');
   assert.equal(assistant.name, 'lessonforge-missions');
   assert.equal(assistant.meta.lessonForge, true);

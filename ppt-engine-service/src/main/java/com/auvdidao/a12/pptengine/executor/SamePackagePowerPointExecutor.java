@@ -222,6 +222,7 @@ public class SamePackagePowerPointExecutor {
             if (hasBlocking(diagnostics)) {
                 return failedAndCleanup(diagnostics, executionDirectory, true);
             }
+            pack.retainOnlySlides(targetSlides);
             beforeArtifactCommitHook.run();
             if (verifySourceIdentity(source, diagnostics, "executor.sourceChangedDuringExecution") == null) {
                 return failedAndCleanup(diagnostics, executionDirectory, true);

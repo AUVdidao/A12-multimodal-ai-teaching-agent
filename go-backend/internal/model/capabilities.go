@@ -4,6 +4,8 @@ const (
 	CapabilityTools     = "supportsTools"
 	CapabilityJSONMode  = "supportsJSONMode"
 	CapabilityVision    = "supportsVision"
+	CapabilityChat      = "supportsChat"
+	CapabilityEmbedding = "supportsEmbeddings"
 	CapabilityStreaming = "supportsStreaming"
 
 	CapabilityDeclared    = "DECLARED"
@@ -15,36 +17,45 @@ const (
 // allowed to use. It is stored with the connection and frozen into each
 // AgentRun so a later connection edit cannot change an already-created run.
 type ModelCapabilities struct {
-	SupportsTools     bool `json:"supportsTools"`
-	SupportsJSONMode  bool `json:"supportsJSONMode"`
-	SupportsVision    bool `json:"supportsVision"`
-	SupportsStreaming bool `json:"supportsStreaming"`
+	SupportsChat       bool `json:"supportsChat"`
+	SupportsTools      bool `json:"supportsTools"`
+	SupportsJSONMode   bool `json:"supportsJSONMode"`
+	SupportsVision     bool `json:"supportsVision"`
+	SupportsEmbeddings bool `json:"supportsEmbeddings"`
+	EmbeddingDimension int  `json:"embeddingDimension,omitempty"`
+	SupportsStreaming  bool `json:"supportsStreaming"`
 }
 
 // CapabilityVerification records whether a capability is only teacher-declared
 // or was observed by the connection verification handshake.
 type CapabilityVerification struct {
-	SupportsTools     string `json:"supportsTools"`
-	SupportsJSONMode  string `json:"supportsJSONMode"`
-	SupportsVision    string `json:"supportsVision"`
-	SupportsStreaming string `json:"supportsStreaming"`
+	SupportsChat       string `json:"supportsChat"`
+	SupportsTools      string `json:"supportsTools"`
+	SupportsJSONMode   string `json:"supportsJSONMode"`
+	SupportsVision     string `json:"supportsVision"`
+	SupportsEmbeddings string `json:"supportsEmbeddings"`
+	SupportsStreaming  string `json:"supportsStreaming"`
 }
 
 func DefaultModelCapabilities() ModelCapabilities {
 	return ModelCapabilities{
-		SupportsTools:     true,
-		SupportsJSONMode:  true,
-		SupportsVision:    false,
-		SupportsStreaming: false,
+		SupportsChat:       true,
+		SupportsTools:      true,
+		SupportsJSONMode:   true,
+		SupportsVision:     false,
+		SupportsEmbeddings: false,
+		SupportsStreaming:  false,
 	}
 }
 
 func DefaultCapabilityVerification() CapabilityVerification {
 	return CapabilityVerification{
-		SupportsTools:     CapabilityDeclared,
-		SupportsJSONMode:  CapabilityDeclared,
-		SupportsVision:    CapabilityDeclared,
-		SupportsStreaming: CapabilityDeclared,
+		SupportsChat:       CapabilityDeclared,
+		SupportsTools:      CapabilityDeclared,
+		SupportsJSONMode:   CapabilityDeclared,
+		SupportsVision:     CapabilityDeclared,
+		SupportsEmbeddings: CapabilityDeclared,
+		SupportsStreaming:  CapabilityDeclared,
 	}
 }
 
@@ -60,6 +71,9 @@ func NormalizeCapabilities(capabilities ModelCapabilities, capabilitiesSet bool)
 
 func NormalizeCapabilityVerification(value CapabilityVerification) CapabilityVerification {
 	defaults := DefaultCapabilityVerification()
+	if value.SupportsChat == "" {
+		value.SupportsChat = defaults.SupportsChat
+	}
 	if value.SupportsTools == "" {
 		value.SupportsTools = defaults.SupportsTools
 	}
@@ -68,6 +82,9 @@ func NormalizeCapabilityVerification(value CapabilityVerification) CapabilityVer
 	}
 	if value.SupportsVision == "" {
 		value.SupportsVision = defaults.SupportsVision
+	}
+	if value.SupportsEmbeddings == "" {
+		value.SupportsEmbeddings = defaults.SupportsEmbeddings
 	}
 	if value.SupportsStreaming == "" {
 		value.SupportsStreaming = defaults.SupportsStreaming

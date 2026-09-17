@@ -37,7 +37,7 @@
       </section>
       <div class="lf-new-mission__composer" data-test="go-new-composer">
         <p class="lf-new-workspace__context-summary" data-test="context-summary"><span>Context</span><strong>{{ composerFiles.length }} 个文件</strong><span>·</span><span>{{ selectedConnection?.name || '尚未选择模型' }}</span></p>
-        <LessonForgeComposer v-model="draft" variant="empty" :files="composerFiles" :connections="connections" :selected-connection="selectedConnection" :working="sending || uploading" placeholder="Describe the lesson or courseware you want to create…" @send="handleSend" @files-selected="handleFilesSelected" @select-connection="handleConnectionSelection" @manage-connections="connectionDrawerOpen = true" />
+        <LessonForgeComposer v-model="draft" variant="empty" :files="composerFiles" :connections="planningConnections" :selected-connection="selectedConnection" :working="sending || uploading" placeholder="Describe the lesson or courseware you want to create…" @send="handleSend" @files-selected="handleFilesSelected" @select-connection="handleConnectionSelection" @manage-connections="connectionDrawerOpen = true" />
         <p class="lf-new-mission__composer-status" data-test="go-composer-status">{{ composerStatus }}</p>
       </div>
       <ModelConnectionDrawer v-model="connectionDrawerOpen" :selected-connection="selectedConnection" :selected-connection-id="selectedConnection?.id ?? null" @update:connection="handleConnectionSelection" @connections-loaded="handleConnectionsLoaded" />
@@ -52,7 +52,8 @@ import LessonForgeFrame from '@/components/lessonForge/LessonForgeFrame.vue';
 import LessonForgeComposer from '@/components/lessonForge/LessonForgeComposer.vue';
 import ModelConnectionDrawer from '@/components/assistant/ModelConnectionDrawer.vue';
 import { createGoMission, goErrorMessage, listGoMissions, uploadGoTemporary, type GoMission } from '@/api/go';
-import { getModelConnections, type ModelConnection } from '@/api/aiCredentials';
+import { getModelConnectionBindings, getModelConnections, type ModelConnection } from '@/api/aiCredentials';
+import { isSelectableConnection } from '@/utils/conversationWorkspaceConnection';
 import { composerFileIdentity, mergeComposerFiles, type ComposerFile } from '@/utils/lessonForgeComposer';
 import type { LessonForgeMission } from '@/types/lessonForge';
 
@@ -61,6 +62,7 @@ const draft = ref('');
 const composerFiles = ref<ComposerFile[]>([]);
 const connections = ref<ModelConnection[]>([]);
 const selectedConnection = ref<ModelConnection | null>(null);
+const planningConnections = computed(() => connections.value.filter(isSelectableConnection));
 const connectionDrawerOpen = ref(false);
 const loadingConnections = ref(false);
 const uploading = ref(false);
@@ -81,9 +83,9 @@ const recentMissions = computed<LessonForgeMission[]>(() => recent.value.slice(0
 const composerStatus = computed(() => uploading.value ? '正在上传文件…' : sending.value ? '正在创建 Mission…' : selectedConnection.value ? `${selectedConnection.value.name} · 已选择` : '可以先发送；没有连接时 Agent 会等待补充');
 
 onMounted(async () => { await loadConnections(); try { recent.value = await listGoMissions(); } catch { recent.value = []; } });
-async function loadConnections() { loadingConnections.value = true; try { const response = await getModelConnections(); connections.value = response.code === 0 ? response.data || [] : []; } catch { connections.value = []; } finally { loadingConnections.value = false; } }
-function handleConnectionsLoaded(value: ModelConnection[]) { connections.value = value; if (!value.some((item) => item.id === selectedConnection.value?.id && item.enabled && item.verificationStatus === 'VERIFIED')) selectedConnection.value = null; }
-function handleConnectionSelection(value: { id: number } | ModelConnection | null) { const id = value?.id; selectedConnection.value = id == null ? null : connections.value.find((item) => item.id === id && item.enabled && item.verificationStatus === 'VERIFIED') || null; }
+async function loadConnections() { loadingConnections.value = true; try { const response = await getModelConnections(); connections.value = response.code === 0 ? response.data || [] : []; let planningId: number | undefined; try { const bindings = await getModelConnectionBindings(); planningId = bindings.find((item) => item.role === 'PLANNING')?.modelConnectionId; } catch { planningId = undefined; } selectedConnection.value = planningId == null ? null : planningConnections.value.find((item) => item.id === planningId) || null; } catch { connections.value = []; selectedConnection.value = null; } finally { loadingConnections.value = false; } }
+function handleConnectionsLoaded(value: ModelConnection[]) { connections.value = value; if (!planningConnections.value.some((item) => item.id === selectedConnection.value?.id)) selectedConnection.value = null; }
+function handleConnectionSelection(value: { id: number } | ModelConnection | null) { const id = value?.id; selectedConnection.value = id == null ? null : planningConnections.value.find((item) => item.id === id) || null; }
 function openFilePicker() { contextFileInput.value?.click(); }
 function addDroppedFiles(files: File[]) {
   if (!files.length) return;

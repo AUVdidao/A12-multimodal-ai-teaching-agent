@@ -306,7 +306,8 @@ public class TemplateProfileService {
                 String.valueOf(source.getVersionNumber()),
                 String.valueOf(profile.getVersionNumber()),
                 nativeProfile,
-                profile.getEngineNativeProfileChecksum()
+                profile.getEngineNativeProfileChecksum(),
+                profile.getEngineNativeProfileJson()
         );
     }
 

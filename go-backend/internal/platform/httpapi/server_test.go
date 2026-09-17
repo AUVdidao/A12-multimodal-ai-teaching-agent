@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"lessonforge.local/backend/internal/model"
+	"lessonforge.local/backend/internal/specification"
 )
 
 func TestGenerateRouteIsNotAUserFacingGenerationEntryPoint(t *testing.T) {
@@ -41,5 +42,18 @@ func TestSafeErrorCodeClassifiesProviderHTTPStatuses(t *testing.T) {
 	}
 	if got := safeErrorCode(model.ErrTimeout); got != "MODEL_TIMEOUT" {
 		t.Errorf("safeErrorCode(timeout) = %q, want MODEL_TIMEOUT", got)
+	}
+}
+
+func TestSafeStoreErrorPreservesSpecificationCodes(t *testing.T) {
+	tests := []error{
+		specification.ErrTemplateRequired,
+		specification.ErrPlanInvalid,
+		specification.ErrForbiddenField,
+	}
+	for _, err := range tests {
+		if got := safeStoreError(err); got != err.Error() {
+			t.Errorf("safeStoreError(%q) = %q, want %q", err, got, err.Error())
+		}
 	}
 }

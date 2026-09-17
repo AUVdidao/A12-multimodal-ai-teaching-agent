@@ -23,6 +23,9 @@ export interface GoModelConnection {
   protocol: 'OPENAI_COMPATIBLE';
   baseUrl: string;
   modelId: string;
+  provider?: string;
+  capabilities: GoModelCapabilities;
+  capabilityVerification?: GoCapabilityVerification;
   keyHint: string;
   enabled: boolean;
   verificationStatus: 'UNVERIFIED' | 'VERIFIED' | 'INVALID';
@@ -32,6 +35,32 @@ export interface GoModelConnection {
   updatedAt?: string | null;
 }
 
+export interface GoModelCapabilities {
+  supportsChat: boolean;
+  supportsTools: boolean;
+  supportsJSONMode: boolean;
+  supportsVision: boolean;
+  supportsEmbeddings: boolean;
+  embeddingDimension?: number;
+  supportsStreaming: boolean;
+}
+
+export interface GoCapabilityVerification {
+  supportsChat: 'DECLARED' | 'VERIFIED' | 'UNSUPPORTED';
+  supportsTools: 'DECLARED' | 'VERIFIED' | 'UNSUPPORTED';
+  supportsJSONMode: 'DECLARED' | 'VERIFIED' | 'UNSUPPORTED';
+  supportsVision: 'DECLARED' | 'VERIFIED' | 'UNSUPPORTED';
+  supportsEmbeddings: 'DECLARED' | 'VERIFIED' | 'UNSUPPORTED';
+  supportsStreaming: 'DECLARED' | 'VERIFIED' | 'UNSUPPORTED';
+}
+
+export type GoModelRole = 'PLANNING' | 'TEMPLATE_VISION' | 'EMBEDDING';
+export interface GoModelConnectionBinding {
+  role: GoModelRole;
+  modelConnectionId: number;
+  updatedAt: string;
+}
+
 export interface GoConnectionVerification {
   connectionId: number;
   status: 'UNVERIFIED' | 'VERIFIED' | 'INVALID';
@@ -39,6 +68,16 @@ export interface GoConnectionVerification {
   httpStatus: number;
   baseUrlHost: string;
   modelId: string;
+  capabilities?: {
+    normalChat: boolean;
+    toolCalling: boolean;
+    jsonMode: boolean;
+    vision: boolean;
+    visionProbed: boolean;
+    embeddings: boolean;
+    embeddingsProbed: boolean;
+    embeddingDimension: number;
+  };
   verifiedAt: string;
 }
 
@@ -134,6 +173,8 @@ export interface GoGenerationJob {
   missionId: number;
   specificationId: string;
   specificationVersion: number;
+  generationMode?: 'TEACHER_TEMPLATE' | 'SYSTEM_DEFAULT_TEMPLATE' | string;
+  fallbackReasons?: string[];
   status: string;
   currentSlide: number;
   totalSlides: number;
@@ -263,6 +304,9 @@ export function goErrorCode(error: unknown) {
 export function goErrorMessage(error: unknown, fallback = '暂时无法连接 LessonForge 服务。') {
   const response = (error as AxiosError<GoErrorBody> | undefined)?.response;
   const code = response?.data?.error?.code;
+  if (code === 'TEMPLATE_BINDING_REQUIRED') return '批准前需要先上传并等待一份 PPTX 模板解析完成。';
+  if (code === 'SPECIFICATION_PLAN_INVALID') return '课件方案结构无效，请重新生成方案草稿。';
+  if (code === 'SPECIFICATION_FORBIDDEN_FIELD') return '课件方案包含不允许的执行字段，请重新生成方案草稿。';
   if (code) return `请求未完成（${code}）。`;
   return fallback;
 }
@@ -291,12 +335,12 @@ export async function listGoModelConnections() {
   return data;
 }
 
-export async function createGoModelConnection(payload: { name: string; protocol: 'OPENAI_COMPATIBLE'; baseUrl: string; modelId: string; apiKey: string }) {
+export async function createGoModelConnection(payload: { name: string; protocol: 'OPENAI_COMPATIBLE'; baseUrl: string; modelId: string; apiKey: string; capabilities?: GoModelCapabilities }) {
   const { data } = await goHttp.post<GoModelConnection>('/api/model-connections', payload);
   return data;
 }
 
-export async function updateGoModelConnection(id: number, payload: { name: string; protocol: 'OPENAI_COMPATIBLE'; baseUrl: string; modelId: string; apiKey?: string }) {
+export async function updateGoModelConnection(id: number, payload: { name: string; protocol: 'OPENAI_COMPATIBLE'; baseUrl: string; modelId: string; apiKey?: string; capabilities?: GoModelCapabilities }) {
   const { data } = await goHttp.put<GoModelConnection>(`/api/model-connections/${id}`, payload);
   return data;
 }
@@ -313,6 +357,20 @@ export async function setGoModelConnectionEnabled(id: number, enabled: boolean) 
 export async function verifyGoModelConnection(id: number) {
   const { data } = await goHttp.post<GoConnectionVerification>(`/api/model-connections/${id}/verify`);
   return data;
+}
+
+export async function listGoModelConnectionBindings() {
+  const { data } = await goHttp.get<GoModelConnectionBinding[]>('/api/model-connection-bindings');
+  return Array.isArray(data) ? data : [];
+}
+
+export async function setGoModelConnectionBinding(role: GoModelRole, connectionId: number) {
+  const { data } = await goHttp.put<GoModelConnectionBinding>(`/api/model-connection-bindings/${role}`, { connectionId });
+  return data;
+}
+
+export async function deleteGoModelConnectionBinding(role: GoModelRole) {
+  await goHttp.delete(`/api/model-connection-bindings/${role}`);
 }
 
 export async function listGoMissions() {
@@ -374,8 +432,8 @@ export async function approveGoPlanningDraft(draftId: string) {
   return data.lockedSpecification;
 }
 
-export async function createGoGenerationJob(id: number, specificationId: string, specificationVersion: number) {
-  const { data } = await goHttp.post<GoGenerationJobResponse>(`/api/missions/${id}/generation-jobs`, { specificationId, specificationVersion });
+export async function createGoGenerationJob(id: number, specificationId: string, specificationVersion: number, fallbackPolicy = 'AUTO') {
+  const { data } = await goHttp.post<GoGenerationJobResponse>(`/api/missions/${id}/generation-jobs`, { specificationId, specificationVersion, fallbackPolicy });
   return data;
 }
 

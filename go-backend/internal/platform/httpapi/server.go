@@ -33,6 +33,7 @@ import (
 	"lessonforge.local/backend/internal/platform/crypto"
 	"lessonforge.local/backend/internal/platform/database"
 	"lessonforge.local/backend/internal/platform/storage"
+	"lessonforge.local/backend/internal/specification"
 )
 
 type contextKey string
@@ -91,6 +92,9 @@ func (s *Server) Router() http.Handler {
 		r.Delete("/api/model-connections/{id}", s.deleteConnection)
 		r.Post("/api/model-connections/{id}/enabled", s.enableConnection)
 		r.Post("/api/model-connections/{id}/verify", s.verifyConnection)
+		r.Get("/api/model-connection-bindings", s.listConnectionBindings)
+		r.Put("/api/model-connection-bindings/{role}", s.setConnectionBinding)
+		r.Delete("/api/model-connection-bindings/{role}", s.deleteConnectionBinding)
 		r.Post("/api/uploads", s.upload)
 		r.Get("/api/missions", s.listMissions)
 		r.Post("/api/missions", s.createMission)
@@ -530,6 +534,61 @@ func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, items)
 }
+func (s *Server) listConnectionBindings(w http.ResponseWriter, r *http.Request) {
+	items, err := s.store.ListConnectionBindings(r.Context(), currentUser(r.Context()).ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "CONNECTION_BINDING_LIST_FAILED")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+func (s *Server) setConnectionBinding(w http.ResponseWriter, r *http.Request) {
+	role := strings.ToUpper(strings.TrimSpace(chi.URLParam(r, "role")))
+	if !validModelRole(role) {
+		writeError(w, http.StatusBadRequest, "MODEL_ROLE_INVALID")
+		return
+	}
+	var req struct {
+		ConnectionID int64 `json:"connectionId"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.ConnectionID < 1 {
+		writeError(w, http.StatusBadRequest, "MODEL_CONNECTION_REQUIRED")
+		return
+	}
+	binding, err := s.store.SetConnectionBinding(r.Context(), currentUser(r.Context()).ID, role, req.ConnectionID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeNotFound(w, "CONNECTION_NOT_FOUND")
+			return
+		}
+		if strings.Contains(err.Error(), "MODEL_CONNECTION_") {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "CONNECTION_BINDING_WRITE_FAILED")
+		return
+	}
+	writeJSON(w, http.StatusOK, binding)
+}
+func (s *Server) deleteConnectionBinding(w http.ResponseWriter, r *http.Request) {
+	role := strings.ToUpper(strings.TrimSpace(chi.URLParam(r, "role")))
+	if !validModelRole(role) {
+		writeError(w, http.StatusBadRequest, "MODEL_ROLE_INVALID")
+		return
+	}
+	if err := s.store.DeleteConnectionBinding(r.Context(), currentUser(r.Context()).ID, role); err != nil {
+		writeError(w, http.StatusInternalServerError, "CONNECTION_BINDING_DELETE_FAILED")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func validModelRole(role string) bool {
+	return role == model.ModelRolePlanning || role == model.ModelRoleTemplateVision || role == model.ModelRoleEmbedding
+}
 func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
@@ -545,6 +604,10 @@ func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	var req connectionRequest
 	if !decode(w, r, &req) {
+		return
+	}
+	if err := validateConnectionCapabilities(req.Capabilities); err != nil {
+		writeError(w, 400, err.Error())
 		return
 	}
 	normalized, err := s.validatedBase(r.Context(), req)
@@ -582,6 +645,10 @@ func (s *Server) updateConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	var req connectionRequest
 	if !decode(w, r, &req) {
+		return
+	}
+	if err := validateConnectionCapabilities(req.Capabilities); err != nil {
+		writeError(w, 400, err.Error())
 		return
 	}
 	owner := currentUser(r.Context()).ID
@@ -706,7 +773,7 @@ func (s *Server) verifyConnection(w http.ResponseWriter, r *http.Request) {
 		verificationStatus = "INVALID"
 		safeCode = safeErrorCode(err)
 	}
-	if checks.NormalChat {
+	if checks.ChatProbed || checks.EmbeddingsProbed {
 		if capabilityErr := s.store.MarkConnectionCapabilityVerification(r.Context(), owner, id, checks); capabilityErr != nil {
 			writeError(w, http.StatusServiceUnavailable, "CONNECTION_CAPABILITY_STATUS_WRITE_FAILED")
 			return
@@ -772,6 +839,19 @@ func (s *Server) validatedBase(ctx context.Context, req connectionRequest) (stri
 		return "", errors.New("BASE_URL_UNSAFE_OR_UNREACHABLE")
 	}
 	return normalized, nil
+}
+
+func validateConnectionCapabilities(capabilities *model.ModelCapabilities) error {
+	if capabilities == nil {
+		return nil
+	}
+	if !capabilities.SupportsChat && !capabilities.SupportsEmbeddings {
+		return errors.New("MODEL_CAPABILITY_REQUIRED")
+	}
+	if (capabilities.SupportsTools || capabilities.SupportsJSONMode || capabilities.SupportsVision || capabilities.SupportsStreaming) && !capabilities.SupportsChat {
+		return errors.New("CHAT_CAPABILITY_REQUIRED")
+	}
+	return nil
 }
 
 func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
@@ -1271,17 +1351,20 @@ func (s *Server) createGenerationJob(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		SpecificationID      string `json:"specificationId"`
 		SpecificationVersion int    `json:"specificationVersion"`
+		FallbackPolicy       string `json:"fallbackPolicy"`
 	}
 	if !decode(w, r, &request) {
 		return
 	}
-	result, err := s.store.CreateGenerationJob(r.Context(), currentUser(r.Context()).ID, missionID, request.SpecificationID, request.SpecificationVersion)
+	result, err := s.store.CreateGenerationJobWithPolicy(r.Context(), currentUser(r.Context()).ID, missionID, request.SpecificationID, request.SpecificationVersion, request.FallbackPolicy)
 	if err != nil {
 		switch {
 		case errors.Is(err, database.ErrGenerationMissionNotFound), errors.Is(err, database.ErrGenerationSpecificationNotFound):
 			writeNotFound(w, err.Error())
 		case errors.Is(err, database.ErrGenerationVersionMismatch), errors.Is(err, database.ErrGenerationTemplateInvalid), errors.Is(err, database.ErrGenerationTemplateProfileNotReady), errors.Is(err, database.ErrGenerationMaterialsNotReady), errors.Is(err, database.ErrGenerationActiveConflict):
 			writeError(w, http.StatusConflict, err.Error())
+		case errors.Is(err, database.ErrGenerationFallbackPolicyInvalid):
+			writeError(w, http.StatusBadRequest, err.Error())
 		default:
 			writeError(w, http.StatusInternalServerError, "GENERATION_REQUEST_FAILED")
 		}
@@ -1568,6 +1651,9 @@ func safeStoreError(err error) string {
 		return "UPLOAD_UNAVAILABLE"
 	}
 	if strings.Contains(err.Error(), "MODEL_CONNECTION") {
+		return err.Error()
+	}
+	if errors.Is(err, specification.ErrTemplateRequired) || errors.Is(err, specification.ErrPlanInvalid) || errors.Is(err, specification.ErrForbiddenField) {
 		return err.Error()
 	}
 	return "REQUEST_REJECTED"

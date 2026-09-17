@@ -73,7 +73,7 @@ function stubs() {
     ModelConnectionDrawer: { props: ['modelValue', 'selectedConnection', 'selectedConnectionId'], emits: ['update:connection', 'connections-loaded'], template: '<div data-test="drawer-stub" />' },
     GoQuestionCard: { props: ['question', 'missionId', 'userId'], emits: ['submitted'], template: '<section data-test="go-active-question"><h2>{{ question.text }}</h2><button data-test="go-question-submit" type="button" @click="$emit(\'submitted\')">submit</button></section>' },
     GoQuestionHistoryCard: { props: ['questions'], template: '<section data-test="go-question-history"><span v-for="question in questions" :key="question.id">已回答 {{ question.text }} {{ question.latestAnswer && question.latestAnswer.selectedValues.join(\' \') }} {{ question.latestAnswer && question.latestAnswer.textAnswer }}</span></section>' },
-    GoPlanDraftCard: { props: ['draft', 'locked', 'facts', 'approving'], emits: ['approve'], template: '<section data-test="go-plan-draft"><button v-if="!locked" data-test="approve-plan" type="button" @click="$emit(\'approve\')">Approve 方案</button></section>' },
+    GoPlanDraftCard: { props: ['draft', 'locked', 'facts', 'approving', 'approvalBlocker'], emits: ['approve'], template: '<section data-test="go-plan-draft"><button v-if="!locked" data-test="approve-plan" type="button" :disabled="approving || Boolean(approvalBlocker)" @click="$emit(\'approve\')">Approve 方案</button><p v-if="approvalBlocker" data-test="approval-prerequisite">{{ approvalBlocker }}</p></section>' },
   };
 }
 
@@ -166,6 +166,7 @@ test('mounted Go Mission workspace refreshes questions and folds the accepted an
   await settle();
 
   assert.equal(wrapper.find('[data-test="go-active-question"]').exists(), true);
+  assert.equal(wrapper.find('[data-test="composer-stub"]').exists(), false, 'the general chat composer is hidden while one clarification question is active');
   const submit = wrapper.get('[data-test="go-question-submit"]');
   await submit.trigger('click');
   answeredOnServer = true;
@@ -173,6 +174,7 @@ test('mounted Go Mission workspace refreshes questions and folds the accepted an
   await settle();
   assert.equal(wrapper.find('[data-test="go-active-question"]').exists(), false, '202 is followed by server refresh and history folding');
   assert.equal(wrapper.find('[data-test="go-question-history"]').exists(), true);
+  assert.equal(wrapper.find('[data-test="composer-stub"]').exists(), true, 'the chat composer returns after the clarification is answered');
   assert.match(wrapper.get('[data-test="go-question-history"]').text(), /高中/);
   await wrapper.unmount();
 
@@ -181,6 +183,42 @@ test('mounted Go Mission workspace refreshes questions and folds the accepted an
   assert.equal(refreshed.find('[data-test="go-active-question"]').exists(), false);
   assert.match(refreshed.get('[data-test="go-question-history"]').text(), /已回答/);
   await refreshed.unmount();
+});
+
+test('Mission workspace keeps messages, questions, and plan drafts in one chronological chat timeline', async () => {
+  httpMock.reset();
+  httpMock.onGet('/api/missions/7').reply(200, {
+    ...baseDetail,
+    files: [readyTemplateFile],
+    currentDraft: planningDraft,
+    messages: [
+      { id: 1, missionId: 7, ownerUserId: 7, role: 'USER', content: '最初需求', messageType: 'MESSAGE', createdAt: '2026-09-05T00:00:00Z' },
+      { id: 2, missionId: 7, ownerUserId: 7, role: 'ASSISTANT', content: '已收到课程要求', messageType: 'MESSAGE', createdAt: '2026-09-05T00:03:00Z' },
+      { id: 3, missionId: 7, ownerUserId: 7, role: 'USER', content: '请增加课堂实验', messageType: 'MESSAGE', createdAt: '2026-09-05T00:06:00Z' },
+    ],
+  });
+  httpMock.onGet('/api/model-connections').reply(200, []);
+  httpMock.onGet('/api/missions/7/questions').reply(200, [answered]);
+  httpMock.onGet('/api/missions/7/agent-runs').reply(200, []);
+
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  useAuthStore(pinia).applySession('go-chat-timeline', teacher as any);
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/lessonforge/missions/:missionId', component: GoMissionWorkspaceView }] });
+  await router.push('/lessonforge/missions/7');
+  await router.isReady();
+  const wrapper = mount(GoMissionWorkspaceView, { global: { plugins: [pinia, router], stubs: stubs() } });
+  await settle();
+
+  const children = Array.from(wrapper.get('.lf-conversation-scroll').element.children);
+  const indexOfText = (text: string) => children.findIndex((element) => element.textContent?.includes(text));
+  const questionIndex = children.findIndex((element) => element.matches('[data-test="go-question-history"]'));
+  const planIndex = children.findIndex((element) => element.matches('[data-test="go-plan-draft"]'));
+  assert.ok(indexOfText('最初需求') < questionIndex, 'the first teacher turn stays before the later clarification');
+  assert.ok(questionIndex < indexOfText('已收到课程要求'), 'the clarification is placed by its server timestamp');
+  assert.ok(indexOfText('已收到课程要求') < planIndex, 'the plan follows the assistant turn that preceded it');
+  assert.ok(planIndex < indexOfText('请增加课堂实验'), 'a later teacher turn is appended after the plan instead of jumping above it');
+  await wrapper.unmount();
 });
 
 test('route stage does not manufacture an Agent conversation when the server has no context', async () => {
@@ -285,7 +323,7 @@ test('Mission workspace uses the newest AgentRun returned by the server', async 
 test('Plan draft approval calls the real endpoint and renders the persisted Locked Specification card', async () => {
   let lockedOnServer = false;
   httpMock.reset();
-  httpMock.onGet('/api/missions/7').reply(() => [200, { ...baseDetail, currentDraft: planningDraft, lockedSpecification: lockedOnServer ? lockedSpecification : null }]);
+  httpMock.onGet('/api/missions/7').reply(() => [200, { ...baseDetail, files: [readyTemplateFile], currentDraft: planningDraft, lockedSpecification: lockedOnServer ? lockedSpecification : null }]);
   httpMock.onGet('/api/model-connections').reply(200, []);
   httpMock.onGet('/api/missions/7/questions').reply(200, []);
   httpMock.onGet('/api/missions/7/agent-runs').reply(200, []);
@@ -312,13 +350,41 @@ test('Plan draft approval calls the real endpoint and renders the persisted Lock
   await wrapper.unmount();
 });
 
-test('identity-only template binding blocks generation before the request is posted', async () => {
+test('Plan draft approval is blocked with an actionable reason when no PPTX template is bound', async () => {
+  httpMock.reset();
+  httpMock.onGet('/api/missions/7').reply(200, { ...baseDetail, currentDraft: planningDraft });
+  httpMock.onGet('/api/model-connections').reply(200, []);
+  httpMock.onGet('/api/missions/7/questions').reply(200, []);
+  httpMock.onGet('/api/missions/7/agent-runs').reply(200, []);
+
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  useAuthStore(pinia).applySession('go-approve-prerequisite', teacher as any);
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/lessonforge/missions/:missionId', component: GoMissionWorkspaceView }] });
+  await router.push('/lessonforge/missions/7');
+  await router.isReady();
+  const wrapper = mount(GoMissionWorkspaceView, { global: { plugins: [pinia, router], stubs: stubs() } });
+  await settle();
+
+  const button = wrapper.get('[data-test="approve-plan"]');
+  assert.equal(button.attributes('disabled'), '');
+  assert.match(wrapper.get('[data-test="approval-prerequisite"]').text(), /批准前需要先上传一份 PPTX 模板/);
+  await button.trigger('click');
+  assert.equal(httpMock.history.post.filter((request: AnyRecord) => request.url === '/api/planning/draft-1/approve').length, 0);
+  await wrapper.unmount();
+});
+
+test('identity-only template binding is handed to the server fallback policy', async () => {
   const notReadySpec = { ...lockedSpecification, templateBinding: { ...readyTemplateBinding, executionReady: false, engineNativeProfilePresent: false } };
   httpMock.reset();
   httpMock.onGet('/api/missions/7').reply(200, { ...baseDetail, files: [readyTemplateFile], lockedSpecification: notReadySpec });
   httpMock.onGet('/api/model-connections').reply(200, []);
   httpMock.onGet('/api/missions/7/questions').reply(200, []);
   httpMock.onGet('/api/missions/7/agent-runs').reply(200, []);
+  httpMock.onPost('/api/missions/7/generation-jobs').reply((config) => {
+    assert.deepEqual(JSON.parse(String(config.data)), { specificationId: 'spec-1', specificationVersion: 1, fallbackPolicy: 'AUTO' });
+    return [201, { generationJob: { id: 'job-fallback', missionId: 7, specificationId: 'spec-1', specificationVersion: 1, status: 'SUCCEEDED', generationMode: 'SYSTEM_DEFAULT_TEMPLATE' }, created: true }];
+  });
 
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -330,10 +396,9 @@ test('identity-only template binding blocks generation before the request is pos
   await settle();
 
   const button = wrapper.get('[data-test="request-generation"]');
-  assert.equal(button.attributes('disabled'), '');
-  assert.match(wrapper.get('[data-test="generation-prerequisites"]').text(), /模板尚未具备 PPT Engine 可执行配置/);
   await button.trigger('click');
-  assert.equal(httpMock.history.post.filter((request: AnyRecord) => request.url === '/api/missions/7/generation-jobs').length, 0);
+  await settle();
+  assert.equal(httpMock.history.post.filter((request: AnyRecord) => request.url === '/api/missions/7/generation-jobs').length, 1);
   await wrapper.unmount();
 });
 
@@ -354,7 +419,7 @@ test('locked specification starts real generation and polls the persisted job to
   httpMock.onGet('/api/missions/7/agent-runs').reply(200, []);
   httpMock.onPost('/api/missions/7/generation-jobs').reply((config) => {
     requested = true;
-    assert.deepEqual(JSON.parse(String(config.data)), { specificationId: 'spec-1', specificationVersion: 1 });
+    assert.deepEqual(JSON.parse(String(config.data)), { specificationId: 'spec-1', specificationVersion: 1, fallbackPolicy: 'AUTO' });
     return [201, { generationJob: queuedJob, created: true }];
   });
 
@@ -440,6 +505,9 @@ test('mounted GoQuestionCard blocks empty answers and sends one real payload for
   });
   const wrapper = mount(GoQuestionCard, { props: { question: unanswered, missionId: 7, userId: 7 } });
   await settle();
+  assert.match(wrapper.text(), /A/);
+  assert.match(wrapper.text(), /B/);
+  assert.equal(wrapper.find('[data-test="go-question-text"]').exists(), false, 'choice clarification must not render a free-text box');
   const submit = wrapper.get('[data-test="go-question-submit"]');
   await submit.trigger('click');
   assert.equal(answerRequests, 0, 'empty choice must not POST');

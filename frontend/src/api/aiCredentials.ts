@@ -8,6 +8,11 @@ import {
   setGoModelConnectionEnabled,
   updateGoModelConnection,
   verifyGoModelConnection,
+  deleteGoModelConnectionBinding,
+  listGoModelConnectionBindings,
+  setGoModelConnectionBinding,
+  type GoModelConnectionBinding,
+  type GoModelRole,
 } from './go';
 
 export interface AiCredentialView {
@@ -40,12 +45,33 @@ export async function saveAiCredentials(payload: SaveAiCredentialsPayload) {
 
 export type ModelConnectionProtocol = 'OPENAI_COMPATIBLE';
 export type ModelConnectionVerificationStatus = 'UNVERIFIED' | 'VERIFIED' | 'INVALID';
+export type CapabilityVerificationStatus = 'DECLARED' | 'VERIFIED' | 'UNSUPPORTED';
+export interface ModelCapabilities {
+  supportsChat: boolean;
+  supportsTools: boolean;
+  supportsJSONMode: boolean;
+  supportsVision: boolean;
+  supportsEmbeddings: boolean;
+  embeddingDimension?: number;
+  supportsStreaming: boolean;
+}
+export interface ModelCapabilityVerification {
+  supportsChat: CapabilityVerificationStatus;
+  supportsTools: CapabilityVerificationStatus;
+  supportsJSONMode: CapabilityVerificationStatus;
+  supportsVision: CapabilityVerificationStatus;
+  supportsEmbeddings: CapabilityVerificationStatus;
+  supportsStreaming: CapabilityVerificationStatus;
+}
 export interface ModelConnection {
   id: number;
   name: string;
   protocol: ModelConnectionProtocol;
   baseUrl: string;
   modelId: string;
+  provider?: string;
+  capabilities?: ModelCapabilities;
+  capabilityVerification?: ModelCapabilityVerification;
   keyHint: string;
   enabled: boolean;
   verificationStatus: ModelConnectionVerificationStatus;
@@ -60,6 +86,7 @@ export interface ModelConnectionPayload {
   baseUrl: string;
   apiKey?: string;
   modelId: string;
+  capabilities?: ModelCapabilities;
 }
 export interface ConnectionVerification {
   connectionId: number;
@@ -68,6 +95,16 @@ export interface ConnectionVerification {
   httpStatus: number;
   baseUrlHost: string;
   modelId: string;
+  capabilities?: {
+    normalChat?: boolean;
+    toolCalling?: boolean;
+    jsonMode?: boolean;
+    vision?: boolean;
+    visionProbed?: boolean;
+    embeddings?: boolean;
+    embeddingsProbed?: boolean;
+    embeddingDimension?: number;
+  };
   verifiedAt: string;
 }
 
@@ -76,7 +113,7 @@ export async function getModelConnections() {
   const response = await http.get<ApiResponse<ModelConnection[]>>('/api/v1/ai-credentials/connections');
   return response.data;
 }
-export async function createModelConnection(payload: Required<ModelConnectionPayload>) {
+export async function createModelConnection(payload: ModelConnectionPayload & { apiKey: string }) {
   if (isGoBackend) return { code: 0, message: '', data: await createGoModelConnection(payload) };
   const response = await http.post<ApiResponse<ModelConnection>>('/api/v1/ai-credentials/connections', payload);
   return response.data;
@@ -103,4 +140,22 @@ export async function verifyModelConnection(id: number) {
   if (isGoBackend) return { code: 0, message: '', data: await verifyGoModelConnection(id) };
   const response = await http.post<ApiResponse<ConnectionVerification>>(`/api/v1/ai-credentials/connections/${id}/verify`, {});
   return response.data;
+}
+
+export type ModelRole = GoModelRole;
+export type ModelConnectionBinding = GoModelConnectionBinding;
+
+export async function getModelConnectionBindings() {
+  if (!isGoBackend) return [] as ModelConnectionBinding[];
+  return listGoModelConnectionBindings();
+}
+
+export async function setModelConnectionBinding(role: ModelRole, connectionId: number) {
+  if (!isGoBackend) throw new Error('MODEL_CONNECTION_BINDING_UNSUPPORTED');
+  return setGoModelConnectionBinding(role, connectionId);
+}
+
+export async function clearModelConnectionBinding(role: ModelRole) {
+  if (!isGoBackend) throw new Error('MODEL_CONNECTION_BINDING_UNSUPPORTED');
+  await deleteGoModelConnectionBinding(role);
 }

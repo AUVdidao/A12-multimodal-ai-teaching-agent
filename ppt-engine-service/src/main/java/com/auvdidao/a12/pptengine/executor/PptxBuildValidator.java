@@ -63,6 +63,7 @@ final class PptxBuildValidator {
             diagnostics.add(error(ContractTypes.DiagnosticCode.PPTX_RELATIONSHIP_INVALID,
                     "pptxBuildValidator.presentationRelationshipsInvalid", Map.of("reason", "slideOrder")));
         }
+        validateSlidePartClosure(pack, slides, diagnostics);
         if (slides.size() != plan.slides().size() || plan.originalSlideCount() != plan.slides().size()) {
             diagnostics.add(error(ContractTypes.DiagnosticCode.PPTX_SLIDE_COUNT_MISMATCH,
                     "pptxBuildValidator.slideCountMismatch", Map.of(
@@ -82,6 +83,24 @@ final class PptxBuildValidator {
             }
         }
         return new Result(diagnostics, slides.size(), artifactSha256, artifactSize);
+    }
+
+    void validateSlidePartClosure(PptxPackage pack, List<String> referencedSlides,
+                                  List<ExecutorModels.ExecutorDiagnostic> diagnostics) {
+        Set<String> physicalSlides = pack.physicalSlidePaths();
+        Set<String> referenced = new HashSet<>(referencedSlides);
+        Set<String> orphanSlides = new HashSet<>(physicalSlides);
+        orphanSlides.removeAll(referenced);
+        Set<String> missingSlides = new HashSet<>(referenced);
+        missingSlides.removeAll(physicalSlides);
+        if (!physicalSlides.equals(referenced)) {
+            diagnostics.add(error(ContractTypes.DiagnosticCode.PPTX_SLIDE_COUNT_MISMATCH,
+                    "pptxBuildValidator.slidePartClosureMismatch", Map.of(
+                            "physicalSlideCount", Integer.toString(physicalSlides.size()),
+                            "referencedSlideCount", Integer.toString(referenced.size()),
+                            "orphanSlideCount", Integer.toString(orphanSlides.size()),
+                            "missingSlideCount", Integer.toString(missingSlides.size()))));
+        }
     }
 
     private void requireEntries(PptxPackage pack, List<ExecutorModels.ExecutorDiagnostic> diagnostics) {

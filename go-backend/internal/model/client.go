@@ -99,13 +99,22 @@ type ChatResponse struct {
 	RawStatus        int
 }
 
+type EmbeddingResponse struct {
+	Vector    []float64
+	RawStatus int
+}
+
 type CapabilityCheckResult struct {
-	NormalChat   bool
-	ToolCalling  bool
-	JSONMode     bool
-	Vision       bool
-	VisionProbed bool
-	HTTPStatus   int
+	NormalChat         bool
+	ChatProbed         bool
+	ToolCalling        bool
+	JSONMode           bool
+	Vision             bool
+	VisionProbed       bool
+	Embeddings         bool
+	EmbeddingsProbed   bool
+	EmbeddingDimension int
+	HTTPStatus         int
 }
 
 type ResolvedConnection struct {
@@ -170,6 +179,10 @@ func NormalizeBaseURL(raw string) (string, error) {
 		path = strings.TrimSuffix(path, "/chat/completions")
 		path = strings.TrimRight(path, "/")
 	}
+	for strings.HasSuffix(path, "/embeddings") {
+		path = strings.TrimSuffix(path, "/embeddings")
+		path = strings.TrimRight(path, "/")
+	}
 	for strings.HasSuffix(path, "/v1/v1") {
 		path = strings.TrimSuffix(path, "/v1")
 	}
@@ -178,6 +191,105 @@ func NormalizeBaseURL(raw string) (string, error) {
 	u.RawQuery = ""
 	u.Fragment = ""
 	return strings.TrimRight(u.String(), "/"), nil
+}
+
+// Embed calls the OpenAI-compatible embeddings endpoint and returns the first
+// vector. It is kept as a narrow compatibility wrapper for connection
+// verification and callers that only need one input.
+func (c *Client) Embed(ctx context.Context, connection ResolvedConnection, input string) (response EmbeddingResponse, err error) {
+	vectors, status, err := c.EmbedBatch(ctx, connection, []string{input})
+	if err != nil {
+		return EmbeddingResponse{RawStatus: status}, err
+	}
+	if len(vectors) != 1 || len(vectors[0]) == 0 {
+		return EmbeddingResponse{RawStatus: status}, errors.New("embedding response contains no vector")
+	}
+	return EmbeddingResponse{Vector: vectors[0], RawStatus: status}, nil
+}
+
+// EmbedBatch calls the provider once for a bounded batch of texts and returns
+// vectors in the same order as inputs. The caller must validate the returned
+// dimension against its persisted embedding contract before writing vectors.
+func (c *Client) EmbedBatch(ctx context.Context, connection ResolvedConnection, inputs []string) (vectors [][]float64, rawStatus int, err error) {
+	if connection.Protocol != "OPENAI_COMPATIBLE" {
+		return nil, 0, errors.New("unsupported model protocol")
+	}
+	if len(inputs) == 0 || len(inputs) > 64 {
+		return nil, 0, errors.New("embedding input batch is invalid")
+	}
+	normalized, err := NormalizeBaseURL(connection.BaseURL)
+	if err != nil {
+		return nil, 0, err
+	}
+	u, err := url.Parse(normalized + "/embeddings")
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := c.validateAuthority(ctx, u); err != nil {
+		return nil, 0, err
+	}
+	encoded, err := json.Marshal(map[string]any{"model": connection.ModelID, "input": inputs})
+	if err != nil {
+		return nil, 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(encoded))
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+connection.APIKey)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, classifyTransportError(err)
+	}
+	rawStatus = resp.StatusCode
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close embedding response: %w", closeErr))
+		}
+	}()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes+1))
+	if err != nil {
+		return nil, rawStatus, err
+	}
+	if int64(len(data)) > c.maxResponseBytes {
+		return nil, rawStatus, errors.New("model response exceeds configured limit")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, rawStatus, &HTTPError{Status: resp.StatusCode, Body: safeProviderError(data)}
+	}
+	var decoded struct {
+		Data []struct {
+			Index     *int      `json:"index"`
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return nil, rawStatus, fmt.Errorf("embedding response format: %w", err)
+	}
+	if len(decoded.Data) != len(inputs) {
+		return nil, rawStatus, fmt.Errorf("embedding response count mismatch: got %d want %d", len(decoded.Data), len(inputs))
+	}
+	vectors = make([][]float64, len(inputs))
+	for position, item := range decoded.Data {
+		index := position
+		if item.Index != nil {
+			index = *item.Index
+		}
+		if index < 0 || index >= len(inputs) {
+			return nil, rawStatus, errors.New("embedding response vector index is invalid")
+		}
+		if len(item.Embedding) == 0 || vectors[index] != nil {
+			return nil, rawStatus, errors.New("embedding response vector ordering is invalid")
+		}
+		vectors[index] = item.Embedding
+	}
+	for index, vector := range vectors {
+		if len(vector) == 0 {
+			return nil, rawStatus, fmt.Errorf("embedding response missing vector at index %d", index)
+		}
+	}
+	return vectors, rawStatus, nil
 }
 
 func (c *Client) ValidateBaseURL(ctx context.Context, base string) error {
@@ -282,32 +394,40 @@ func (c *Client) Chat(ctx context.Context, connection ResolvedConnection, reques
 // the structured AgentRuntime contract.
 func (c *Client) VerifyConnection(ctx context.Context, connection ResolvedConnection) (CapabilityCheckResult, error) {
 	result := CapabilityCheckResult{}
-	normal, err := c.Chat(ctx, connection, ChatRequest{Messages: []ChatMessage{{Role: "user", Content: "Reply with exactly OK."}}, MaxTokens: 8})
-	result.HTTPStatus = normal.RawStatus
-	if err != nil {
-		return result, err
+	needsChat := connection.Capabilities.SupportsChat || connection.Capabilities.SupportsTools || connection.Capabilities.SupportsJSONMode || connection.Capabilities.SupportsVision
+	if needsChat {
+		result.ChatProbed = true
+		normal, err := c.Chat(ctx, connection, ChatRequest{Messages: []ChatMessage{{Role: "user", Content: "Reply with exactly OK."}}, MaxTokens: 8})
+		result.HTTPStatus = normal.RawStatus
+		if err != nil {
+			return result, err
+		}
+		result.NormalChat = true
 	}
-	result.NormalChat = true
 
-	toolResponse, toolErr := c.Chat(ctx, connection, ChatRequest{
-		Messages:  []ChatMessage{{Role: "user", Content: "Call the verification_tool exactly once."}},
-		Tools:     []ToolDefinition{{Type: "function", Function: ToolFunction{Name: "verification_tool", Description: "Connection verification tool.", Parameters: map[string]any{"type": "object", "additionalProperties": false}}}},
-		MaxTokens: 32,
-	})
-	if toolResponse.RawStatus != 0 {
-		result.HTTPStatus = toolResponse.RawStatus
+	if connection.Capabilities.SupportsTools {
+		toolResponse, toolErr := c.Chat(ctx, connection, ChatRequest{
+			Messages:  []ChatMessage{{Role: "user", Content: "Call the verification_tool exactly once."}},
+			Tools:     []ToolDefinition{{Type: "function", Function: ToolFunction{Name: "verification_tool", Description: "Connection verification tool.", Parameters: map[string]any{"type": "object", "additionalProperties": false}}}},
+			MaxTokens: 32,
+		})
+		if toolResponse.RawStatus != 0 {
+			result.HTTPStatus = toolResponse.RawStatus
+		}
+		result.ToolCalling = toolErr == nil && len(toolResponse.ToolCalls) > 0
 	}
-	result.ToolCalling = toolErr == nil && len(toolResponse.ToolCalls) > 0
 
-	jsonResponse, jsonErr := c.Chat(ctx, connection, ChatRequest{
-		Messages:  []ChatMessage{{Role: "user", Content: "Return exactly this JSON object: {\"ok\":true}."}},
-		MaxTokens: 16,
-		JSONMode:  true,
-	})
-	if jsonResponse.RawStatus != 0 {
-		result.HTTPStatus = jsonResponse.RawStatus
+	if connection.Capabilities.SupportsJSONMode {
+		jsonResponse, jsonErr := c.Chat(ctx, connection, ChatRequest{
+			Messages:  []ChatMessage{{Role: "user", Content: "Return exactly this JSON object: {\"ok\":true}."}},
+			MaxTokens: 16,
+			JSONMode:  true,
+		})
+		if jsonResponse.RawStatus != 0 {
+			result.HTTPStatus = jsonResponse.RawStatus
+		}
+		result.JSONMode = jsonErr == nil && json.Valid([]byte(strings.TrimSpace(jsonResponse.Content)))
 	}
-	result.JSONMode = jsonErr == nil && json.Valid([]byte(strings.TrimSpace(jsonResponse.Content)))
 	if connection.Capabilities.SupportsVision {
 		result.VisionProbed = true
 		visionResponse, visionErr := c.Chat(ctx, connection, ChatRequest{
@@ -322,6 +442,21 @@ func (c *Client) VerifyConnection(ctx context.Context, connection ResolvedConnec
 			result.HTTPStatus = visionResponse.RawStatus
 		}
 		result.Vision = visionErr == nil && strings.TrimSpace(visionResponse.Content) != ""
+	}
+	if connection.Capabilities.SupportsEmbeddings {
+		result.EmbeddingsProbed = true
+		embeddingResponse, embeddingErr := c.Embed(ctx, connection, "LessonForge connection verification")
+		if embeddingResponse.RawStatus != 0 {
+			result.HTTPStatus = embeddingResponse.RawStatus
+		}
+		result.Embeddings = embeddingErr == nil && len(embeddingResponse.Vector) > 0
+		result.EmbeddingDimension = len(embeddingResponse.Vector)
+		if embeddingErr != nil {
+			return result, embeddingErr
+		}
+	}
+	if !needsChat && !connection.Capabilities.SupportsEmbeddings {
+		return result, errors.New("MODEL_CAPABILITY_REQUIRED")
 	}
 	return result, nil
 }

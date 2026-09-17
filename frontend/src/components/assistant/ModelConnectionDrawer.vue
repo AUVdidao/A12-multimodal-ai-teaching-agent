@@ -1,7 +1,7 @@
 <template>
   <el-drawer
     :model-value="modelValue"
-    title="Model Connection"
+    title="模型连接"
     size="min(560px, 100%)"
     direction="rtl"
     @update:model-value="$emit('update:modelValue', $event)"
@@ -9,15 +9,15 @@
   >
     <section class="connection-drawer">
       <div class="connection-drawer__notice" role="status">
-        <strong>会话级模型选择</strong>
-        <span>连接只显示脱敏摘要；需要时可在这里管理或测试。</span>
+        <strong>模型能力与连接管理</strong>
+        <span>分别声明课件规划、模板视觉和文本嵌入能力；连接只显示脱敏摘要。</span>
       </div>
 
       <section class="connection-drawer__section">
         <div class="connection-drawer__section-head">
           <div>
             <h3>当前连接</h3>
-            <p>选择后仅绑定当前前端会话，不改变服务器默认 Provider。</p>
+            <p>这里只选择能够执行对话与课件规划的连接；视觉与嵌入连接不会进入聊天模型列表。</p>
           </div>
           <el-button text type="primary" @click="toggleForm">{{ editingId ? '取消编辑' : showForm ? '收起添加' : '添加连接' }}</el-button>
         </div>
@@ -40,6 +40,9 @@
           <div>
             <strong>{{ connection.name }}</strong>
             <span>{{ connection.modelId }} · {{ connection.baseUrl }}</span>
+            <div class="connection-card__capabilities">
+              <span v-for="label in capabilityLabels(connection)" :key="label">{{ label }}</span>
+            </div>
             <small>{{ verificationLabel(connection) }} · Key {{ connection.keyHint || '未配置' }}</small>
           </div>
           <div class="connection-card__actions">
@@ -62,6 +65,7 @@
         <strong>最近一次测试：{{ lastVerification.status }}</strong>
         <span>诊断码：{{ lastVerification.safeCode || '未提供' }} · HTTP：{{ lastVerification.httpStatus || '未提供' }}</span>
         <span>服务主机：{{ lastVerification.baseUrlHost || '未提供' }} · Model ID：{{ lastVerification.modelId || '未提供' }}</span>
+        <span v-if="lastVerification.capabilities?.embeddings">嵌入接口已验证 · 向量维度 {{ lastVerification.capabilities.embeddingDimension || '未知' }}</span>
         <span>时间：{{ lastVerification.verifiedAt || '未提供' }}</span>
       </section>
 
@@ -76,6 +80,20 @@
         <el-form-item label="Model ID" required>
           <el-input v-model="form.modelId" autocomplete="off" placeholder="模型 ID" />
         </el-form-item>
+        <div class="connection-form__capabilities">
+          <strong>模型用途</strong>
+          <p>按这个模型实际提供的能力选择；测试连接会分别验证所选接口。</p>
+          <el-checkbox v-model="form.capabilities.supportsChat" @change="syncCapabilityDependencies">对话与课件规划</el-checkbox>
+          <el-checkbox v-model="form.capabilities.supportsVision" @change="syncCapabilityDependencies">模板视觉理解</el-checkbox>
+          <el-checkbox v-model="form.capabilities.supportsEmbeddings" @change="syncCapabilityDependencies">文本嵌入与语义检索</el-checkbox>
+          <div v-if="form.capabilities.supportsChat" class="connection-form__advanced">
+            <span>规划能力</span>
+            <el-checkbox v-model="form.capabilities.supportsTools">工具调用</el-checkbox>
+            <el-checkbox v-model="form.capabilities.supportsJSONMode">结构化输出</el-checkbox>
+            <el-checkbox v-model="form.capabilities.supportsStreaming">流式输出</el-checkbox>
+          </div>
+          <small v-if="form.capabilities.supportsEmbeddings">保存后将通过标准兼容的嵌入接口进行探测，并记录服务返回的向量维度。</small>
+        </div>
         <el-form-item label="API Key" :required="!editingId">
           <el-input v-model="form.apiKey" type="password" show-password autocomplete="new-password" :placeholder="editingId ? '留空保持已有 Key；输入新 Key 才会替换' : '仅提交到现有连接 API，不在页面回显'" />
         </el-form-item>
@@ -112,6 +130,7 @@ import {
   findSelectableConnection,
   isSelectableConnection,
   modelConnectionVerificationLabel,
+  defaultModelCapabilities,
   releaseConnectionOperation,
   safeConnectionErrorMessage,
   shouldSyncConnectionSelection,
@@ -138,7 +157,7 @@ const error = ref('');
 const showForm = ref(false);
 const editingId = ref<number | null>(null);
 const lastVerification = ref<ConnectionVerification | null>(null);
-const form = reactive({ name: '', baseUrl: '', modelId: '', apiKey: '' });
+const form = reactive({ name: '', baseUrl: '', modelId: '', apiKey: '', capabilities: defaultModelCapabilities() });
 const selectableConnections = computed(() => connections.value.filter(isSelectableConnection));
 
 async function loadConnections() {
@@ -185,11 +204,17 @@ function startEdit(connection: ModelConnection) {
   form.baseUrl = connection.baseUrl;
   form.modelId = connection.modelId;
   form.apiKey = '';
+  Object.assign(form.capabilities, defaultModelCapabilities(), connection.capabilities || {});
   showForm.value = true;
   lastVerification.value = null;
 }
 
 async function saveConnection() {
+  syncCapabilityDependencies();
+  if (!form.capabilities.supportsChat && !form.capabilities.supportsEmbeddings) {
+    ElMessage.warning('至少选择“对话与课件规划”或“文本嵌入与语义检索”。');
+    return;
+  }
   const mode = editingId.value === null ? 'create' as const : 'edit' as const;
   const payload = buildModelConnectionPayload(form, mode);
   if (!payload) {
@@ -293,7 +318,27 @@ function resetForm() {
   form.baseUrl = '';
   form.modelId = '';
   form.apiKey = '';
+  Object.assign(form.capabilities, defaultModelCapabilities());
   showForm.value = false;
+}
+
+function syncCapabilityDependencies() {
+  if (form.capabilities.supportsVision) form.capabilities.supportsChat = true;
+  if (!form.capabilities.supportsChat) {
+    form.capabilities.supportsTools = false;
+    form.capabilities.supportsJSONMode = false;
+    form.capabilities.supportsVision = false;
+    form.capabilities.supportsStreaming = false;
+  }
+}
+
+function capabilityLabels(connection: ModelConnection) {
+  const capabilities = connection.capabilities || defaultModelCapabilities();
+  const labels: string[] = [];
+  if (capabilities.supportsChat) labels.push('课件规划');
+  if (capabilities.supportsVision) labels.push('模板视觉');
+  if (capabilities.supportsEmbeddings) labels.push(capabilities.embeddingDimension ? `文本嵌入 ${capabilities.embeddingDimension}维` : '文本嵌入');
+  return labels;
 }
 
 function connectionLabel(connection: ModelConnection) {
@@ -323,6 +368,8 @@ function verificationLabel(connection: ModelConnection) {
 .connection-card > div:first-child { display: grid; min-width: 0; gap: 5px; }
 .connection-card strong { color: var(--ui-text); font-size: 13px; overflow-wrap: anywhere; }
 .connection-card span, .connection-card small { color: var(--ui-muted); font-size: 11px; overflow-wrap: anywhere; }
+.connection-card__capabilities { display: flex !important; flex-wrap: wrap; gap: 5px !important; }
+.connection-card__capabilities span { padding: 2px 7px; border-radius: 999px; background: #eff6ff; color: #2563eb; }
 .connection-card small { color: var(--ui-primary); }
 .connection-card__actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 3px; }
 .verification-result { display: grid; gap: 4px; padding: 11px 12px; border: 1px solid var(--ui-border); border-radius: 8px; background: #f8fbff; color: var(--ui-muted); font-size: 12px; line-height: 1.45; }
@@ -330,5 +377,10 @@ function verificationLabel(connection: ModelConnection) {
 .connection-form { padding-top: 16px; border-top: 1px solid var(--ui-border); }
 .connection-form :deep(.el-form-item) { margin: 0; }
 .connection-form__boundary { padding: 10px 12px; border-radius: 8px; background: #fff8ec; color: #9b6818 !important; }
+.connection-form__capabilities { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--ui-border); border-radius: 9px; background: #f8fbff; }
+.connection-form__capabilities strong { color: var(--ui-text); font-size: 13px; }
+.connection-form__capabilities small { color: var(--ui-muted); line-height: 1.5; }
+.connection-form__advanced { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding-top: 7px; border-top: 1px solid var(--ui-border); }
+.connection-form__advanced > span { color: var(--ui-muted); font-size: 12px; }
 .connection-form__actions { display: flex; justify-content: flex-end; gap: 9px; }
 </style>

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public final class LessonForgeMaterialDtos {
     private LessonForgeMaterialDtos() {}
@@ -44,5 +45,34 @@ public final class LessonForgeMaterialDtos {
             String originalFilename,
             String bindingStatus,
             LocalDateTime createdAt
+    ) {}
+
+    public record ChunkEmbeddingRequest(
+            @NotNull @Positive Long chunkId,
+            @NotNull @Size(min = 1, max = 4096) List<Double> vector
+    ) {}
+
+    public record EmbeddingRequest(
+            @NotNull @Positive Long missionId,
+            @NotNull @Positive Long missionFileId,
+            @NotNull @Positive Long ownerUserId,
+            @NotNull @Positive Long actorUserId,
+            @NotBlank @Size(min = 64, max = 64) String sourceSha256,
+            @NotNull @Positive Long sourceSize,
+            @NotNull @Positive Long modelConnectionId,
+            @NotBlank @Size(max = 255) String modelId,
+            @NotNull @Positive Integer dimension,
+            @NotNull @Size(min = 1, max = 4096) List<@NotNull ChunkEmbeddingRequest> embeddings
+    ) {
+        public PipelineRequest identity() {
+            return new PipelineRequest(missionId, missionFileId, ownerUserId, actorUserId, sourceSha256, sourceSize);
+        }
+    }
+
+    public record EmbeddingResponse(
+            int persistedCount,
+            int dimension,
+            String modelId,
+            String status
     ) {}
 }

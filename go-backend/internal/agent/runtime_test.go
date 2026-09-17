@@ -62,6 +62,24 @@ func TestValidQuestionRejectsInvalidChoiceOptions(t *testing.T) {
 	if !validQuestion("MULTI_CHOICE", []string{"one", "two"}) {
 		t.Fatal("valid multi-choice question was rejected")
 	}
+	if validQuestion("SINGLE_CHOICE", []string{"one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen"}) {
+		t.Fatal("single-choice question with more than twelve options was accepted")
+	}
+}
+
+func TestToolCallBudgetCountsActualCallsInOneResponse(t *testing.T) {
+	if !toolCallBudgetExceeded(0, 2, 1) {
+		t.Fatal("two returned tool calls should exceed a budget of one")
+	}
+	if toolCallBudgetExceeded(0, 2, 2) {
+		t.Fatal("two returned tool calls should fit a budget of two")
+	}
+	if toolCallBudgetExceeded(1, 1, 2) {
+		t.Fatal("a second tool call should fit in the final budget slot")
+	}
+	if !toolCallBudgetExceeded(2, 1, 2) {
+		t.Fatal("a third tool call should exceed the budget")
+	}
 }
 
 func TestRequiredToolQueryRejectsMissingOrBlankQuery(t *testing.T) {
@@ -90,7 +108,7 @@ func TestOnlyKeysRejectsUnexpectedAgentOutputFields(t *testing.T) {
 
 func TestSystemPromptDeclaresStrictQuestionEnvelope(t *testing.T) {
 	prompt := systemPrompt()
-	for _, required := range []string{"exactly one JSON object and nothing else", "questionType", "SINGLE_CHOICE", "options", "After the teacher answers a QUESTION", "exactly these top-level keys", "structuredPlan", "non-empty slides array", "non-empty title"} {
+	for _, required := range []string{"exactly one JSON object and nothing else", "Ask at most one clarification question per response", "questionType", "SINGLE_CHOICE", "2 to 4", "A, B, C, or D", "After the teacher answers a QUESTION", "exactly these top-level keys", "structuredPlan", "non-empty slides array", "non-empty title"} {
 		if !strings.Contains(prompt, required) {
 			t.Fatalf("system prompt missing %q", required)
 		}

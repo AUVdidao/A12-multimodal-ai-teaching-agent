@@ -38,6 +38,18 @@ type ModelConnection struct {
 	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
+const (
+	ModelRolePlanning       = "PLANNING"
+	ModelRoleTemplateVision = "TEMPLATE_VISION"
+	ModelRoleEmbedding      = "EMBEDDING"
+)
+
+type ModelConnectionBinding struct {
+	Role              string    `json:"role"`
+	ModelConnectionID int64     `json:"modelConnectionId"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
 type Mission struct {
 	ID                        int64      `json:"id"`
 	OwnerTeacherID            int64      `json:"ownerTeacherId"`
@@ -180,6 +192,8 @@ type GenerationJob struct {
 	MissionID            int64      `json:"missionId"`
 	SpecificationID      string     `json:"specificationId"`
 	SpecificationVersion int        `json:"specificationVersion"`
+	GenerationMode       string     `json:"generationMode"`
+	FallbackReasons      []string   `json:"fallbackReasons,omitempty"`
 	Status               string     `json:"status"`
 	CurrentSlide         int        `json:"currentSlide"`
 	TotalSlides          int        `json:"totalSlides"`

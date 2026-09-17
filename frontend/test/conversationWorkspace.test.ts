@@ -90,6 +90,7 @@ test('connection selection only accepts enabled verified connections and clears 
   assert.equal(findSelectableConnection(connections, 2), null);
   assert.equal(findSelectableConnection(connections, 99), null);
   assert.equal(findSelectableConnection(connections, null), null);
+  assert.equal(findSelectableConnection([{ id: 3, name: 'embedding', enabled: true, verificationStatus: 'VERIFIED', capabilities: { supportsChat: false, supportsEmbeddings: true } }] as any, 3), null);
 });
 
 test('connection form payload requires a new key but preserves an existing key on blank edit', () => {
@@ -103,6 +104,14 @@ test('connection form payload requires a new key but preserves an existing key o
   const replacement = buildModelConnectionPayload({ ...values, apiKey: 'synthetic-replacement-key' }, 'edit');
   assert.equal(replacement?.apiKey, 'synthetic-replacement-key');
   assert.equal(buildModelConnectionPayload({ ...values, apiKey: 'synthetic-new-key' }, 'create')?.protocol, 'OPENAI_COMPATIBLE');
+  assert.deepEqual(buildModelConnectionPayload({ ...values, apiKey: 'synthetic-new-key' }, 'create')?.capabilities, {
+    supportsChat: true,
+    supportsTools: true,
+    supportsJSONMode: true,
+    supportsVision: false,
+    supportsEmbeddings: false,
+    supportsStreaming: false,
+  });
 });
 
 test('connection verification maps server outcomes without turning pending or invalid into success', () => {

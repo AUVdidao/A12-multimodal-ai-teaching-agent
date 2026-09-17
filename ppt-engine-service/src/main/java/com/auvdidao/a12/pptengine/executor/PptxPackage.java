@@ -97,6 +97,17 @@ final class PptxPackage {
         return Set.copyOf(entries.keySet());
     }
 
+    /**
+     * Returns slide XML parts physically present in the ZIP package. This is
+     * intentionally separate from {@link #slidePaths()}, which only follows
+     * the presentation's visible slide order.
+     */
+    Set<String> physicalSlidePaths() {
+        return entries.keySet().stream()
+                .filter(PptxPackage::isPhysicalSlidePart)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+    }
+
     byte[] bytes(String name) {
         return entries.get(name);
     }
@@ -153,6 +164,78 @@ final class PptxPackage {
                     "application/vnd.openxmlformats-officedocument.presentationml.slide+xml");
         }
         return List.copyOf(targetSlides);
+    }
+
+    /**
+     * Removes template slide parts that are no longer referenced by
+     * presentation.xml, together with their relationship parts and content
+     * type overrides. Keeping those orphan parts makes the ZIP look readable
+     * while leaving the OOXML package structurally inconsistent.
+     */
+    void retainOnlySlides(List<String> targetSlides) throws IOException {
+        Set<String> keep = new HashSet<>(targetSlides);
+        Set<String> removedPackageParts = new HashSet<>();
+        for (String name : new ArrayList<>(entries.keySet())) {
+            if (isPhysicalSlidePart(name) && !keep.contains(name)) {
+                removedPackageParts.add(name);
+                entries.remove(name);
+                documents.remove(name);
+            }
+        }
+        for (String name : new ArrayList<>(entries.keySet())) {
+            if (isSlideRelationshipsPart(name)
+                    && !keep.contains(slidePartForRelationships(name))) {
+                removedPackageParts.add(name);
+                entries.remove(name);
+                documents.remove(name);
+            }
+        }
+
+        // Generated slides deliberately omit the copied notesSlide relationship
+        // until a notes part can be cloned and rebound. Remove notes parts that
+        // are therefore no longer reachable; otherwise their back-references
+        // point at deleted template slides and the final relationship gate
+        // correctly rejects the package as dangling.
+        Set<String> referencedNotes = new HashSet<>();
+        for (String slide : keep) {
+            String relationshipsPart = relsPath(slide);
+            if (!entries.containsKey(relationshipsPart)) {
+                continue;
+            }
+            Document relationships = document(relationshipsPart);
+            for (Element relationship : elements(relationships, REL_NS, "Relationship")) {
+                if (relationship.getAttribute("Type").endsWith("/notesSlide")) {
+                    referencedNotes.add(resolveTarget(slide, relationship.getAttribute("Target")));
+                }
+            }
+        }
+        for (String name : new ArrayList<>(entries.keySet())) {
+            if (isPhysicalNotesPart(name) && !referencedNotes.contains(name)) {
+                removedPackageParts.add(name);
+                entries.remove(name);
+                documents.remove(name);
+            }
+        }
+        for (String name : new ArrayList<>(entries.keySet())) {
+            if (isNotesRelationshipsPart(name)
+                    && !referencedNotes.contains(notesPartForRelationships(name))) {
+                removedPackageParts.add(name);
+                entries.remove(name);
+                documents.remove(name);
+            }
+        }
+        if (removedPackageParts.isEmpty()) {
+            return;
+        }
+        Document contentTypes = document("[Content_Types].xml");
+        for (Element override : new ArrayList<>(elements(contentTypes, CT_NS, "Override"))) {
+            String partName = override.getAttribute("PartName");
+            String normalized = partName.startsWith("/") ? partName.substring(1) : partName;
+            if (removedPackageParts.stream().anyMatch(normalized::equalsIgnoreCase)) {
+                override.getParentNode().removeChild(override);
+            }
+        }
+        saveDocument("[Content_Types].xml", contentTypes);
     }
 
     /** Adds an OOXML content-type override without weakening existing entries. */
@@ -308,6 +391,44 @@ final class PptxPackage {
             result.add((Element) nodes.item(index));
         }
         return result;
+    }
+
+    private static boolean isPhysicalSlidePart(String name) {
+        return name.startsWith("ppt/slides/")
+                && name.endsWith(".xml")
+                && !name.startsWith("ppt/slides/_rels/")
+                && name.indexOf('/', "ppt/slides/".length()) < 0;
+    }
+
+    private static boolean isSlideRelationshipsPart(String name) {
+        return name.startsWith("ppt/slides/_rels/") && name.endsWith(".xml.rels");
+    }
+
+    private static String slidePartForRelationships(String name) {
+        String leaf = name.substring("ppt/slides/_rels/".length());
+        if (!leaf.endsWith(".rels")) {
+            throw new IllegalArgumentException("invalid slide relationship part");
+        }
+        return "ppt/slides/" + leaf.substring(0, leaf.length() - ".rels".length());
+    }
+
+    private static boolean isPhysicalNotesPart(String name) {
+        return name.startsWith("ppt/notesSlides/")
+                && name.endsWith(".xml")
+                && !name.startsWith("ppt/notesSlides/_rels/")
+                && name.indexOf('/', "ppt/notesSlides/".length()) < 0;
+    }
+
+    private static boolean isNotesRelationshipsPart(String name) {
+        return name.startsWith("ppt/notesSlides/_rels/") && name.endsWith(".xml.rels");
+    }
+
+    private static String notesPartForRelationships(String name) {
+        String leaf = name.substring("ppt/notesSlides/_rels/".length());
+        if (!leaf.endsWith(".rels")) {
+            throw new IllegalArgumentException("invalid notes relationship part");
+        }
+        return "ppt/notesSlides/" + leaf.substring(0, leaf.length() - ".rels".length());
     }
 
     static Element findObject(Document slide, String objectId) {

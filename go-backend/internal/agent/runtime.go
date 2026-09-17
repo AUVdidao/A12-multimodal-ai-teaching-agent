@@ -26,6 +26,11 @@ type Runtime struct {
 	Capability   CapabilityResolver
 	MaxToolCalls int
 	ToolTimeout  time.Duration
+	// EnableSubagentChain switches the planning turn from the legacy single
+	// planning-agent loop to the role-scoped clarification/research/template/
+	// composition chain. Both modes keep the same AgentRun lease and output
+	// persistence boundary.
+	EnableSubagentChain bool
 	// chat is a same-package integration seam. Production leaves it nil and
 	// uses the provider-neutral model client; tests can still drive the full
 	// worker/runtime/store output path without a real Provider or API key.
@@ -140,6 +145,9 @@ func (r *Runtime) Run(ctx context.Context, run model.AgentRun) error {
 	if err != nil {
 		return err
 	}
+	if r.EnableSubagentChain {
+		return r.runSubagentChain(ctx, run, owner, mission, resolved, frozen, messages, files, questions, currentDraft, historicalSummary)
+	}
 	chat := builtContext.Messages
 	tools := toolDefinitions()
 	if !frozen.Capabilities.SupportsTools || !frozen.Capabilities.SupportsJSONMode {
@@ -150,7 +158,8 @@ func (r *Runtime) Run(ctx context.Context, run model.AgentRun) error {
 		limit = 8
 	}
 	outputRepairAttempts := 0
-	for calls := 0; calls <= limit; calls++ {
+	toolCallsUsed := 0
+	for {
 		started := time.Now()
 		chatRequest := model.ChatRequest{Messages: chat, Tools: tools, MaxTokens: 4096, JSONMode: frozen.Capabilities.SupportsJSONMode}
 		var response model.ChatResponse
@@ -174,6 +183,10 @@ func (r *Runtime) Run(ctx context.Context, run model.AgentRun) error {
 			return fmt.Errorf("mark model connection used: %w", err)
 		}
 		if len(response.ToolCalls) > 0 {
+			if toolCallBudgetExceeded(toolCallsUsed, len(response.ToolCalls), limit) {
+				return errors.New("AGENT_TOOL_CALL_LIMIT")
+			}
+			toolCallsUsed += len(response.ToolCalls)
 			results := make([]string, 0, len(response.ToolCalls))
 			for _, call := range response.ToolCalls {
 				results = append(results, r.runTool(ctx, run.MissionID, owner, call))
@@ -330,7 +343,7 @@ func outputRepairPrompt(errorCode string) string {
 	case "AGENT_INVALID_PLAN":
 		return "Your previous output was rejected as AGENT_INVALID_PLAN. Return exactly one JSON object with exactly these top-level keys: type, markdown, structuredPlan. type must be PLAN_DRAFT; markdown must be non-empty; structuredPlan.slides must be a non-empty array and every slide must have a non-empty title. Do not include geometry, OOXML, engine, credential, or API fields. If no authorized source file exists, omit sourceRefs. Return JSON only, with no Markdown fences or prose."
 	case "AGENT_INVALID_QUESTION":
-		return "Your previous output was rejected as AGENT_INVALID_QUESTION. Return exactly one JSON object of type QUESTION with question, explicit questionType (TEXT, SINGLE_CHOICE, or MULTI_CHOICE), and options matching that type. Return JSON only, with no Markdown fences or prose."
+		return "Your previous output was rejected as AGENT_INVALID_QUESTION. Return exactly one JSON object of type QUESTION with a non-empty question, questionType set to SINGLE_CHOICE, and 2 to 4 concise options. Return JSON only, with no Markdown fences or prose."
 	case "AGENT_INVALID_MESSAGE":
 		return "Your previous output was rejected as AGENT_INVALID_MESSAGE. Return exactly {\"type\":\"MESSAGE\",\"content\":\"non-empty text\"} and no other keys. Return JSON only, with no Markdown fences or prose."
 	default:
@@ -387,10 +400,16 @@ func (r *Runtime) persistFinal(ctx context.Context, run model.AgentRun, content 
 		_, err := r.Store.AddAssistantMessageForRun(ctx, run.MissionID, run.ID, run.LeaseToken, envelope.Content, "TEXT", map[string]any{"type": "MESSAGE"})
 		return err
 	case "QUESTION":
-		if !onlyKeys(raw, "type", "question", "questionType", "options") || envelope.Question == "" || !validQuestion(envelope.QuestionType, envelope.Options) {
+		if !onlyKeys(raw, "type", "question", "questionType", "options") || strings.TrimSpace(envelope.Question) == "" || !validQuestion(envelope.QuestionType, envelope.Options) {
 			return errors.New("AGENT_INVALID_QUESTION")
 		}
-		_, err := r.Store.SaveQuestionForRun(ctx, run.MissionID, run.ID, run.LeaseToken, envelope.Question, defaultString(envelope.QuestionType, "TEXT"), envelope.Options)
+		question := strings.TrimSpace(envelope.Question)
+		questionType := strings.ToUpper(strings.TrimSpace(envelope.QuestionType))
+		options := make([]string, len(envelope.Options))
+		for index, option := range envelope.Options {
+			options[index] = strings.TrimSpace(option)
+		}
+		_, err := r.Store.SaveQuestionForRun(ctx, run.MissionID, run.ID, run.LeaseToken, question, defaultString(questionType, "TEXT"), options)
 		if err != nil {
 			return err
 		}
@@ -454,8 +473,14 @@ func (r *Runtime) tool(ctx context.Context, missionID, owner int64, call model.T
 		}
 		snippets, err := r.RAG.Search(ctx, missionID, query, fileIDs)
 		if err != nil {
+			_ = r.Store.AddActivity(ctx, missionID, "RAG_SEARCH_FAILED", "RAG search failed", "RAG_SEARCH", safeToolError(err))
 			return safeToolError(err)
 		}
+		mode := "KEYWORD_FALLBACK"
+		if len(snippets) > 0 && snippets[0].RetrievalMode != "" {
+			mode = snippets[0].RetrievalMode
+		}
+		_ = r.Store.AddActivity(ctx, missionID, "RAG_SEARCH_COMPLETED", fmt.Sprintf("mode=%s hits=%d chunks=%s materials=%s", mode, len(snippets), ragChunkIDs(snippets), ragMaterialIDs(snippets)), "RAG_SEARCH", mode)
 		return marshal(snippets)
 	case "read_material":
 		if r.RAG == nil {
@@ -527,7 +552,7 @@ func systemPromptForVersion(version string) string {
 	if version != model.PlanAgentPromptVersion {
 		return ""
 	}
-	return "You are the LessonForge planning agent. Work only with the current Mission context. Use search_materials to locate authorized material evidence and read_material when the relevant attached file needs bounded content. Use tools when needed, but do not block a semantic plan on unavailable optional sources. After the teacher answers a QUESTION, continue to the next necessary stage; if no required clarification remains, return a PLAN_DRAFT instead of repeating the question or returning prose. Return exactly one JSON object and nothing else: no explanation, no Markdown fences, and no prose before or after it. The object type must be MESSAGE, QUESTION, or PLAN_DRAFT. MESSAGE must be exactly {\"type\":\"MESSAGE\",\"content\":\"...\"}. QUESTION must be exactly {\"type\":\"QUESTION\",\"question\":\"...\",\"questionType\":\"TEXT\",\"options\":[]} for a free-text question, or use questionType SINGLE_CHOICE/MULTI_CHOICE with 2-12 options. PLAN_DRAFT must have exactly these top-level keys: type, markdown, structuredPlan; type must be PLAN_DRAFT, markdown must be non-empty, and structuredPlan must contain a non-empty slides array where every slide has a non-empty title. Keep PLAN_DRAFT semantic only and omit sourceRefs when no authorized source file exists. Never output shape IDs, coordinates, geometry, OOXML, credentials, API fields, or hidden reasoning. Do not invent material facts; label teacher or AI provenance."
+	return "You are the LessonForge planning agent. Work only with the current Mission context. Use search_materials to locate authorized material evidence and read_material when the relevant attached file needs bounded content. Use tools when needed, but do not block a semantic plan on unavailable optional sources. Ask at most one clarification question per response. After the teacher answers a QUESTION, continue to the next necessary stage; if another required clarification remains, ask the next single question; otherwise return a PLAN_DRAFT instead of repeating the question or returning prose. Return exactly one JSON object and nothing else: no explanation, no Markdown fences, and no prose before or after it. The object type must be MESSAGE, QUESTION, or PLAN_DRAFT. MESSAGE must be exactly {\"type\":\"MESSAGE\",\"content\":\"...\"}. QUESTION must be exactly {\"type\":\"QUESTION\",\"question\":\"...\",\"questionType\":\"SINGLE_CHOICE\",\"options\":[\"...\",\"...\"]} with 2 to 4 concise, mutually exclusive options so the teacher can answer by selecting A, B, C, or D. PLAN_DRAFT must have exactly these top-level keys: type, markdown, structuredPlan; type must be PLAN_DRAFT, markdown must be non-empty, and structuredPlan must contain a non-empty slides array where every slide has a non-empty title. Keep PLAN_DRAFT semantic only and omit sourceRefs when no authorized source file exists. Never output shape IDs, coordinates, geometry, OOXML, credentials, API fields, or hidden reasoning. Do not invent material facts; label teacher or AI provenance."
 }
 func marshal(v any) string {
 	b, err := json.Marshal(v)
@@ -538,6 +563,31 @@ func marshal(v any) string {
 }
 func safeToolError(err error) string {
 	return marshal(map[string]string{"error": safeToolErrorCode(err)})
+}
+
+func ragChunkIDs(snippets []rag.Snippet) string {
+	ids := make([]string, 0, len(snippets))
+	for _, snippet := range snippets {
+		if snippet.ChunkID > 0 {
+			ids = append(ids, strconv.FormatInt(snippet.ChunkID, 10))
+		}
+	}
+	return strings.Join(ids, ",")
+}
+
+func ragMaterialIDs(snippets []rag.Snippet) string {
+	seen := make(map[int64]struct{})
+	ids := make([]string, 0, len(snippets))
+	for _, snippet := range snippets {
+		if snippet.MaterialID > 0 {
+			if _, ok := seen[snippet.MaterialID]; ok {
+				continue
+			}
+			seen[snippet.MaterialID] = struct{}{}
+			ids = append(ids, strconv.FormatInt(snippet.MaterialID, 10))
+		}
+	}
+	return strings.Join(ids, ",")
 }
 
 func safeToolErrorCode(err error) string {
@@ -618,7 +668,7 @@ func validQuestion(questionType string, options []string) bool {
 	if strings.TrimSpace(questionType) == "" {
 		return false
 	}
-	switch questionType {
+	switch strings.ToUpper(strings.TrimSpace(questionType)) {
 	case "TEXT":
 		return len(options) == 0
 	case "SINGLE_CHOICE", "MULTI_CHOICE":
@@ -627,7 +677,8 @@ func validQuestion(questionType string, options []string) bool {
 		}
 		seen := map[string]bool{}
 		for _, option := range options {
-			if strings.TrimSpace(option) == "" || seen[option] {
+			option = strings.TrimSpace(option)
+			if option == "" || seen[option] {
 				return false
 			}
 			seen[option] = true
@@ -636,6 +687,10 @@ func validQuestion(questionType string, options []string) bool {
 	default:
 		return false
 	}
+}
+
+func toolCallBudgetExceeded(used, requested, limit int) bool {
+	return used < 0 || requested < 0 || limit < 0 || requested > limit-used
 }
 
 func requiredToolQuery(args map[string]any) (string, bool) {

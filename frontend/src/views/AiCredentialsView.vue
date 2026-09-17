@@ -2,13 +2,17 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
+  clearModelConnectionBinding,
   createModelConnection, deleteModelConnection, getModelConnections, setModelConnectionEnabled,
-  updateModelConnection, verifyModelConnection, type ModelConnection, type ModelConnectionPayload,
+  getModelConnectionBindings, setModelConnectionBinding, updateModelConnection, verifyModelConnection,
+  type ModelCapabilities, type ModelConnection, type ModelConnectionPayload, type ModelRole,
 } from '@/api/aiCredentials';
+import A12AssetIcon from '@/components/ui/A12AssetIcon.vue';
+import { defaultModelCapabilities } from '@/utils/conversationWorkspaceConnection';
 
 const router = useRouter();
 const connections = ref<ModelConnection[]>([]);
-const selectedConnectionId = ref<number | null>(null);
+const bindings = reactive<Record<ModelRole, number | null>>({ PLANNING: null, TEMPLATE_VISION: null, EMBEDDING: null });
 const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
@@ -16,16 +20,17 @@ const success = ref('');
 const editingId = ref<number | null>(null);
 const formOpen = ref(false);
 const formPanel = ref<HTMLElement | null>(null);
-const form = reactive<ModelConnectionPayload>({ name: '', protocol: 'OPENAI_COMPATIBLE', baseUrl: '', apiKey: '', modelId: '' });
+const form = reactive<ModelConnectionPayload & { capabilities: ModelCapabilities }>({ name: '', protocol: 'OPENAI_COMPATIBLE', baseUrl: '', apiKey: '', modelId: '', capabilities: defaultModelCapabilities() });
 
-const selectableConnections = computed(() => connections.value.filter((connection) => (
-  connection.enabled && connection.verificationStatus === 'VERIFIED'
-)));
-const selectedConnection = computed(() => selectableConnections.value.find((connection) => connection.id === selectedConnectionId.value) || null);
+const roles: Array<{ role: ModelRole; title: string }> = [
+  { role: 'PLANNING', title: '课件规划模型' },
+  { role: 'TEMPLATE_VISION', title: '模板视觉模型' },
+  { role: 'EMBEDDING', title: '文本嵌入模型' },
+];
 
 function resetForm() {
   editingId.value = null;
-  Object.assign(form, { name: '', protocol: 'OPENAI_COMPATIBLE', baseUrl: '', apiKey: '', modelId: '' });
+  Object.assign(form, { name: '', protocol: 'OPENAI_COMPATIBLE', baseUrl: '', apiKey: '', modelId: '', capabilities: defaultModelCapabilities() });
 }
 
 function openAddConnection() {
@@ -48,8 +53,14 @@ async function load() {
     const response = await getModelConnections();
     if (response.code !== 0) throw new Error(response.message);
     connections.value = response.data ?? [];
-    if (!selectableConnections.value.some((connection) => connection.id === selectedConnectionId.value)) {
-      selectedConnectionId.value = null;
+    try {
+      const savedBindings = await getModelConnectionBindings();
+      for (const role of roles) bindings[role.role] = savedBindings.find((item) => item.role === role.role)?.modelConnectionId ?? null;
+    } catch {
+      // Older running backends do not have the optional role-binding endpoint.
+      // Keep the existing model connections visible and let the user select or
+      // upgrade the backend before configuring the new role bindings.
+      for (const role of roles) bindings[role.role] = null;
     }
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '无法读取模型连接';
@@ -66,6 +77,7 @@ function edit(connection: ModelConnection) {
     baseUrl: connection.baseUrl,
     apiKey: '',
     modelId: connection.modelId,
+    capabilities: { ...defaultModelCapabilities(), ...(connection.capabilities || {}) },
   });
   error.value = '';
   success.value = '';
@@ -78,6 +90,8 @@ async function save() {
   error.value = '';
   success.value = '';
   try {
+    syncCapabilityDependencies();
+    if (!form.capabilities?.supportsChat && !form.capabilities?.supportsEmbeddings) throw new Error('至少选择一种模型用途');
     const response = editingId.value === null
       ? await createModelConnection({ ...form, apiKey: form.apiKey ?? '' })
       : await updateModelConnection(editingId.value, form);
@@ -100,9 +114,65 @@ async function remove(connection: ModelConnection) {
     error.value = response.message;
     return;
   }
-  if (selectedConnectionId.value === connection.id) selectedConnectionId.value = null;
   success.value = '模型连接已删除';
   await load();
+}
+
+function supportsRole(connection: ModelConnection, role: ModelRole) {
+  if (!connection.enabled || connection.verificationStatus !== 'VERIFIED') return false;
+  const capabilities = connection.capabilities || defaultModelCapabilities();
+  const verification = connection.capabilityVerification;
+  // A legacy connection may already be overall VERIFIED while its newer
+  // capability fields are still DECLARED. It remains a valid planning model
+  // when chat/tools/JSON are declared and not explicitly unsupported.
+  if (role === 'PLANNING') return capabilities.supportsChat
+    && capabilities.supportsTools
+    && capabilities.supportsJSONMode
+    && (!verification || [verification.supportsChat, verification.supportsTools, verification.supportsJSONMode].every((status) => status !== 'UNSUPPORTED'));
+  if (role === 'TEMPLATE_VISION') return capabilities.supportsVision && verification?.supportsVision === 'VERIFIED';
+  return capabilities.supportsEmbeddings && Boolean(capabilities.embeddingDimension) && verification?.supportsEmbeddings === 'VERIFIED';
+}
+
+function roleConnections(role: ModelRole) {
+  return connections.value.filter((connection) => supportsRole(connection, role));
+}
+
+async function updateBinding(role: ModelRole, value: string) {
+  error.value = '';
+  success.value = '';
+  try {
+    if (!value) {
+      await clearModelConnectionBinding(role);
+      bindings[role] = null;
+    } else {
+      const binding = await setModelConnectionBinding(role, Number(value));
+      bindings[role] = binding.modelConnectionId;
+    }
+    success.value = '模型分工已更新';
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : '模型分工更新失败';
+    await load();
+  }
+}
+
+function syncCapabilityDependencies() {
+  const capabilities = form.capabilities;
+  if (capabilities.supportsVision) capabilities.supportsChat = true;
+  if (!capabilities.supportsChat) {
+    capabilities.supportsTools = false;
+    capabilities.supportsJSONMode = false;
+    capabilities.supportsVision = false;
+    capabilities.supportsStreaming = false;
+  }
+}
+
+function capabilityLabels(connection: ModelConnection) {
+  const capabilities = connection.capabilities || defaultModelCapabilities();
+  const labels: string[] = [];
+  if (capabilities.supportsChat) labels.push('课件规划');
+  if (capabilities.supportsVision) labels.push('模板视觉');
+  if (capabilities.supportsEmbeddings) labels.push(capabilities.embeddingDimension ? `文本嵌入 ${capabilities.embeddingDimension}维` : '文本嵌入');
+  return labels;
 }
 
 async function toggle(connection: ModelConnection) {
@@ -155,7 +225,7 @@ onMounted(load);
       </button>
       <nav class="settings-nav" aria-label="模型设置">
         <button class="settings-nav__item is-active" type="button" aria-current="page">
-          <span class="settings-nav__icon" aria-hidden="true">▣</span>
+          <span class="settings-nav__icon"><A12AssetIcon name="atom" :size="21" /></span>
           <span>模型</span>
         </button>
       </nav>
@@ -164,9 +234,7 @@ onMounted(load);
     <section class="model-settings-content" aria-labelledby="model-settings-title">
       <div class="model-settings-inner">
         <header class="settings-page-heading">
-          <p class="settings-kicker">模型选择</p>
           <h1 id="model-settings-title">模型配置</h1>
-          <p>选择当前任务使用的模型连接，或管理已有连接。</p>
         </header>
 
         <div v-if="error" class="settings-notice settings-notice--error" role="alert">{{ error }}</div>
@@ -174,21 +242,19 @@ onMounted(load);
 
         <section class="settings-section" aria-labelledby="model-selection-title">
           <div class="settings-section-heading">
-            <h2 id="model-selection-title">选择模型</h2>
+            <h2 id="model-selection-title">模型分工</h2>
           </div>
-          <div class="model-selection-card">
+          <div v-for="item in roles" :key="item.role" class="model-selection-card">
             <div>
-              <strong>当前模型</strong>
-              <p>仅显示已启用且验证通过的模型连接。</p>
+              <strong>{{ item.title }}</strong>
             </div>
-            <select v-model="selectedConnectionId" aria-label="选择模型" :disabled="loading || selectableConnections.length === 0">
-              <option :value="null">尚未选择模型</option>
-              <option v-for="connection in selectableConnections" :key="connection.id" :value="connection.id">
+            <select :value="bindings[item.role] || ''" :aria-label="item.title" :disabled="loading" @change="updateBinding(item.role, ($event.target as HTMLSelectElement).value)">
+              <option value="">尚未指定</option>
+              <option v-for="connection in roleConnections(item.role)" :key="connection.id" :value="connection.id">
                 {{ connection.name }} · {{ connection.modelId }}
               </option>
             </select>
           </div>
-          <p v-if="selectedConnection" class="selection-hint">已选择：{{ selectedConnection.name }}（{{ selectedConnection.modelId }}）</p>
         </section>
 
         <section class="settings-section" aria-labelledby="connections-title">
@@ -211,6 +277,7 @@ onMounted(load);
                   <span class="connection-status" :class="statusClass(connection)"><span class="status-dot" aria-hidden="true"></span>{{ statusLabel(connection) }}</span>
                 </div>
                 <span>{{ connection.modelId }}</span>
+                <div class="connection-capabilities"><span v-for="label in capabilityLabels(connection)" :key="label">{{ label }}</span></div>
                 <small>{{ connection.baseUrl }} · {{ connection.keyHint }}</small>
               </div>
               <div class="connection-row__actions">
@@ -237,6 +304,17 @@ onMounted(load);
                 <label class="editor-grid__wide">API Base URL<input v-model="form.baseUrl" required maxlength="2048" placeholder="https://api.example.com/v1" /></label>
                 <label>API Key<input v-model="form.apiKey" :required="editingId === null" type="password" autocomplete="new-password" :placeholder="editingId === null ? '输入 API Key' : '留空以保留原 Key'" /></label>
                 <label>Model ID<input v-model="form.modelId" required maxlength="128" placeholder="例如：deepseek-chat" /></label>
+                <fieldset class="editor-grid__wide capability-fieldset">
+                  <legend>模型用途</legend>
+                  <label><input v-model="form.capabilities.supportsChat" type="checkbox" @change="syncCapabilityDependencies" /> 对话与课件规划</label>
+                  <label><input v-model="form.capabilities.supportsVision" type="checkbox" @change="syncCapabilityDependencies" /> 模板视觉理解</label>
+                  <label><input v-model="form.capabilities.supportsEmbeddings" type="checkbox" @change="syncCapabilityDependencies" /> 文本嵌入与语义检索</label>
+                  <div v-if="form.capabilities.supportsChat" class="capability-advanced">
+                    <label><input v-model="form.capabilities.supportsTools" type="checkbox" /> 工具调用</label>
+                    <label><input v-model="form.capabilities.supportsJSONMode" type="checkbox" /> 结构化输出</label>
+                    <label><input v-model="form.capabilities.supportsStreaming" type="checkbox" /> 流式输出</label>
+                  </div>
+                </fieldset>
               </div>
               <div class="editor-actions">
                 <button class="secondary-button" type="button" @click="closeForm">取消</button>
@@ -261,14 +339,12 @@ onMounted(load);
 .settings-back__arrow { font-size: 26px; font-weight: 300; line-height: 18px; }
 .settings-nav { display: grid; gap: 6px; }
 .settings-nav__item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 0 14px; border: 0; border-radius: 8px; background: #f0edff; color: #4d3cdb; font-size: 15px; font-weight: 600; text-align: left; }
-.settings-nav__icon { display: inline-grid; width: 18px; place-items: center; color: #6755ed; font-size: 17px; }
+.settings-nav__icon { display: inline-grid; width: 21px; height: 21px; flex: 0 0 21px; place-items: center; color: #6755ed; }
 
 .model-settings-content { min-width: 0; flex: 1; overflow-y: auto; background: #f4f7fb; }
 .model-settings-inner { width: 100%; margin: 0 auto; padding: 46px clamp(24px, 4vw, 58px) 64px; }
-.settings-page-heading { margin: 0 0 38px; }
-.settings-kicker { margin: 0 0 8px; color: #7a849b; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.settings-page-heading h1 { margin: 0 0 9px; color: #17213a; font-size: clamp(30px, 3vw, 42px); line-height: 1.15; letter-spacing: -.025em; }
-.settings-page-heading > p:last-child { margin: 0; color: #6d7892; font-size: 15px; }
+.settings-page-heading { margin: 0 0 30px; }
+.settings-page-heading h1 { margin: 0; color: #17213a; font-size: clamp(30px, 3vw, 42px); line-height: 1.15; letter-spacing: -.025em; }
 .settings-notice { margin: -14px 0 24px; padding: 12px 16px; border: 1px solid; border-radius: 8px; font-size: 14px; }
 .settings-notice--error { border-color: #efb4b4; background: #fff7f7; color: #b42318; }
 .settings-notice--success { border-color: #a7dfc0; background: #f2fbf5; color: #18794e; }
@@ -276,9 +352,8 @@ onMounted(load);
 .settings-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 14px; }
 .settings-section-heading h2 { margin: 0; color: #263454; font-size: 21px; }
 .model-selection-card, .connections-card, .connection-editor { border: 1px solid #dfe5ef; border-radius: 10px; background: #fff; box-shadow: 0 7px 20px rgb(30 45 90 / 4%); }
-.model-selection-card { display: flex; align-items: center; justify-content: space-between; gap: 22px; padding: 22px 24px; }
-.model-selection-card strong { display: block; margin-bottom: 6px; color: #263454; font-size: 16px; }
-.model-selection-card p { margin: 0; color: #7a849b; font-size: 13px; }
+.model-selection-card { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-bottom: 10px; padding: 22px 24px; }
+.model-selection-card strong { display: block; color: #263454; font-size: 16px; }
 .model-selection-card select { min-width: min(420px, 48%); height: 42px; padding: 0 12px; border: 1px solid #cfd7e6; border-radius: 7px; outline: none; background: #fff; color: #263454; font-size: 14px; }
 .model-selection-card select:focus { border-color: #6755ed; box-shadow: 0 0 0 2px rgb(103 85 237 / 13%); }
 .model-selection-card select:disabled { cursor: not-allowed; color: #9aa4b6; background: #f8f9fc; }
@@ -300,6 +375,8 @@ onMounted(load);
 .connection-row__title { display: flex; align-items: center; flex-wrap: wrap; gap: 11px; }
 .connection-row__title strong { color: #263454; font-size: 16px; }
 .connection-row__identity > span { color: #53617d; font-size: 14px; }
+.connection-capabilities { display: flex; flex-wrap: wrap; gap: 5px; }
+.connection-capabilities span { padding: 2px 8px; border-radius: 999px; background: #eaf3ff; color: #2563eb; font-size: 11px; }
 .connection-row__identity small { overflow: hidden; color: #8b98aa; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .connection-status { display: inline-flex; align-items: center; gap: 6px; color: #7a849b; font-size: 13px; }
 .connection-status.is-ready { color: #198754; }
@@ -323,6 +400,11 @@ onMounted(load);
 .editor-grid input, .editor-grid select { width: 100%; min-height: 40px; padding: 0 11px; border: 1px solid #cfd7e6; border-radius: 7px; outline: none; background: #fff; color: #263454; font-size: 14px; }
 .editor-grid input:focus, .editor-grid select:focus { border-color: #6755ed; box-shadow: 0 0 0 2px rgb(103 85 237 / 13%); }
 .editor-grid input::placeholder { color: #9aa4b6; }
+.capability-fieldset { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 14px 16px; border: 1px solid #cfd7e6; border-radius: 8px; }
+.capability-fieldset legend { padding: 0 6px; color: #53617d; font-size: 13px; }
+.capability-fieldset label { display: flex; grid-template-columns: none; align-items: center; gap: 7px; }
+.capability-fieldset input { width: 16px; min-height: 16px; margin: 0; box-shadow: none; }
+.capability-advanced { display: flex; width: 100%; flex-wrap: wrap; gap: 10px 22px; padding-top: 10px; border-top: 1px solid #e5eaf2; }
 .editor-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 
 @media (max-width: 760px) {

@@ -4,10 +4,10 @@
     <h2>{{ question.text }}</h2>
     <fieldset v-if="question.type !== 'TEXT'" :disabled="submitting">
       <legend class="go-question-type">{{ question.type === 'SINGLE_CHOICE' ? '请选择一项' : '可选择多项' }}</legend>
-      <label v-for="option in safeOptions" :key="option" class="go-question-option">
+      <label v-for="(option, index) in safeOptions" :key="option" class="go-question-option">
         <input v-if="question.type === 'SINGLE_CHOICE'" v-model="selectedValue" type="radio" name="go-question-choice" :value="option" />
         <input v-else v-model="selectedValues" type="checkbox" :value="option" />
-        <span>{{ option }}</span>
+        <span class="go-question-option__content"><strong>{{ optionCode(index) }}</strong><span>{{ option }}</span></span>
       </label>
     </fieldset>
     <label v-else class="go-question-text-label">
@@ -87,6 +87,8 @@ async function submit() {
     if (contextIsCurrent(userId, missionId)) submitting.value = false;
   }
 }
+
+function optionCode(index: number) { return String.fromCharCode(65 + index); }
 
 watch(() => [props.question.id, props.question.latestAnswer?.id, props.question.latestAnswer?.answeredAt, safeOptions.value.join('\u0000')], syncAnswer, { immediate: true });
 onBeforeUnmount(() => { active = false; });
