@@ -39,6 +39,10 @@ func TestPrepareSystemDefaultTemplateBuildsTrustedFallbackPackage(t *testing.T) 
 	if len(profile["components"].([]any)) != systemDefaultShapeCount {
 		t.Fatalf("component count = %d, want %d", len(profile["components"].([]any)), systemDefaultShapeCount)
 	}
+	component := profile["components"].([]any)[0].(map[string]any)
+	if component["transformConstraint"] != "FIXED" {
+		t.Fatalf("system default transform constraint = %#v, want FIXED", component["transformConstraint"])
+	}
 
 	path := filepath.Join(root, filepath.FromSlash(systemDefaultTemplateKey))
 	archive, err := zip.OpenReader(path)

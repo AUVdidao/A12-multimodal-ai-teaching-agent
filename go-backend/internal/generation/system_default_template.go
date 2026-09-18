@@ -177,7 +177,10 @@ func systemDefaultProfile(spec model.LockedSpecification, missionID, owner int64
 					"required":             true,
 					"capacityConstraint":   map[string]any{"maxCharacters": 4000, "maxItems": 1},
 				}},
-				"transformConstraint": "RESPONSIVE",
+				// The generated system-default PPTX has deterministic native
+				// bounds. Declare the same fixed transform contract consumed by
+				// the executor; RESPONSIVE would make every fill operation partial.
+				"transformConstraint": "FIXED",
 				"fixedStyle": map[string]any{
 					"styleId":       "system-default-style",
 					"fontToken":     "system-default-font",
