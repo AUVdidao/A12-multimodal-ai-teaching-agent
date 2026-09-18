@@ -490,6 +490,8 @@
 .go-plan-preview__status { flex: 0 0 auto; margin-top: 2px; padding: 5px 8px; border: 1px solid rgba(126, 128, 229, .34); border-radius: 5px; background: var(--lf-indigo-soft); color: var(--lf-indigo); font-size: 10px; }
 .go-plan-preview__approve { flex: 0 0 auto; margin-top: 0; }
 .go-plan-preview__approval-requirement { margin: 12px 20px 0; padding: 9px 11px; border: 1px solid rgba(205, 151, 40, .34); border-radius: 6px; background: rgba(205, 151, 40, .08); color: #9a6b14; font-size: 11px; line-height: 1.55; }
+.go-plan-preview__generation-policy { display: flex; gap: 8px; margin: 12px 20px 0; padding: 9px 11px; border: 1px solid rgba(98, 87, 217, .22); border-radius: 6px; background: rgba(98, 87, 217, .06); color: var(--lf-muted); font-size: 11px; line-height: 1.55; }
+.go-plan-preview__generation-policy span { flex: 0 0 auto; color: var(--lf-indigo); font-weight: 600; }
 .go-plan-preview__summary { display: flex; flex-wrap: wrap; gap: 7px; margin: 17px 20px 0; }
 .go-plan-preview__summary span { padding: 5px 8px; border: 1px solid var(--lf-line); border-radius: 4px; color: var(--lf-muted); font-size: 10px; }
 .go-plan-preview__intro { margin: 16px 20px 18px !important; color: var(--lf-muted) !important; font-size: 12px; line-height: 1.7; }

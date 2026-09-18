@@ -13,6 +13,7 @@
       </div>
     </header>
     <p v-if="!locked && approvalBlocker" class="go-plan-preview__approval-requirement" data-test="approval-prerequisite">{{ approvalBlocker }}</p>
+    <p v-if="!locked" class="go-plan-preview__generation-policy" data-test="generation-policy"><span>生成方式</span>{{ generationPolicy }}</p>
     <div v-if="facts.length" class="go-plan-preview__summary">
       <span v-for="fact in facts" :key="fact">{{ fact }}</span>
     </div>
@@ -42,7 +43,7 @@ import { computed } from 'vue';
 import { presentPlanSlides } from '@/utils/conversationPresentation';
 import type { GoPlanningDraft } from '@/api/go';
 
-const props = defineProps<{ draft: GoPlanningDraft; locked: boolean; facts: string[]; approving: boolean; approvalBlocker: string }>();
+const props = defineProps<{ draft: GoPlanningDraft; locked: boolean; facts: string[]; approving: boolean; approvalBlocker: string; generationPolicy: string }>();
 defineEmits<{ approve: [] }>();
 const slides = computed(() => presentPlanSlides(props.draft));
 const intro = computed(() => {

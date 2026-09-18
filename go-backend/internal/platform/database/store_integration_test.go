@@ -615,6 +615,85 @@ func TestApproveDraftStopsAtLockedSpecificationWithoutGenerationJob(t *testing.T
 	}
 }
 
+func TestApproveDraftWithoutTemplateLocksDefaultLayoutAndAuditsFallback(t *testing.T) {
+	store, ctx := integrationStore(t)
+	suffix := uuid.NewString()
+	owner, err := store.CreateUser(ctx, "Default layout owner", "default-layout-"+suffix+"@example.test", "test-password-hash", model.RoleTeacher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var missionID, messageID int64
+	if err := store.DB.QueryRow(ctx, `INSERT INTO missions(owner_teacher_id,source,title) VALUES($1,'SELF_CREATED','Default layout mission') RETURNING id`, owner.ID).Scan(&missionID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DB.QueryRow(ctx, `INSERT INTO mission_messages(mission_id,role,content) VALUES($1,'USER','approve without a template') RETURNING id`, missionID).Scan(&messageID); err != nil {
+		t.Fatal(err)
+	}
+	runID := uuid.NewString()
+	if _, err := store.DB.Exec(ctx, `INSERT INTO agent_runs(id,mission_id,triggering_message_id,model_identity_snapshot,status) VALUES($1,$2,$3,'{"source":"integration"}'::jsonb,'COMPLETED')`, runID, missionID, messageID); err != nil {
+		t.Fatal(err)
+	}
+	draftID := uuid.NewString()
+	if _, err := store.DB.Exec(ctx, `INSERT INTO planning_drafts(id,mission_id,version,markdown,structured_plan_json,created_by_agent_run_id,output_stage) VALUES($1,$2,1,'# Default layout draft','{"slides":[{"title":"Introduction"}]}'::jsonb,$3,'PLAN_DRAFT')`, draftID, missionID, runID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := store.DB.Exec(cleanupCtx, `ALTER TABLE locked_specifications DISABLE TRIGGER locked_specifications_immutable_trg`); err != nil {
+			t.Errorf("disable immutable trigger for default layout cleanup: %v", err)
+		}
+		if _, err := store.DB.Exec(cleanupCtx, `DELETE FROM missions WHERE id=$1`, missionID); err != nil {
+			t.Errorf("cleanup default layout mission: %v", err)
+		}
+		if _, err := store.DB.Exec(cleanupCtx, `ALTER TABLE locked_specifications ENABLE TRIGGER locked_specifications_immutable_trg`); err != nil {
+			t.Errorf("restore immutable trigger after default layout cleanup: %v", err)
+		}
+		if _, err := store.DB.Exec(cleanupCtx, `DELETE FROM users WHERE id=$1`, owner.ID); err != nil {
+			t.Errorf("cleanup default layout owner: %v", err)
+		}
+	})
+
+	spec, err := store.ApproveDraft(ctx, owner.ID, draftID)
+	if err != nil {
+		t.Fatalf("ApproveDraft without template: %v", err)
+	}
+	if spec.ID == "" || spec.TemplateBinding != nil {
+		t.Fatalf("default-layout locked specification = %#v", spec)
+	}
+	var summary string
+	if err := store.DB.QueryRow(ctx, `SELECT summary FROM activity_events WHERE mission_id=$1 AND event_type='PLAN_APPROVED'`, missionID).Scan(&summary); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(summary, "system default template") || !strings.Contains(summary, "not provided") {
+		t.Fatalf("approval audit summary = %q", summary)
+	}
+	job, err := store.CreateGenerationJobWithPolicy(ctx, owner.ID, missionID, spec.ID, spec.Version, GenerationFallbackPolicyAuto)
+	if err != nil {
+		t.Fatalf("CreateGenerationJobWithPolicy without template: %v", err)
+	}
+	if !job.Created || job.Job.GenerationMode != GenerationModeSystemDefault || !containsString(job.Job.FallbackReasons, "TEMPLATE_NOT_PROVIDED") {
+		t.Fatalf("default-layout generation job = %+v", job.Job)
+	}
+	var storedMode string
+	var storedReasons []byte
+	if err := store.DB.QueryRow(ctx, `SELECT generation_mode,fallback_reasons FROM generation_jobs WHERE id=$1`, job.Job.ID).Scan(&storedMode, &storedReasons); err != nil {
+		t.Fatal(err)
+	}
+	if storedMode != GenerationModeSystemDefault || !strings.Contains(string(storedReasons), "TEMPLATE_NOT_PROVIDED") {
+		t.Fatalf("persisted default-layout metadata = mode=%q reasons=%s", storedMode, storedReasons)
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestApproveDraftBindsRealStoredPPTXBeforeLockedSpecification(t *testing.T) {
 	store, ctx := integrationStore(t)
 	root := t.TempDir()

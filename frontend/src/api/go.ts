@@ -304,7 +304,7 @@ export function goErrorCode(error: unknown) {
 export function goErrorMessage(error: unknown, fallback = '暂时无法连接 LessonForge 服务。') {
   const response = (error as AxiosError<GoErrorBody> | undefined)?.response;
   const code = response?.data?.error?.code;
-  if (code === 'TEMPLATE_BINDING_REQUIRED') return '批准前需要先上传并等待一份 PPTX 模板解析完成。';
+  if (code === 'TEMPLATE_BINDING_REQUIRED') return '当前模板绑定不可用；如未上传模板，批准后将使用系统默认版式。';
   if (code === 'SPECIFICATION_PLAN_INVALID') return '课件方案结构无效，请重新生成方案草稿。';
   if (code === 'SPECIFICATION_FORBIDDEN_FIELD') return '课件方案包含不允许的执行字段，请重新生成方案草稿。';
   if (code) return `请求未完成（${code}）。`;

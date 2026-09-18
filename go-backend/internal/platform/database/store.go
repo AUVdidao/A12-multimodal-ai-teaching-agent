@@ -2446,8 +2446,10 @@ func (s *Store) ApproveDraft(ctx context.Context, owner int64, draftID string) (
 		if err := json.Unmarshal(existingRaw, &existing.Specification); err != nil {
 			return model.LockedSpecification{}, fmt.Errorf("decode locked specification: %w", err)
 		}
-		if err := json.Unmarshal(existingBinding, &existing.TemplateBinding); err != nil {
-			return model.LockedSpecification{}, fmt.Errorf("decode template binding: %w", err)
+		if len(existingBinding) > 0 && string(bytes.TrimSpace(existingBinding)) != "null" {
+			if err := json.Unmarshal(existingBinding, &existing.TemplateBinding); err != nil {
+				return model.LockedSpecification{}, fmt.Errorf("decode template binding: %w", err)
+			}
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return model.LockedSpecification{}, err
@@ -2483,13 +2485,21 @@ func (s *Store) ApproveDraft(ctx context.Context, owner int64, draftID string) (
 	if _, err := tx.Exec(ctx, `INSERT INTO locked_specifications(id,mission_id,source_draft_id,version,specification_json,template_binding_json,content_hash) VALUES($1,$2,$3,$4,$5,$6,$7)`, specID, d.MissionID, d.ID, d.Version, encoded, bindingEncoded, contentHash); err != nil {
 		return model.LockedSpecification{}, err
 	}
-	if err := addActivityTx(ctx, tx, d.MissionID, "PLAN_APPROVED", "Plan approved and locked", "LOCKED_SPECIFICATION", specID); err != nil {
+	approvalSummary := "Plan approved and locked with teacher template"
+	if binding == nil {
+		approvalSummary = "Plan approved and locked with system default template; teacher PPTX template not provided"
+	}
+	if err := addActivityTx(ctx, tx, d.MissionID, "PLAN_APPROVED", approvalSummary, "LOCKED_SPECIFICATION", specID); err != nil {
 		return model.LockedSpecification{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return model.LockedSpecification{}, err
 	}
-	return model.LockedSpecification{ID: specID, MissionID: d.MissionID, SourceDraftID: d.ID, Version: d.Version, Specification: compiled, TemplateBinding: binding, ContentHash: contentHash}, nil
+	var returnedBinding any
+	if binding != nil {
+		returnedBinding = binding
+	}
+	return model.LockedSpecification{ID: specID, MissionID: d.MissionID, SourceDraftID: d.ID, Version: d.Version, Specification: compiled, TemplateBinding: returnedBinding, ContentHash: contentHash}, nil
 }
 
 // CreateGenerationJob is the explicit post-approval generation boundary. It
@@ -2608,7 +2618,7 @@ func (s *Store) resolveGenerationModeTx(ctx context.Context, tx pgx.Tx, owner, m
 			return "", nil, ErrGenerationTemplateInvalid
 		}
 		mode = GenerationModeSystemDefault
-		reasons = append(reasons, "TEMPLATE_PROFILE_UNAVAILABLE")
+		reasons = append(reasons, "TEMPLATE_NOT_PROVIDED")
 	} else if err := s.validateGenerationTemplateBindingTx(ctx, tx, owner, missionID, raw); err != nil {
 		if fallbackPolicy != GenerationFallbackPolicyAuto || !errors.Is(err, ErrGenerationTemplateProfileNotReady) {
 			return "", nil, err
@@ -2714,7 +2724,10 @@ func (s *Store) validateGenerationTemplateBindingTx(ctx context.Context, tx pgx.
 func (s *Store) templateBindingTx(ctx context.Context, tx pgx.Tx, missionID int64) (map[string]any, error) {
 	var input templatebinding.Input
 	if err := tx.QueryRow(ctx, `SELECT mf.id,fo.id,m.owner_teacher_id,fo.original_name,fo.mime_type,fo.sha256,fo.storage_key,fo.size_bytes,mf.parse_status,fo.created_at FROM mission_files mf JOIN file_objects fo ON fo.id=mf.file_object_id JOIN missions m ON m.id=mf.mission_id WHERE mf.mission_id=$1 AND mf.role='TEMPLATE' AND fo.owner_user_id=m.owner_teacher_id ORDER BY mf.created_at,mf.id LIMIT 1`, missionID).Scan(&input.MissionFileID, &input.FileObjectID, &input.OwnerUserID, &input.OriginalName, &input.MimeType, &input.SHA256, &input.StorageKey, &input.Size, &input.ParseStatus, &input.LastModified); err != nil {
-		return nil, specification.ErrTemplateRequired
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read template binding: %w", err)
 	}
 	input.MissionID = missionID
 	binding, err := templatebinding.Build(input, s.StorageRoot)

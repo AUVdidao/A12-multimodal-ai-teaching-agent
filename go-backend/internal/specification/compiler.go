@@ -27,13 +27,22 @@ func CompileWithSourceValidator(plan any, binding map[string]any, validator Sour
 	if err := ValidateSemanticPlanWithSourceValidator(plan, validator); err != nil {
 		return nil, "", err
 	}
-	if binding == nil || strings.TrimSpace(fmt.Sprint(binding["templateFileVersion"])) == "" || strings.TrimSpace(fmt.Sprint(binding["templateProfileVersion"])) == "" {
+	// A teacher-owned PPTX template is optional.  When it is absent the
+	// immutable semantic specification deliberately carries a null binding;
+	// the explicit GenerationJob boundary will select the server-owned default
+	// layout and record that fallback.  A non-empty binding still has to carry
+	// the template identity required by the constrained path.
+	if binding != nil && (strings.TrimSpace(fmt.Sprint(binding["templateFileVersion"])) == "" || strings.TrimSpace(fmt.Sprint(binding["templateProfileVersion"])) == "") {
 		return nil, "", ErrTemplateRequired
+	}
+	var compiledBinding any
+	if binding != nil {
+		compiledBinding = binding
 	}
 	compiled := map[string]any{
 		"compiler":        "lessonforge-semantic-v1",
 		"plan":            plan,
-		"templateBinding": binding,
+		"templateBinding": compiledBinding,
 	}
 	encoded, err := json.Marshal(compiled)
 	if err != nil {

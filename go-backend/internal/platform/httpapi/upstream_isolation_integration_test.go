@@ -175,3 +175,140 @@ func TestUpstreamHTTPIsolationCoversMissionFilesDraftAndApproval(t *testing.T) {
 		t.Fatalf("cross-owner approval side effects = locked %d generation_jobs %d", locked, jobs)
 	}
 }
+
+func TestApproveDraftHTTPAllowsMissingTemplateAndRecordsDefaultGenerationMode(t *testing.T) {
+	dsn := os.Getenv("LESSONFORGE_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("LESSONFORGE_TEST_DATABASE_URL is not configured")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	pool, err := database.Open(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	if err := database.Migrate(ctx, pool, filepath.Join("..", "..", "..", "migrations")); err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := database.AcquireIntegrationTestLock(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(unlock)
+	store := database.NewStore(pool)
+	suffix := uuid.NewString()
+	owner, err := store.CreateUser(ctx, "Default layout HTTP owner", "default-layout-http-"+suffix+"@example.test", "test-password-hash", model.RoleTeacher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var missionID, messageID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO missions(owner_teacher_id,source,title) VALUES($1,'SELF_CREATED','Default layout HTTP') RETURNING id`, owner.ID).Scan(&missionID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO mission_messages(mission_id,role,content) VALUES($1,'USER','approve without template over HTTP') RETURNING id`, missionID).Scan(&messageID); err != nil {
+		t.Fatal(err)
+	}
+	runID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO agent_runs(id,mission_id,triggering_message_id,model_identity_snapshot,status) VALUES($1,$2,$3,'{"source":"default-layout-http"}'::jsonb,'COMPLETED')`, runID, missionID, messageID); err != nil {
+		t.Fatal(err)
+	}
+	draftID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO planning_drafts(id,mission_id,version,markdown,structured_plan_json,created_by_agent_run_id,output_stage) VALUES($1,$2,1,'# default layout','{"slides":[{"title":"Introduction"}]}'::jsonb,$3,'PLAN_DRAFT')`, draftID, missionID, runID); err != nil {
+		t.Fatal(err)
+	}
+	token, err := auth.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateSession(ctx, owner.ID, auth.TokenHash(token), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		if _, err := pool.Exec(cleanupCtx, `ALTER TABLE locked_specifications DISABLE TRIGGER locked_specifications_immutable_trg`); err != nil {
+			t.Errorf("disable immutable trigger for HTTP default-layout cleanup: %v", err)
+		}
+		if _, err := pool.Exec(cleanupCtx, `DELETE FROM missions WHERE id=$1`, missionID); err != nil {
+			t.Errorf("cleanup HTTP default-layout mission: %v", err)
+		}
+		if _, err := pool.Exec(cleanupCtx, `ALTER TABLE locked_specifications ENABLE TRIGGER locked_specifications_immutable_trg`); err != nil {
+			t.Errorf("restore immutable trigger after HTTP default-layout cleanup: %v", err)
+		}
+		if _, err := pool.Exec(cleanupCtx, `DELETE FROM users WHERE id=$1`, owner.ID); err != nil {
+			t.Errorf("cleanup HTTP default-layout owner: %v", err)
+		}
+	})
+
+	server := httptest.NewServer(NewServer(Config{SessionCookie: "session"}, pool, store, nil, nil, nil, nil).Router())
+	t.Cleanup(server.Close)
+	request := func(method, path string, body io.Reader) *http.Response {
+		t.Helper()
+		req, err := http.NewRequestWithContext(ctx, method, server.URL+path, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		response, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+
+	response := request(http.MethodPost, "/api/planning/"+draftID+"/approve", strings.NewReader(`{}`))
+	if response.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		t.Fatalf("approve without template status = %d body=%s", response.StatusCode, body)
+	}
+	var approved struct {
+		Locked model.LockedSpecification `json:"lockedSpecification"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&approved); err != nil {
+		response.Body.Close()
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if approved.Locked.ID == "" || approved.Locked.TemplateBinding != nil {
+		t.Fatalf("HTTP default-layout locked specification = %#v", approved.Locked)
+	}
+
+	response = request(http.MethodPost, "/api/missions/"+strconv.FormatInt(missionID, 10)+"/generation-jobs", strings.NewReader(`{"specificationId":"`+approved.Locked.ID+`","specificationVersion":1,"fallbackPolicy":"AUTO"}`))
+	if response.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		t.Fatalf("default-layout generation status = %d body=%s", response.StatusCode, body)
+	}
+	var generation struct {
+		Job model.GenerationJob `json:"generationJob"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&generation); err != nil {
+		response.Body.Close()
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if generation.Job.GenerationMode != database.GenerationModeSystemDefault || !containsHTTPString(generation.Job.FallbackReasons, "TEMPLATE_NOT_PROVIDED") {
+		t.Fatalf("HTTP default-layout generation job = %+v", generation.Job)
+	}
+	var summary string
+	if err := pool.QueryRow(ctx, `SELECT summary FROM activity_events WHERE mission_id=$1 AND event_type='PLAN_APPROVED'`, missionID).Scan(&summary); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(summary, "system default template") || !strings.Contains(summary, "not provided") {
+		t.Fatalf("HTTP approval audit summary = %q", summary)
+	}
+}
+
+func containsHTTPString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}

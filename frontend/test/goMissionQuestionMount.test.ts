@@ -73,7 +73,7 @@ function stubs() {
     ModelConnectionDrawer: { props: ['modelValue', 'selectedConnection', 'selectedConnectionId'], emits: ['update:connection', 'connections-loaded'], template: '<div data-test="drawer-stub" />' },
     GoQuestionCard: { props: ['question', 'missionId', 'userId'], emits: ['submitted'], template: '<section data-test="go-active-question"><h2>{{ question.text }}</h2><button data-test="go-question-submit" type="button" @click="$emit(\'submitted\')">submit</button></section>' },
     GoQuestionHistoryCard: { props: ['questions'], template: '<section data-test="go-question-history"><span v-for="question in questions" :key="question.id">已回答 {{ question.text }} {{ question.latestAnswer && question.latestAnswer.selectedValues.join(\' \') }} {{ question.latestAnswer && question.latestAnswer.textAnswer }}</span></section>' },
-    GoPlanDraftCard: { props: ['draft', 'locked', 'facts', 'approving', 'approvalBlocker'], emits: ['approve'], template: '<section data-test="go-plan-draft"><button v-if="!locked" data-test="approve-plan" type="button" :disabled="approving || Boolean(approvalBlocker)" @click="$emit(\'approve\')">Approve 方案</button><p v-if="approvalBlocker" data-test="approval-prerequisite">{{ approvalBlocker }}</p></section>' },
+    GoPlanDraftCard: { props: ['draft', 'locked', 'facts', 'approving', 'approvalBlocker', 'generationPolicy'], emits: ['approve'], template: '<section data-test="go-plan-draft"><button v-if="!locked" data-test="approve-plan" type="button" :disabled="approving || Boolean(approvalBlocker)" @click="$emit(\'approve\')">Approve 方案</button><p v-if="approvalBlocker" data-test="approval-prerequisite">{{ approvalBlocker }}</p><p v-if="!locked" data-test="generation-policy">{{ generationPolicy }}</p></section>' },
   };
 }
 
@@ -350,16 +350,26 @@ test('Plan draft approval calls the real endpoint and renders the persisted Lock
   await wrapper.unmount();
 });
 
-test('Plan draft approval is blocked with an actionable reason when no PPTX template is bound', async () => {
+test('Plan draft approval remains available when no PPTX template is bound', async () => {
   httpMock.reset();
-  httpMock.onGet('/api/missions/7').reply(200, { ...baseDetail, currentDraft: planningDraft });
+  let lockedOnServer = false;
+  let generationRequested = false;
+  const defaultLockedSpecification = { ...lockedSpecification, templateBinding: null };
+  const defaultJob = { id: 'job-default', missionId: 7, specificationId: 'spec-1', specificationVersion: 1, status: 'SUCCEEDED', generationMode: 'SYSTEM_DEFAULT_TEMPLATE', fallbackReasons: ['TEMPLATE_PROFILE_UNAVAILABLE'], currentSlide: 0, totalSlides: 3, createdAt: '2026-09-05T00:07:00Z' };
+  httpMock.onGet('/api/missions/7').reply(() => [200, { ...baseDetail, currentDraft: lockedOnServer ? null : planningDraft, lockedSpecification: lockedOnServer ? defaultLockedSpecification : null, generationJobs: generationRequested ? [defaultJob] : [] }]);
   httpMock.onGet('/api/model-connections').reply(200, []);
   httpMock.onGet('/api/missions/7/questions').reply(200, []);
   httpMock.onGet('/api/missions/7/agent-runs').reply(200, []);
+  httpMock.onPost('/api/planning/draft-1/approve').reply(() => { lockedOnServer = true; return [201, { lockedSpecification: defaultLockedSpecification }]; });
+  httpMock.onPost('/api/missions/7/generation-jobs').reply((config) => {
+    generationRequested = true;
+    assert.deepEqual(JSON.parse(String(config.data)), { specificationId: 'spec-1', specificationVersion: 1, fallbackPolicy: 'AUTO' });
+    return [201, { generationJob: defaultJob, created: true }];
+  });
 
   const pinia = createPinia();
   setActivePinia(pinia);
-  useAuthStore(pinia).applySession('go-approve-prerequisite', teacher as any);
+  useAuthStore(pinia).applySession('go-approve-default-layout', teacher as any);
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/lessonforge/missions/:missionId', component: GoMissionWorkspaceView }] });
   await router.push('/lessonforge/missions/7');
   await router.isReady();
@@ -367,10 +377,16 @@ test('Plan draft approval is blocked with an actionable reason when no PPTX temp
   await settle();
 
   const button = wrapper.get('[data-test="approve-plan"]');
-  assert.equal(button.attributes('disabled'), '');
-  assert.match(wrapper.get('[data-test="approval-prerequisite"]').text(), /批准前需要先上传一份 PPTX 模板/);
+  assert.equal(button.attributes('disabled'), undefined);
+  assert.match(wrapper.get('[data-test="generation-policy"]').text(), /未上传 PPTX 模板.*系统默认版式生成/);
   await button.trigger('click');
-  assert.equal(httpMock.history.post.filter((request: AnyRecord) => request.url === '/api/planning/draft-1/approve').length, 0);
+  await settle();
+  assert.equal(httpMock.history.post.filter((request: AnyRecord) => request.url === '/api/planning/draft-1/approve').length, 1);
+  assert.match(wrapper.get('[data-test="go-locked-specification"]').text(), /系统默认版式（未上传模板）/);
+  await wrapper.get('[data-test="request-generation"]').trigger('click');
+  await settle();
+  assert.equal(httpMock.history.post.filter((request: AnyRecord) => request.url === '/api/missions/7/generation-jobs').length, 1);
+  assert.match(wrapper.get('[data-test="go-generation-waiting"]').text(), /系统默认版式/);
   await wrapper.unmount();
 });
 

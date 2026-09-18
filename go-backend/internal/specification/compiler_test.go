@@ -20,11 +20,19 @@ func TestCompileRejectsEngineAndGeometryFields(t *testing.T) {
 	}
 }
 
-func TestCompileRequiresTemplateBindingAndPreservesSemanticPlan(t *testing.T) {
-	if _, _, err := Compile(validPlan(), nil); !errors.Is(err, ErrTemplateRequired) {
-		t.Fatalf("expected template binding error, got %v", err)
+func TestCompileAllowsMissingTemplateBindingAndPreservesSemanticPlan(t *testing.T) {
+	compiled, hash, err := Compile(validPlan(), nil)
+	if err != nil || hash == "" {
+		t.Fatalf("compile without template failed: %v", err)
 	}
-	compiled, hash, err := Compile(validPlan(), map[string]any{"templateFileVersion": "file", "templateProfileVersion": "profile"})
+	if compiled["templateBinding"] != nil {
+		t.Fatalf("missing template binding = %#v, want nil", compiled["templateBinding"])
+	}
+	if _, ok := compiled["plan"]; !ok {
+		t.Fatal("compiled contract lost semantic plan")
+	}
+
+	compiled, hash, err = Compile(validPlan(), map[string]any{"templateFileVersion": "file", "templateProfileVersion": "profile"})
 	if err != nil || hash == "" {
 		t.Fatalf("compile failed: %v", err)
 	}

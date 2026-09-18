@@ -64,7 +64,7 @@
             </article>
             <GoQuestionCard v-else-if="item.kind === 'question' && item.question.id === activeQuestion?.id" :question="item.question" :question-index="questionIndex(item.question.id)" :question-total="renderedQuestions.length" :mission-id="missionId" :user-id="auth.user?.id ?? undefined" @submitted="handleQuestionSubmitted" />
             <GoQuestionHistoryCard v-else-if="item.kind === 'question'" :questions="[item.question]" />
-            <GoPlanDraftCard v-else :draft="item.draft" :locked="Boolean(renderedLockedSpecification)" :facts="planFacts" :approving="approving" :approval-blocker="approvalBlocker" @approve="approveDraft" />
+            <GoPlanDraftCard v-else :draft="item.draft" :locked="Boolean(renderedLockedSpecification)" :facts="planFacts" :approving="approving" :approval-blocker="approvalBlocker" :generation-policy="generationPolicy" @approve="approveDraft" />
           </template>
 
           <section v-if="showInitialConversation" class="go-initial-conversation" data-test="go-initial-conversation">
@@ -219,10 +219,20 @@ const generationBlockers = computed(() => {
 });
 const approvalBlocker = computed(() => {
   const template = (detail.value?.files || []).find((file) => file.role === 'TEMPLATE');
-  if (!template) return '批准前需要先上传一份 PPTX 模板。';
+  // A missing template is a valid client-side product path. Keep blocking only
+  // states that the current approval contract cannot safely freeze as a
+  // teacher-template binding.
+  if (!template) return '';
   if (template.parseStatus === 'FAILED') return 'PPTX 模板解析失败，请重新上传或处理模板。';
   if (template.parseStatus !== 'READY') return 'PPTX 模板仍在解析，完成后才能批准方案。';
   return '';
+});
+const generationPolicy = computed(() => {
+  const template = (detail.value?.files || []).find((file) => file.role === 'TEMPLATE');
+  if (!template) return '未上传 PPTX 模板，批准后将使用系统默认版式生成。';
+  if (template.parseStatus === 'READY') return '已绑定教师模板，批准后将按模板约束生成。';
+  if (template.parseStatus === 'FAILED') return '教师模板解析失败，生成时将回退到系统默认版式。';
+  return '教师模板仍在解析，生成时将按服务端可用性决定模板或默认版式。';
 });
 const generationButtonVisible = computed(() => Boolean(renderedLockedSpecification.value && (!currentGenerationJob.value || generationIsActive.value || ['FAILED', 'CANCELLED', 'SUCCEEDED'].includes(currentGenerationJob.value.status))));
 const generationCanRequest = computed(() => Boolean(renderedLockedSpecification.value && !generationIsActive.value && (!currentGenerationJob.value || ['FAILED', 'CANCELLED', 'SUCCEEDED'].includes(currentGenerationJob.value.status)) && !generationBlockers.value.length && !generationRequesting.value));
@@ -309,7 +319,7 @@ function scrollToLatest(behavior: ScrollBehavior = 'auto') {
 }
 function fileStatusLabel(status: string) { return ({ PENDING: '等待解析', PARSING: '解析中', INDEXING: '建立索引', READY: '已就绪', FAILED: '解析失败' } as Record<string, string>)[status] || status || '等待处理'; }
 function shortHash(value: string) { return value ? `${value.slice(0, 12)}…` : '—'; }
-function templateBindingLabel(value: unknown) { if (!bindingIsUsable(value)) return '未完成'; const record = value as Record<string, unknown>; return typeof record.templateOriginalName === 'string' ? record.templateOriginalName : '已绑定模板'; }
+function templateBindingLabel(value: unknown) { if (value == null) return '系统默认版式（未上传模板）'; if (!bindingIsUsable(value)) return '模板绑定未完成'; const record = value as Record<string, unknown>; return typeof record.templateOriginalName === 'string' ? record.templateOriginalName : '已绑定模板'; }
 function bindingIsUsable(value: unknown) { if (!value || typeof value !== 'object' || Array.isArray(value)) return false; const record = value as Record<string, unknown>; return record.bindingKind === 'LESSONFORGE_UPSTREAM_TEMPLATE_BINDING' && typeof record.templateStorageKey === 'string' && record.templateStorageKey.length > 0 && typeof record.templateFileSha256 === 'string' && record.templateFileSha256.length === 64 && Number(record.missionFileId) > 0 && Number(record.fileObjectId) > 0; }
 function generationFeedbackLabel(job: GoGenerationJob) { const feedback = job.generationFeedback; if (!feedback || typeof feedback !== 'object' || Array.isArray(feedback)) return '服务端未返回详细原因'; const code = (feedback as Record<string, unknown>).code; return typeof code === 'string' ? code : '服务端未返回详细原因'; }
 function useStarterPrompt(prompt: string) { draft.value = prompt; }
