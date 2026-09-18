@@ -60,6 +60,10 @@ func prepareSystemDefaultTemplate(spec model.LockedSpecification, job model.Gene
 	if err != nil {
 		return systemDefaultTemplate{}, fmt.Errorf("PPT_ENGINE_SYSTEM_DEFAULT_TEMPLATE_BUILD: %w", err)
 	}
+	payload, err = clearSystemDefaultPlaceholders(payload)
+	if err != nil {
+		return systemDefaultTemplate{}, fmt.Errorf("PPT_ENGINE_SYSTEM_DEFAULT_TEMPLATE_BUILD: %w", err)
+	}
 	if err := os.WriteFile(path, payload, 0o644); err != nil {
 		return systemDefaultTemplate{}, errors.New("PPT_ENGINE_SYSTEM_DEFAULT_STORAGE_NOT_CONFIGURED")
 	}
@@ -282,6 +286,48 @@ func systemDefaultPPTX() ([]byte, error) {
 		return nil, errors.New("system default template asset is empty")
 	}
 	return append([]byte(nil), systemDefaultTemplateAsset...), nil
+}
+
+func clearSystemDefaultPlaceholders(payload []byte) ([]byte, error) {
+	archive, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
+	if err != nil {
+		return nil, err
+	}
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	placeholder := []byte("<a:t>系统默认内容</a:t>")
+	emptyText := []byte("<a:t></a:t>")
+	for _, entry := range archive.File {
+		reader, err := entry.Open()
+		if err != nil {
+			return nil, err
+		}
+		data, readErr := io.ReadAll(reader)
+		closeErr := reader.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		if strings.HasPrefix(entry.Name, "ppt/slides/") && strings.HasSuffix(entry.Name, ".xml") {
+			data = bytes.ReplaceAll(data, placeholder, emptyText)
+		}
+		header := entry.FileHeader
+		header.Method = zip.Deflate
+		header.SetModTime(time.Unix(0, 0).UTC())
+		fileWriter, err := writer.CreateHeader(&header)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := fileWriter.Write(data); err != nil {
+			return nil, err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
 }
 
 // systemDefaultPPTXGenerated retains the old deterministic package builder

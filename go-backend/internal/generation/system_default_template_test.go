@@ -2,7 +2,9 @@ package generation
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,6 +61,22 @@ func TestPrepareSystemDefaultTemplateBuildsTrustedFallbackPackage(t *testing.T) 
 	for _, entry := range archive.File {
 		if _, ok := wanted[entry.Name]; ok {
 			wanted[entry.Name] = true
+		}
+		if filepath.ToSlash(filepath.Dir(entry.Name)) == "ppt/slides" && filepath.Ext(entry.Name) == ".xml" {
+			reader, err := entry.Open()
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := io.ReadAll(reader)
+			if closeErr := reader.Close(); err == nil {
+				err = closeErr
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(data, []byte("系统默认内容")) {
+				t.Fatalf("fallback PPTX retained a visible placeholder in %s", entry.Name)
+			}
 		}
 	}
 	for name, found := range wanted {
