@@ -175,12 +175,12 @@ func TestEngineSpecificationProjectsLegacyPointsPlanWithoutInventingTeachingFact
 		"compiler": "lessonforge-semantic-v1",
 		"plan": map[string]any{
 			"slides": []any{map[string]any{
-				"title":  "TCP 三次握手",
-				"points": []any{"客户端发送 SYN", "服务端返回 SYN-ACK"},
+				"title":  "RAG 基础：知识获取管道",
+				"points": []any{"材料解析与切分", "关键词检索与上下文拼接"},
 			}},
 		},
 	}
-	got, err := engineSpecification(raw, "spec-legacy", 1, 88, 58, time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC), map[string]any{
+	got, err := engineSpecification(raw, "spec-legacy", 1, 7001, 9001, time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC), map[string]any{
 		"profileId": "lessonforge-system-default-profile", "profileVersion": 1,
 		"templateId": systemDefaultTemplateID,
 		"templatePageReferences": []any{map[string]any{"semanticRole": "BODY"}},
@@ -189,14 +189,14 @@ func TestEngineSpecificationProjectsLegacyPointsPlanWithoutInventingTeachingFact
 		t.Fatal(err)
 	}
 	slide := got["slides"].([]any)[0].(map[string]any)
-	if slide["teachingGoal"] != "客户端发送 SYN" {
+	if slide["teachingGoal"] != "材料解析与切分" {
 		t.Fatalf("legacy point was not used as the existing teaching fact: %#v", slide["teachingGoal"])
 	}
 	if slide["semanticLayout"].(map[string]any)["requestedTransform"] != "FIXED" {
 		t.Fatalf("system default transform was not bound to the native fixed geometry: %#v", slide["semanticLayout"])
 	}
 	blocks := slide["contentBlocks"].([]any)
-	if blocks[2].(map[string]any)["content"] != "客户端发送 SYN\n服务端返回 SYN-ACK" {
+	if blocks[2].(map[string]any)["content"] != "材料解析与切分\n关键词检索与上下文拼接" {
 		t.Fatalf("legacy points were not projected as key points: %#v", blocks[2])
 	}
 }
