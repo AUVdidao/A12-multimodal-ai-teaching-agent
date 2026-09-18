@@ -122,7 +122,15 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 		return w.Store.FinishGeneration(ctx, job.ID, job.LeaseToken, "CANCELLED", map[string]string{"code": "GENERATION_CANCELLED"}, nil)
 	}
 	if result.Status != "SUCCEEDED" && result.Status != "SUCCEEDED_WITH_FEEDBACK" {
-		return w.Store.FinishGeneration(ctx, job.ID, job.LeaseToken, "FAILED", map[string]any{"code": "PPT_ENGINE_FAILED", "status": result.Status, "diagnostics": result.Diagnostics}, nil)
+		// The Engine executor contract calls its structured diagnostic list
+		// `feedback`; `diagnostics` is the older client-side name. Preserve the
+		// actual safe diagnostic payload so PARTIAL/FAILED jobs explain which
+		// binding was incomplete instead of recording null.
+		diagnostics := result.Diagnostics
+		if len(diagnostics) == 0 {
+			diagnostics = result.Feedback
+		}
+		return w.Store.FinishGeneration(ctx, job.ID, job.LeaseToken, "FAILED", map[string]any{"code": "PPT_ENGINE_FAILED", "status": result.Status, "diagnostics": diagnostics}, nil)
 	}
 	if len(result.Artifacts) == 0 {
 		return w.Store.FinishGeneration(ctx, job.ID, job.LeaseToken, "FAILED", map[string]string{"code": "PPT_ENGINE_ARTIFACT_MISSING"}, nil)
