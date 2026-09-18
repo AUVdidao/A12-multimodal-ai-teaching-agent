@@ -170,6 +170,33 @@ func TestEngineSpecificationProjectsSemanticPlanAtGenerationBoundary(t *testing.
 	}
 }
 
+func TestEngineSpecificationProjectsLegacyPointsPlanWithoutInventingTeachingFacts(t *testing.T) {
+	raw := map[string]any{
+		"compiler": "lessonforge-semantic-v1",
+		"plan": map[string]any{
+			"slides": []any{map[string]any{
+				"title":  "TCP 三次握手",
+				"points": []any{"客户端发送 SYN", "服务端返回 SYN-ACK"},
+			}},
+		},
+	}
+	got, err := engineSpecification(raw, "spec-legacy", 1, 88, 58, time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC), map[string]any{
+		"profileId": "lessonforge-system-default-profile", "profileVersion": 1,
+		"templatePageReferences": []any{map[string]any{"semanticRole": "BODY"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slide := got["slides"].([]any)[0].(map[string]any)
+	if slide["teachingGoal"] != "客户端发送 SYN" {
+		t.Fatalf("legacy point was not used as the existing teaching fact: %#v", slide["teachingGoal"])
+	}
+	blocks := slide["contentBlocks"].([]any)
+	if blocks[2].(map[string]any)["content"] != "客户端发送 SYN\n服务端返回 SYN-ACK" {
+		t.Fatalf("legacy points were not projected as key points: %#v", blocks[2])
+	}
+}
+
 func TestEngineSpecificationRejectsIncompleteSemanticSlide(t *testing.T) {
 	raw := map[string]any{
 		"compiler": "lessonforge-semantic-v1",

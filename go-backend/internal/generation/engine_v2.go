@@ -275,12 +275,20 @@ func projectSemanticPlan(plan map[string]any, specID string, specVersion int, mi
 			return nil, errors.New("PPT_ENGINE_SPECIFICATION_INCOMPLETE")
 		}
 		title := text(slide["title"])
-		purpose := text(slide["purpose"])
-		if title == "" || purpose == "" {
+		// PlanningDraft is intentionally a small, teacher-facing contract. Older
+		// drafts (and the current agent prompt) use `points`, while the Engine
+		// contract calls the same content `keyPoints` and requires a non-empty
+		// teachingGoal. Project only facts already present in the draft: prefer an
+		// explicit goal, then use the first point as the legacy goal fallback.
+		keyPoints, err := semanticTextList(firstPresent(slide, "keyPoints", "points"))
+		if err != nil || len(keyPoints) == 0 {
 			return nil, errors.New("PPT_ENGINE_SPECIFICATION_INCOMPLETE")
 		}
-		keyPoints, err := semanticTextList(slide["keyPoints"])
-		if err != nil || len(keyPoints) == 0 {
+		purpose := firstText(slide, "purpose", "teachingGoal", "objective")
+		if purpose == "" {
+			purpose = keyPoints[0]
+		}
+		if title == "" || purpose == "" {
 			return nil, errors.New("PPT_ENGINE_SPECIFICATION_INCOMPLETE")
 		}
 		role := semanticRole
@@ -363,6 +371,24 @@ func semanticTextList(value any) ([]string, error) {
 		result = append(result, value)
 	}
 	return result, nil
+}
+
+func firstPresent(object map[string]any, keys ...string) any {
+	for _, key := range keys {
+		if value, ok := object[key]; ok && value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstText(object map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value := text(object[key]); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func firstExecutableSemanticRole(profile map[string]any) (string, bool) {
