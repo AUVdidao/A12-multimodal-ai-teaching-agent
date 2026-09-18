@@ -182,6 +182,7 @@ func TestEngineSpecificationProjectsLegacyPointsPlanWithoutInventingTeachingFact
 	}
 	got, err := engineSpecification(raw, "spec-legacy", 1, 88, 58, time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC), map[string]any{
 		"profileId": "lessonforge-system-default-profile", "profileVersion": 1,
+		"templateId": systemDefaultTemplateID,
 		"templatePageReferences": []any{map[string]any{"semanticRole": "BODY"}},
 	})
 	if err != nil {
@@ -190,6 +191,9 @@ func TestEngineSpecificationProjectsLegacyPointsPlanWithoutInventingTeachingFact
 	slide := got["slides"].([]any)[0].(map[string]any)
 	if slide["teachingGoal"] != "客户端发送 SYN" {
 		t.Fatalf("legacy point was not used as the existing teaching fact: %#v", slide["teachingGoal"])
+	}
+	if slide["semanticLayout"].(map[string]any)["requestedTransform"] != "FIXED" {
+		t.Fatalf("system default transform was not bound to the native fixed geometry: %#v", slide["semanticLayout"])
 	}
 	blocks := slide["contentBlocks"].([]any)
 	if blocks[2].(map[string]any)["content"] != "客户端发送 SYN\n服务端返回 SYN-ACK" {

@@ -299,6 +299,13 @@ func projectSemanticPlan(plan map[string]any, specID string, specVersion int, mi
 			}
 			role = requestedRole
 		}
+		requestedTransform := any(nil)
+		if text(profile["templateId"]) == systemDefaultTemplateID {
+			// The system-owned PPTX is generated with fixed native text-box
+			// geometry. The executor requires an explicit transform declaration;
+			// do not relax this contract for teacher-owned templates.
+			requestedTransform = "FIXED"
+		}
 		blocks := []any{
 			semanticContentBlock(fmt.Sprintf("slide-%d-title", index+1), "TITLE", title, specID, index+1),
 			semanticContentBlock(fmt.Sprintf("slide-%d-purpose", index+1), "BODY", purpose, specID, index+1),
@@ -318,7 +325,7 @@ func projectSemanticPlan(plan map[string]any, specID string, specVersion int, mi
 					"preferredPosition": "CENTER",
 					"maxItems":          len(blocks),
 				}},
-				"requestedTransform": nil,
+				"requestedTransform": requestedTransform,
 			},
 			"assetRequirements": []any{},
 			"provenance":        []any{},
