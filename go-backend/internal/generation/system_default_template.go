@@ -14,8 +14,19 @@ import (
 	"strings"
 	"time"
 
+	_ "embed"
+
 	"lessonforge.local/backend/internal/model"
 )
+
+// systemDefaultTemplateAsset is a PowerPoint-authored-compatible OOXML base
+// package. The previous hand-built package was structurally sufficient for
+// the internal ZIP validator but PowerPoint rejected it because it omitted
+// standard presentation parts. Keep the source asset in the repository so
+// the worker ships the exact same valid base package on every retry.
+//
+//go:embed assets/system-default-template.pptx
+var systemDefaultTemplateAsset []byte
 
 const (
 	systemDefaultTemplateKey = "system/default-lessonforge-template.pptx"
@@ -267,6 +278,17 @@ func systemDefaultBounds(index int) (int, int, int, int) {
 }
 
 func systemDefaultPPTX() ([]byte, error) {
+	if len(systemDefaultTemplateAsset) == 0 {
+		return nil, errors.New("system default template asset is empty")
+	}
+	return append([]byte(nil), systemDefaultTemplateAsset...), nil
+}
+
+// systemDefaultPPTXGenerated retains the old deterministic package builder
+// for comparison/debugging. Runtime generation uses the embedded package
+// above, because Microsoft PowerPoint requires the standard OOXML parts it
+// does not contain.
+func systemDefaultPPTXGenerated() ([]byte, error) {
 	entries := []struct {
 		name string
 		data string
