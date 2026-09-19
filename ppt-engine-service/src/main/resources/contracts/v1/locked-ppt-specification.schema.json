@@ -82,7 +82,14 @@
       "properties": {
         "primaryRole": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
         "regions": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/region"}},
-        "requestedTransform": {"$ref": "#/$defs/transformConstraint"}
+        "requestedTransform": {"$ref": "#/$defs/transformConstraint"},
+        "pageType": {"type": ["string", "null"], "enum": ["TITLE_IMPORT", "CONCEPT", "PROCESS", "COMPARISON", "CARDS", "SUMMARY", null]},
+        "informationHierarchy": {"type": "array", "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 64}},
+        "visualFocus": {"type": ["string", "null"], "maxLength": 500},
+        "contentDensity": {"type": ["string", "null"], "enum": ["SPARSE", "BALANCED", "DENSE", null]},
+        "componentRequirements": {"type": "array", "maxItems": 20, "items": {"type": "string", "minLength": 1, "maxLength": 64}},
+        "sourceConstraint": {"type": ["string", "null"], "enum": ["SOURCES_REQUIRED", "SOURCES_OPTIONAL", "NO_EXTERNAL_SOURCE", null]},
+        "preserveEditability": {"type": "boolean"}
       }
     },
     "region": {

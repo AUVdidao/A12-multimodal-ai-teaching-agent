@@ -93,9 +93,28 @@ public final class ContractModels {
     public record SemanticLayout(
             String primaryRole,
             List<SemanticRegion> regions,
-            TransformConstraint requestedTransform) {
+            TransformConstraint requestedTransform,
+            String pageType,
+            List<String> informationHierarchy,
+            String visualFocus,
+            String contentDensity,
+            List<String> componentRequirements,
+            String sourceConstraint,
+            Boolean preserveEditability) {
+        /** Compatibility constructor for the original role/region-only contract. */
+        public SemanticLayout(
+                String primaryRole,
+                List<SemanticRegion> regions,
+                TransformConstraint requestedTransform) {
+            this(primaryRole, regions, requestedTransform, null, List.of(), null, null,
+                    List.of(), null, true);
+        }
+
         public SemanticLayout {
             regions = immutableList(regions);
+            informationHierarchy = immutableList(informationHierarchy);
+            componentRequirements = immutableList(componentRequirements);
+            preserveEditability = preserveEditability == null ? Boolean.TRUE : preserveEditability;
         }
     }
 

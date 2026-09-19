@@ -5,8 +5,10 @@ import com.auvdidao.a12.pptengine.contract.CompositionModels;
 import com.auvdidao.a12.pptengine.contract.ContractModels;
 import com.auvdidao.a12.pptengine.contract.ContractTypes;
 import com.auvdidao.a12.pptengine.contract.DiagnosticFactory;
+import com.auvdidao.a12.pptengine.layout.LayoutVariantCompiler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -45,14 +47,25 @@ public class CompositionPlanValidator {
     private final ChecksumService checksumService;
     private final StablePlanIdFactory idFactory;
     private final ObjectMapper objectMapper;
+    private final LayoutVariantCompiler variantCompiler;
 
     public CompositionPlanValidator(
             ChecksumService checksumService,
             StablePlanIdFactory idFactory,
             ObjectMapper objectMapper) {
+        this(checksumService, idFactory, objectMapper, new LayoutVariantCompiler());
+    }
+
+    @Autowired
+    public CompositionPlanValidator(
+            ChecksumService checksumService,
+            StablePlanIdFactory idFactory,
+            ObjectMapper objectMapper,
+            LayoutVariantCompiler variantCompiler) {
         this.checksumService = checksumService;
         this.idFactory = idFactory;
         this.objectMapper = objectMapper;
+        this.variantCompiler = variantCompiler;
     }
 
     public List<ContractModels.Diagnostic> validate(
@@ -391,12 +404,14 @@ public class CompositionPlanValidator {
             String expectedPlacementId = owner == null ? null : idFactory.placementId(
                     slide.slideId(), placement.bindingKind(), placement.bindingId(),
                     placement.componentId(), placement.slotId());
+            ContractModels.Bounds expectedBounds = owner == null ? null : variantCompiler.boundsFor(
+                    slide, profile, owner.slot(), placement.bindingKind(), placement.bindingId(), layout.safeArea());
             boolean validReference = owner != null
                     && owner.component().componentId().equals(placement.componentId())
                     && componentPlacementIds.contains(placement.componentId())
                     && expectedPlacementId.equals(placement.placementId())
                     && owner.slot().semanticRole().equals(placement.semanticRole())
-                    && owner.slot().bounds().equals(placement.bounds())
+                    && expectedBounds != null && expectedBounds.equals(placement.bounds())
                     && slide.semanticLayout().requestedTransform() == placement.requestedTransform()
                     && owner.component().transformConstraint() == placement.allowedTransform();
             if (!placementIds.add(placement.placementId()) || !validReference) {

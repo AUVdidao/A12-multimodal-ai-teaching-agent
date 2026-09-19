@@ -6,6 +6,7 @@ import com.auvdidao.a12.pptengine.contract.ContractModels;
 import com.auvdidao.a12.pptengine.contract.ContractTypes;
 import com.auvdidao.a12.pptengine.contract.DiagnosticFactory;
 import com.auvdidao.a12.pptengine.resolver.ComponentResolver;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -32,9 +33,16 @@ import static com.auvdidao.a12.pptengine.contract.ContractTypes.SlotBindingKind.
 public class LayoutResolver {
 
     private final StablePlanIdFactory idFactory;
+    private final LayoutVariantCompiler variantCompiler;
 
     public LayoutResolver(StablePlanIdFactory idFactory) {
+        this(idFactory, new LayoutVariantCompiler());
+    }
+
+    @Autowired
+    public LayoutResolver(StablePlanIdFactory idFactory, LayoutVariantCompiler variantCompiler) {
         this.idFactory = idFactory;
+        this.variantCompiler = variantCompiler;
     }
 
     public LayoutResult resolve(
@@ -153,7 +161,8 @@ public class LayoutResolver {
             return;
         }
 
-        ContractModels.Bounds bounds = owner.slot().bounds();
+        ContractModels.Bounds bounds = variantCompiler.boundsFor(
+                slide, profile, owner.slot(), bindingKind, bindingId, safeArea);
         if (!insidePage(bounds, profile.pageSize())) {
             diagnostics.add(DiagnosticFactory.stageError(
                     LAYOUT_RESOLVER,

@@ -55,7 +55,7 @@ func buildEngineV2Package(spec model.LockedSpecification, job model.GenerationJo
 	if err != nil {
 		return engineV2Package{}, err
 	}
-	specificationChecksum, err := canonicalChecksumWithout(engineSpec, "checksum")
+	specificationChecksum, err := canonicalSpecificationChecksum(engineSpec)
 	if err != nil {
 		return engineV2Package{}, err
 	}
@@ -285,10 +285,14 @@ func projectSemanticPlan(plan map[string]any, specID string, specVersion int, mi
 			return nil, errors.New("PPT_ENGINE_SPECIFICATION_INCOMPLETE")
 		}
 		purpose := firstText(slide, "purpose", "teachingGoal", "objective")
-		if purpose == "" {
-			purpose = keyPoints[0]
+		visualFocus := firstText(slide, "visualFocus", "visual")
+		// visualFocus is a compiler hint, not learner-facing copy. Do not
+		// promote instructions such as "重绘流程图" into a visible BODY block.
+		teachingGoal := firstText(slide, "teachingGoal", "objective", "purpose")
+		if teachingGoal == "" {
+			teachingGoal = keyPoints[0]
 		}
-		if title == "" || purpose == "" {
+		if title == "" || teachingGoal == "" {
 			return nil, errors.New("PPT_ENGINE_SPECIFICATION_INCOMPLETE")
 		}
 		role := semanticRole
@@ -301,21 +305,51 @@ func projectSemanticPlan(plan map[string]any, specID string, specVersion int, mi
 		}
 		requestedTransform := any(nil)
 		if text(profile["templateId"]) == systemDefaultTemplateID {
-			// The system-owned PPTX is generated with fixed native text-box
-			// geometry. The executor requires an explicit transform declaration;
-			// do not relax this contract for teacher-owned templates.
-			requestedTransform = "FIXED"
+			// The system-owned fallback has compiler-owned editable text regions.
+			// They are responsive by contract so the semantic page variant can use
+			// the slide safe area; teacher-owned templates remain profile-bound.
+			requestedTransform = "RESPONSIVE"
 		}
-		blocks := []any{
-			semanticContentBlock(fmt.Sprintf("slide-%d-title", index+1), "TITLE", title, specID, index+1),
-			semanticContentBlock(fmt.Sprintf("slide-%d-purpose", index+1), "BODY", purpose, specID, index+1),
-			semanticContentBlock(fmt.Sprintf("slide-%d-key-points", index+1), "BULLETS", strings.Join(keyPoints, "\n"), specID, index+1),
+		pageType := semanticPageType(slide, index+1, visualFocus, len(keyPoints))
+		if text(profile["templateId"]) == systemDefaultTemplateID {
+			// The compiler-owned fallback profile exposes one page reference per
+			// semantic variant. Keep teacher-owned semantic roles untouched.
+			role = pageType
+		}
+		sourceRefs := semanticSourceRefs(slide["sources"])
+		blocks := []any{semanticContentBlock(fmt.Sprintf("slide-%d-title", index+1), "TITLE", title, specID, index+1, sourceRefs)}
+		if purpose != "" {
+			blocks = append(blocks, semanticContentBlock(fmt.Sprintf("slide-%d-purpose", index+1), "BODY", purpose, specID, index+1, sourceRefs))
+		}
+		if pageType == "PROCESS" || pageType == "COMPARISON" || pageType == "CARDS" || pageType == "SUMMARY" {
+			for pointIndex, point := range keyPoints {
+				blocks = append(blocks, semanticContentBlock(
+					fmt.Sprintf("slide-%d-point-%d", index+1, pointIndex+1), "BULLETS", point,
+					specID, index+1, sourceRefs))
+			}
+		} else {
+			blocks = append(blocks, semanticContentBlock(fmt.Sprintf("slide-%d-key-points", index+1), "BULLETS", strings.Join(keyPoints, "\n"), specID, index+1, sourceRefs))
+		}
+		hierarchy := semanticStringList(firstPresent(slide, "informationHierarchy", "hierarchy"))
+		if len(hierarchy) == 0 {
+			hierarchy = []string{"TITLE", "FOCUS", "SUPPORTING_POINTS"}
+		}
+		contentDensity := semanticContentDensity(slide, keyPoints)
+		componentRequirements := semanticStringList(firstPresent(slide, "componentRequirements", "components"))
+		if len(componentRequirements) == 0 {
+			componentRequirements = []string{"TEXT"}
+		}
+		sourceConstraint := "SOURCES_OPTIONAL"
+		if len(sourceRefs) > 0 {
+			sourceConstraint = "SOURCES_REQUIRED"
+		} else if raw, ok := slide["sources"]; ok && raw != nil {
+			sourceConstraint = "NO_EXTERNAL_SOURCE"
 		}
 		slides = append(slides, map[string]any{
 			"slideId":       fmt.Sprintf("slide-%d", index+1),
 			"pageNumber":    index + 1,
 			"title":         title,
-			"teachingGoal":  purpose,
+			"teachingGoal":  teachingGoal,
 			"contentBlocks": blocks,
 			"semanticLayout": map[string]any{
 				"primaryRole": role,
@@ -325,10 +359,17 @@ func projectSemanticPlan(plan map[string]any, specID string, specVersion int, mi
 					"preferredPosition": "CENTER",
 					"maxItems":          len(blocks),
 				}},
-				"requestedTransform": requestedTransform,
+				"requestedTransform":    requestedTransform,
+				"pageType":              pageType,
+				"informationHierarchy":  hierarchy,
+				"visualFocus":           visualFocus,
+				"contentDensity":        contentDensity,
+				"componentRequirements": componentRequirements,
+				"sourceConstraint":      sourceConstraint,
+				"preserveEditability":   true,
 			},
 			"assetRequirements": []any{},
-			"provenance":        []any{},
+			"provenance":        semanticProvenance(sourceRefs),
 			"notes":             text(slide["notes"]),
 		})
 	}
@@ -353,15 +394,93 @@ func projectSemanticPlan(plan map[string]any, specID string, specVersion int, mi
 	}, nil
 }
 
-func semanticContentBlock(blockID, blockType, content, specID string, slideNumber int) map[string]any {
+func semanticContentBlock(blockID, blockType, content, specID string, slideNumber int, sourceRefs []string) map[string]any {
+	sourceType := "AI_EXAMPLE"
+	sourceReference := fmt.Sprintf("planning-draft:%s:slide-%d", specID, slideNumber)
+	if len(sourceRefs) > 0 {
+		sourceType = "MATERIAL"
+		sourceReference = sourceRefs[0]
+	}
 	return map[string]any{
 		"blockId":         blockID,
 		"type":            blockType,
 		"content":         content,
-		"sourceType":      "AI_EXAMPLE",
-		"sourceReference": fmt.Sprintf("planning-draft:%s:slide-%d", specID, slideNumber),
+		"sourceType":      sourceType,
+		"sourceReference": sourceReference,
 		"locked":          true,
 	}
+}
+
+func semanticPageType(slide map[string]any, pageNumber int, visualFocus string, pointCount int) string {
+	if requested := strings.ToUpper(strings.TrimSpace(firstText(slide, "pageType"))); requested != "" {
+		for _, allowed := range []string{"TITLE_IMPORT", "CONCEPT", "PROCESS", "COMPARISON", "CARDS", "SUMMARY"} {
+			if requested == allowed {
+				return requested
+			}
+		}
+	}
+	combined := strings.ToUpper(strings.TrimSpace(text(slide["title"]) + " " + visualFocus))
+	if strings.Contains(combined, "流程") || strings.Contains(combined, "步骤") || strings.Contains(combined, "流水线") || strings.Contains(combined, "PROCESS") || strings.Contains(combined, "PIPELINE") {
+		return "PROCESS"
+	}
+	if strings.Contains(combined, "对比") || strings.Contains(combined, "比较") || strings.Contains(combined, "区别") || strings.Contains(combined, "指标") || strings.Contains(combined, "COMPARE") || strings.Contains(combined, "TABLE") {
+		return "COMPARISON"
+	}
+	if strings.Contains(combined, "小结") || strings.Contains(combined, "总结") || strings.Contains(combined, "回顾") || strings.Contains(combined, "SUMMARY") || strings.Contains(combined, "REVIEW") {
+		return "SUMMARY"
+	}
+	if pageNumber == 1 {
+		return "TITLE_IMPORT"
+	}
+	if pointCount >= 4 {
+		return "CARDS"
+	}
+	return "CONCEPT"
+}
+
+func semanticContentDensity(slide map[string]any, points []string) string {
+	if requested := strings.ToUpper(strings.TrimSpace(firstText(slide, "contentDensity", "density"))); requested != "" {
+		if requested == "SPARSE" || requested == "BALANCED" || requested == "DENSE" {
+			return requested
+		}
+	}
+	total := 0
+	for _, point := range points {
+		total += len([]rune(point))
+	}
+	if len(points) >= 5 || total > 420 {
+		return "DENSE"
+	}
+	if len(points) <= 2 && total < 100 {
+		return "SPARSE"
+	}
+	return "BALANCED"
+}
+
+func semanticStringList(value any) []string {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if value := strings.TrimSpace(text(item)); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func semanticSourceRefs(value any) []string {
+	return semanticStringList(value)
+}
+
+func semanticProvenance(sourceRefs []string) []any {
+	result := make([]any, 0, len(sourceRefs))
+	for _, sourceRef := range sourceRefs {
+		result = append(result, map[string]any{"sourceType": "MATERIAL", "sourceReference": sourceRef})
+	}
+	return result
 }
 
 func semanticTextList(value any) ([]string, error) {
@@ -550,6 +669,60 @@ func sharedPath(root, key string) (string, error) {
 
 func canonicalChecksum(value map[string]any) (string, error) {
 	return canonicalChecksumWithout(value)
+}
+
+// canonicalSpecificationChecksum mirrors ChecksumService's Jackson-side
+// compatibility normalization. Semantic layout defaults were added after the
+// frozen v1 vector; the request still carries them, but they must not alter
+// the checksum when they are only compatibility defaults.
+func canonicalSpecificationChecksum(value map[string]any) (string, error) {
+	normalized, ok := normalizeLegacySemanticDefaults(value).(map[string]any)
+	if !ok {
+		return "", errors.New("canonical Engine specification checksum input is not an object")
+	}
+	return canonicalChecksumWithout(normalized, "checksum")
+}
+
+func normalizeLegacySemanticDefaults(value any) any {
+	switch item := value.(type) {
+	case map[string]any:
+		copy := make(map[string]any, len(item))
+		for key, child := range item {
+			copy[key] = normalizeLegacySemanticDefaults(child)
+		}
+		if layout, ok := copy["semanticLayout"].(map[string]any); ok {
+			removeLegacySemanticDefault(layout, "pageType", func(child any) bool { return child == nil })
+			removeLegacySemanticDefault(layout, "informationHierarchy", isEmptyJSONList)
+			removeLegacySemanticDefault(layout, "visualFocus", func(child any) bool { return child == nil })
+			removeLegacySemanticDefault(layout, "contentDensity", func(child any) bool { return child == nil })
+			removeLegacySemanticDefault(layout, "componentRequirements", isEmptyJSONList)
+			removeLegacySemanticDefault(layout, "sourceConstraint", func(child any) bool { return child == nil })
+			removeLegacySemanticDefault(layout, "preserveEditability", func(child any) bool {
+				preserve, ok := child.(bool)
+				return child == nil || (ok && preserve)
+			})
+		}
+		return copy
+	case []any:
+		result := make([]any, len(item))
+		for index, child := range item {
+			result[index] = normalizeLegacySemanticDefaults(child)
+		}
+		return result
+	default:
+		return value
+	}
+}
+
+func removeLegacySemanticDefault(object map[string]any, fieldName string, predicate func(any) bool) {
+	if value, ok := object[fieldName]; ok && predicate(value) {
+		delete(object, fieldName)
+	}
+}
+
+func isEmptyJSONList(value any) bool {
+	items, ok := value.([]any)
+	return ok && len(items) == 0
 }
 
 func canonicalChecksumWithout(value map[string]any, excluded ...string) (string, error) {

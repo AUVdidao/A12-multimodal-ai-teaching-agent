@@ -191,7 +191,8 @@
           "enum": [
             "ANALYZER_PROFILE_COVER_FIRST_PAGE",
             "ANALYZER_PROFILE_CONTENT_REMAINDER",
-            "PROFILE_ROLE_UNAVAILABLE_FAIL_CLOSED"
+            "PROFILE_ROLE_UNAVAILABLE_FAIL_CLOSED",
+            "COMPILER_OWNED_PAGE_VARIANT"
           ]
         },
         "objectIds": {

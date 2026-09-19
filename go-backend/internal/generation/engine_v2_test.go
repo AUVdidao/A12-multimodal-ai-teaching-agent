@@ -182,7 +182,7 @@ func TestEngineSpecificationProjectsLegacyPointsPlanWithoutInventingTeachingFact
 	}
 	got, err := engineSpecification(raw, "spec-legacy", 1, 7001, 9001, time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC), map[string]any{
 		"profileId": "lessonforge-system-default-profile", "profileVersion": 1,
-		"templateId": systemDefaultTemplateID,
+		"templateId":             systemDefaultTemplateID,
 		"templatePageReferences": []any{map[string]any{"semanticRole": "BODY"}},
 	})
 	if err != nil {
@@ -192,12 +192,60 @@ func TestEngineSpecificationProjectsLegacyPointsPlanWithoutInventingTeachingFact
 	if slide["teachingGoal"] != "材料解析与切分" {
 		t.Fatalf("legacy point was not used as the existing teaching fact: %#v", slide["teachingGoal"])
 	}
-	if slide["semanticLayout"].(map[string]any)["requestedTransform"] != "FIXED" {
-		t.Fatalf("system default transform was not bound to the native fixed geometry: %#v", slide["semanticLayout"])
+	if slide["semanticLayout"].(map[string]any)["requestedTransform"] != "RESPONSIVE" {
+		t.Fatalf("system default transform was not bound to the compiler-owned responsive geometry: %#v", slide["semanticLayout"])
 	}
 	blocks := slide["contentBlocks"].([]any)
-	if blocks[2].(map[string]any)["content"] != "材料解析与切分\n关键词检索与上下文拼接" {
-		t.Fatalf("legacy points were not projected as key points: %#v", blocks[2])
+	if len(blocks) != 2 || blocks[1].(map[string]any)["type"] != "BULLETS" ||
+		blocks[1].(map[string]any)["content"] != "材料解析与切分\n关键词检索与上下文拼接" {
+		t.Fatalf("legacy points were not projected as key points: %#v", blocks)
+	}
+}
+
+func TestEngineSpecificationKeepsVisualFocusOutOfVisibleContent(t *testing.T) {
+	raw := map[string]any{
+		"compiler": "lessonforge-semantic-v1",
+		"plan": map[string]any{
+			"slides": []any{map[string]any{
+				"title":       "智能体执行流程",
+				"visualFocus": "重绘流程图并突出执行顺序",
+				"keyPoints":   []any{"接收任务", "调用工具", "回写结果"},
+			}},
+		},
+	}
+	profile := map[string]any{
+		"profileId":      "lessonforge-system-default-profile",
+		"profileVersion": 1,
+		"templateId":     systemDefaultTemplateID,
+		"templatePageReferences": []any{
+			map[string]any{"semanticRole": "PROCESS"},
+		},
+	}
+
+	got, err := engineSpecification(raw, "spec-visual-focus", 1, 7001, 9001,
+		time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC), profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slide := got["slides"].([]any)[0].(map[string]any)
+	blocks := slide["contentBlocks"].([]any)
+	if len(blocks) != 4 {
+		t.Fatalf("visual focus was promoted into visible content: %#v", blocks)
+	}
+	for index, block := range blocks[1:] {
+		if block.(map[string]any)["type"] != "BULLETS" {
+			t.Fatalf("supporting content type at %d = %#v", index, block)
+		}
+		if block.(map[string]any)["content"] == "重绘流程图并突出执行顺序" {
+			t.Fatalf("visual focus leaked into visible content: %#v", block)
+		}
+	}
+	layout := slide["semanticLayout"].(map[string]any)
+	if layout["visualFocus"] != "重绘流程图并突出执行顺序" {
+		t.Fatalf("visual focus was not preserved as layout intent: %#v", layout)
+	}
+	if layout["pageType"] != "PROCESS" {
+		t.Fatalf("page type = %#v", layout["pageType"])
 	}
 }
 

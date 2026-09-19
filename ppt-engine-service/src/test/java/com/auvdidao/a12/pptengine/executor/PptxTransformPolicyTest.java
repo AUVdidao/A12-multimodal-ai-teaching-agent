@@ -37,18 +37,17 @@ class PptxTransformPolicyTest {
                 String matrixObjectKind = objectKind;
                 Element legalObject = object(objectKind);
                 ContractModels.Bounds legal = legalBounds(strategy);
-                if (strategy == ContractTypes.TransformConstraint.RESPONSIVE) {
-                    assertThatThrownBy(() -> SamePackagePowerPointExecutor.applyTransform(
-                            legalObject, legal, matrixStrategy, matrixStrategy))
-                            .isInstanceOf(TransformConstraintException.class);
-                } else {
-                    SamePackagePowerPointExecutor.applyTransform(legalObject, legal, matrixStrategy, matrixStrategy);
-                    assertThat(geometry(roundTrip(legalObject))).isEqualTo(expectedGeometry(matrixStrategy, legal));
-                }
+                SamePackagePowerPointExecutor.applyTransform(legalObject, legal, matrixStrategy, matrixStrategy);
+                assertThat(geometry(roundTrip(legalObject))).isEqualTo(expectedGeometry(matrixStrategy, legal));
 
-                assertThatThrownBy(() -> SamePackagePowerPointExecutor.applyTransform(
-                        object(matrixObjectKind), outOfRange(matrixStrategy), matrixStrategy, matrixStrategy))
-                        .isInstanceOf(TransformConstraintException.class);
+                if (strategy == ContractTypes.TransformConstraint.RESPONSIVE) {
+                    SamePackagePowerPointExecutor.applyTransform(
+                            object(matrixObjectKind), outOfRange(matrixStrategy), matrixStrategy, matrixStrategy);
+                } else {
+                    assertThatThrownBy(() -> SamePackagePowerPointExecutor.applyTransform(
+                            object(matrixObjectKind), outOfRange(matrixStrategy), matrixStrategy, matrixStrategy))
+                            .isInstanceOf(TransformConstraintException.class);
+                }
                 assertThatThrownBy(() -> SamePackagePowerPointExecutor.applyTransform(
                         object(matrixObjectKind), null, matrixStrategy, matrixStrategy))
                         .isInstanceOf(TransformConstraintException.class);
@@ -73,7 +72,7 @@ class PptxTransformPolicyTest {
             case UNIFORM_SCALE -> new ContractModels.Bounds(15, 25, 200, 100);
             case STRETCH_X -> new ContractModels.Bounds(10, 20, 200, 50);
             case STRETCH_Y -> new ContractModels.Bounds(10, 20, 100, 100);
-            case RESPONSIVE -> CURRENT;
+            case RESPONSIVE -> new ContractModels.Bounds(40, 60, 200, 100);
         };
     }
 
@@ -84,7 +83,7 @@ class PptxTransformPolicyTest {
             case UNIFORM_SCALE -> new ContractModels.Bounds(10, 20, 150, 100);
             case STRETCH_X -> new ContractModels.Bounds(10, 21, 200, 50);
             case STRETCH_Y -> new ContractModels.Bounds(11, 20, 100, 100);
-            case RESPONSIVE -> new ContractModels.Bounds(10, 20, 100, 50);
+            case RESPONSIVE -> new ContractModels.Bounds(11, 21, 101, 51);
         };
     }
 
@@ -96,7 +95,7 @@ class PptxTransformPolicyTest {
             case UNIFORM_SCALE -> requested;
             case STRETCH_X -> new ContractModels.Bounds(requested.leftEmu(), 20, requested.widthEmu(), 50);
             case STRETCH_Y -> new ContractModels.Bounds(10, requested.topEmu(), 100, requested.heightEmu());
-            case RESPONSIVE -> CURRENT;
+            case RESPONSIVE -> requested;
         };
     }
 

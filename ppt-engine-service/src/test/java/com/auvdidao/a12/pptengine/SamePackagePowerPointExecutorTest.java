@@ -335,7 +335,8 @@ class SamePackagePowerPointExecutorTest {
                         SamePackagePowerPointExecutor.ExecutionResult result = executor.execute(request);
                         boolean responsive = strategy == ContractTypes.TransformConstraint.RESPONSIVE;
                         assertMatrixObjectIdentity(request, target, suffix);
-                        if (outcome == MatrixOutcome.LEGAL && !responsive) {
+                        if (outcome == MatrixOutcome.LEGAL
+                                || (responsive && outcome == MatrixOutcome.OUT_OF_RANGE)) {
                             assertThat(result.status()).as(suffix + " " + result.diagnostics())
                                     .isEqualTo(ContractTypes.GenerationJobStatus.SUCCEEDED);
                             assertThat(result.diagnostics()).as(suffix).isEmpty();

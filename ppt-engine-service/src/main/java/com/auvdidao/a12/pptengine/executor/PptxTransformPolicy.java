@@ -42,7 +42,7 @@ final class PptxTransformPolicy {
                     && bounds.heightEmu() == current.heightEmu();
             case STRETCH_Y -> bounds.leftEmu() == current.leftEmu()
                     && bounds.widthEmu() == current.widthEmu();
-            case RESPONSIVE -> false;
+            case RESPONSIVE -> true;
         };
         if (!valid) {
             throw new TransformConstraintException("bounds exceed " + allowed.name());

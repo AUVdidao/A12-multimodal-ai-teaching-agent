@@ -29,15 +29,32 @@ import (
 var systemDefaultTemplateAsset []byte
 
 const (
-	systemDefaultTemplateKey = "system/default-lessonforge-template.pptx"
-	systemDefaultTemplateID  = "lessonforge-system-default"
-	systemDefaultTemplateVer = 1
-	systemDefaultShapeCount  = 56
-	systemDefaultSlotCount   = 8
+	systemDefaultTemplateKey    = "system/default-lessonforge-template.pptx"
+	systemDefaultTemplateID     = "lessonforge-system-default"
+	systemDefaultTemplateVer    = 1
+	systemDefaultShapeCount     = 3
+	systemDefaultComponentCount = 26
 )
 
 type systemDefaultTemplate struct {
 	binding map[string]any
+}
+
+type systemDefaultLayoutVariant struct {
+	pageType    string
+	sourceSlide int
+	roles       []string
+}
+
+func systemDefaultLayoutVariants() []systemDefaultLayoutVariant {
+	return []systemDefaultLayoutVariant{
+		{pageType: "TITLE_IMPORT", sourceSlide: 1, roles: []string{"TITLE", "BULLETS"}},
+		{pageType: "CONCEPT", sourceSlide: 2, roles: []string{"TITLE", "BODY", "BULLETS"}},
+		{pageType: "PROCESS", sourceSlide: 3, roles: []string{"TITLE", "BODY", "BULLETS", "BULLETS", "BULLETS", "BULLETS"}},
+		{pageType: "COMPARISON", sourceSlide: 4, roles: []string{"TITLE", "BODY", "BULLETS", "BULLETS", "BULLETS", "BULLETS"}},
+		{pageType: "CARDS", sourceSlide: 5, roles: []string{"TITLE", "BULLETS", "BULLETS", "BULLETS", "BULLETS"}},
+		{pageType: "SUMMARY", sourceSlide: 6, roles: []string{"TITLE", "BULLETS", "BULLETS", "BULLETS"}},
+	}
 }
 
 // prepareSystemDefaultTemplate creates the system-owned, low-fidelity PPTX
@@ -152,50 +169,49 @@ func profileIdentityFromValue(value any) (string, int) {
 func systemDefaultProfile(spec model.LockedSpecification, missionID, owner int64, profileID string, profileVersion int, sourceSHA string) map[string]any {
 	const width = 12192000
 	const height = 6858000
-	objectIDs := make([]string, 0, systemDefaultShapeCount)
-	for index := 0; index < systemDefaultShapeCount; index++ {
-		objectIDs = append(objectIDs, strconv.Itoa(index+2))
-	}
-	roles := semanticRoles(spec.Specification)
-	pages := make([]any, 0, len(roles))
-	for index, role := range roles {
+	variants := systemDefaultLayoutVariants()
+	pages := make([]any, 0, len(variants))
+	components := make([]any, 0)
+	for variantIndex, variant := range variants {
+		objectIDs := make([]string, 0, len(variant.roles))
+		for shapeIndex := range variant.roles {
+			objectIDs = append(objectIDs, strconv.Itoa(shapeIndex+2))
+		}
 		pages = append(pages, map[string]any{
-			"pageReferenceId":    fmt.Sprintf("system-default-page-%02d", index+1),
-			"sourceSlide":        1,
-			"semanticRole":       role,
+			"pageReferenceId":    fmt.Sprintf("system-default-page-%s-%02d", variant.pageType, variantIndex+1),
+			"sourceSlide":        variant.sourceSlide,
+			"semanticRole":       variant.pageType,
 			"objectIds":          objectIDs,
-			"semanticRoleSource": "ANALYZER_PROFILE_CONTENT_REMAINDER",
+			"semanticRoleSource": "COMPILER_OWNED_PAGE_VARIANT",
 		})
-	}
-	types := []string{"TITLE", "BODY", "BULLETS", "QUOTE", "TABLE", "CHART", "TEXT"}
-	components := make([]any, 0, len(types)*systemDefaultSlotCount)
-	shapeIndex := 0
-	for _, contentType := range types {
-		for slotIndex := 0; slotIndex < systemDefaultSlotCount; slotIndex++ {
-			shapeIndex++
-			left, top, slotWidth, slotHeight := systemDefaultBounds(shapeIndex)
+		counts := map[string]int{}
+		for _, role := range variant.roles {
+			counts[role]++
+		}
+		ordinals := map[string]int{}
+		for shapeIndex, contentType := range variant.roles {
+			ordinals[contentType]++
+			left, top, slotWidth, slotHeight := systemDefaultBoundsForRole(contentType, ordinals[contentType], counts[contentType])
+			componentID := fmt.Sprintf("system-default-%s-%02d-%s-%02d", strings.ToLower(variant.pageType), variantIndex+1, strings.ToLower(contentType), ordinals[contentType])
 			components = append(components, map[string]any{
-				"componentId":  fmt.Sprintf("system-default-component-%03d", shapeIndex),
-				"name":         "系统默认文字组件",
-				"semanticRole": "SYSTEM_DEFAULT",
-				"sourceSlide":  1,
+				"componentId":  componentID,
+				"name":         "系统默认" + variant.pageType + "可编辑组件",
+				"semanticRole": variant.pageType,
+				"sourceSlide":  variant.sourceSlide,
 				"shapeRefs": []any{map[string]any{
 					"objectType": "SHAPE",
-					"objectId":   strconv.Itoa(shapeIndex + 1),
+					"objectId":   strconv.Itoa(shapeIndex + 2),
 				}},
 				"childComponentIds": []any{},
 				"slots": []any{map[string]any{
-					"slotId":               fmt.Sprintf("system-default-slot-%03d", shapeIndex),
+					"slotId":               componentID + "-slot",
 					"semanticRole":         contentType,
 					"acceptedContentTypes": []any{contentType},
 					"bounds":               map[string]any{"leftEmu": left, "topEmu": top, "widthEmu": slotWidth, "heightEmu": slotHeight},
 					"required":             true,
 					"capacityConstraint":   map[string]any{"maxCharacters": 4000, "maxItems": 1},
 				}},
-				// The generated system-default PPTX has deterministic native
-				// bounds. Declare the same fixed transform contract consumed by
-				// the executor; RESPONSIVE would make every fill operation partial.
-				"transformConstraint": "FIXED",
+				"transformConstraint": "RESPONSIVE",
 				"fixedStyle": map[string]any{
 					"styleId":       "system-default-style",
 					"fontToken":     "system-default-font",
@@ -241,44 +257,38 @@ func systemDefaultProfile(spec model.LockedSpecification, missionID, owner int64
 	}
 }
 
-func semanticRoles(value any) []string {
-	roles := []string{"BODY"}
-	seen := map[string]bool{"BODY": true}
-	var visit func(any)
-	visit = func(current any) {
-		switch item := current.(type) {
-		case map[string]any:
-			if layout, ok := item["semanticLayout"].(map[string]any); ok {
-				role := strings.TrimSpace(fmt.Sprint(layout["primaryRole"]))
-				if role != "" && !seen[role] {
-					seen[role] = true
-					roles = append(roles, role)
-				}
-			}
-			for _, child := range item {
-				visit(child)
-			}
-		case []any:
-			for _, child := range item {
-				visit(child)
-			}
+func systemDefaultBoundsForRole(role string, ordinal, count int) (int, int, int, int) {
+	switch role {
+	case "TITLE":
+		return 650000, 400000, 10800000, 850000
+	case "BODY":
+		return 750000, 1550000, 4900000, 4000000
+	case "BULLETS":
+		if count <= 1 {
+			return 6000000, 1550000, 5350000, 4400000
 		}
+		gap := 180000
+		width := (10800000 - gap*(count-1)) / count
+		return 650000 + (ordinal-1)*(width+gap), 2600000, width, 2900000
+	default:
+		return 650000, 1550000, 10800000, 4400000
 	}
-	visit(value)
-	if len(roles) > 200 {
-		return roles[:200]
-	}
-	return roles
 }
 
 func systemDefaultBounds(index int) (int, int, int, int) {
-	// Callers use one-based component/shape indexes. Normalize them before
-	// laying out the 56 slots so the first row starts at column zero and the
-	// final row remains inside the 16:9 page bounds.
-	zeroBased := index - 1
-	column := zeroBased % 7
-	row := zeroBased / 7
-	return 350000 + column*1700000, 350000 + row*750000, 1450000, 600000
+	// The source asset and profile share these editable native text regions.
+	// Execute may resize them per semantic page variant because the fallback
+	// profile is compiler-owned and declares RESPONSIVE transforms.
+	switch index {
+	case 1: // TITLE
+		return 650000, 400000, 10800000, 850000
+	case 2: // BODY / focus
+		return 750000, 1550000, 4900000, 4400000
+	case 3: // BULLETS / supporting content
+		return 6000000, 1550000, 5350000, 4400000
+	default:
+		return 650000, 400000, 10800000, 850000
+	}
 }
 
 func systemDefaultPPTX() ([]byte, error) {
@@ -408,7 +418,15 @@ func systemDefaultSlide() string {
 	for index := 0; index < systemDefaultShapeCount; index++ {
 		id := index + 2
 		left, top, width, height := systemDefaultBounds(index + 1)
-		shapes.WriteString(fmt.Sprintf(`<p:sp><p:nvSpPr><p:cNvPr id="%d" name="系统默认文字框%d"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="F7F9FC"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="CBD5E1"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="zh-CN" sz="1600"/><a:t>系统默认内容</a:t></a:r><a:endParaRPr lang="zh-CN"/></a:p></p:txBody></p:sp>`, id, id, left, top, width, height))
+		fontSize := 1800
+		if index == 1 {
+			fontSize = 2800
+		}
+		style := `<a:noFill/><a:ln><a:noFill/></a:ln>`
+		if index > 1 {
+			style = `<a:solidFill><a:srgbClr val="F7F9FC"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="CBD5E1"/></a:solidFill></a:ln>`
+		}
+		shapes.WriteString(fmt.Sprintf(`<p:sp><p:nvSpPr><p:cNvPr id="%d" name="系统默认文字框%d"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>%s</p:spPr><p:txBody><a:bodyPr wrap="square"><a:normAutofit/></a:bodyPr><a:lstStyle/><a:p><a:r><a:rPr lang="zh-CN" sz="%d"/><a:t>系统默认内容</a:t></a:r><a:endParaRPr lang="zh-CN"/></a:p></p:txBody></p:sp>`, id, id, left, top, width, height, style, fontSize))
 	}
 	return `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld name="系统默认页面"><p:spTree>` + shapes.String() + `</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`
 }

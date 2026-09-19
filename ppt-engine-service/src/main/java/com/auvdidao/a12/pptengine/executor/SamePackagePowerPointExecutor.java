@@ -222,6 +222,7 @@ public class SamePackagePowerPointExecutor {
             if (hasBlocking(diagnostics)) {
                 return failedAndCleanup(diagnostics, executionDirectory, true);
             }
+            removeUnusedSystemDefaultObjects(request, pack, targetSlides);
             pack.retainOnlySlides(targetSlides);
             beforeArtifactCommitHook.run();
             if (verifySourceIdentity(source, diagnostics, "executor.sourceChangedDuringExecution") == null) {
@@ -267,6 +268,57 @@ public class SamePackagePowerPointExecutor {
             } catch (IOException ignored) {
                 // The final artifact remains auditable; failed cleanup is not hidden in feedback details.
             }
+        }
+    }
+
+    /**
+     * The compiler-owned fallback template contains only content objects, not
+     * teacher-authored background art. Keep the shapes selected by the plan and
+     * remove the unused source objects before the package is committed. This
+     * prevents an implementation detail of the fallback profile from becoming
+     * a visible grid of empty placeholders in every generated slide.
+     */
+    private void removeUnusedSystemDefaultObjects(
+            ExecutorModels.ExecuteRequest request,
+            PptxPackage pack,
+            List<String> targetSlides) throws IOException {
+        if (request == null || request.templateProfile() == null
+                || !"lessonforge-system-default".equals(request.templateProfile().templateId())) {
+            return;
+        }
+        Map<String, ContractModels.TemplateComponent> components = request.templateProfile().components().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        ContractModels.TemplateComponent::componentId, item -> item, (left, right) -> left));
+        Set<String> templateObjectIds = request.templateProfile().templatePageReferences().stream()
+                .flatMap(page -> page.objectIds().stream())
+                .collect(java.util.stream.Collectors.toSet());
+        for (int slideIndex = 0; slideIndex < targetSlides.size(); slideIndex++) {
+            CompositionModels.ComposedSlidePlan slide = request.plan().slides().get(slideIndex);
+            Set<String> usedObjectIds = new HashSet<>();
+            for (CompositionModels.CompositionOperation operation : slide.operations()) {
+                if (operation.operationType() == CompositionOperationType.FILL_TEXT_SLOT
+                        || operation.operationType() == CompositionOperationType.USE_OR_CLONE_COMPONENT_OBJECT) {
+                    ContractModels.TemplateComponent component = components.get(operation.componentId());
+                    if (component != null) {
+                        component.shapeRefs().forEach(reference -> usedObjectIds.add(reference.objectId()));
+                    }
+                    if (operation.nativeObjectReference() != null) {
+                        usedObjectIds.add(operation.nativeObjectReference().objectId());
+                    }
+                }
+            }
+            String targetSlide = targetSlides.get(slideIndex);
+            Document document = pack.document(targetSlide);
+            for (String objectId : templateObjectIds) {
+                if (usedObjectIds.contains(objectId)) {
+                    continue;
+                }
+                Element object = pack.findObject(document, objectId);
+                if (object != null && "sp".equals(object.getLocalName()) && object.getParentNode() != null) {
+                    object.getParentNode().removeChild(object);
+                }
+            }
+            pack.saveDocument(targetSlide, document);
         }
     }
 

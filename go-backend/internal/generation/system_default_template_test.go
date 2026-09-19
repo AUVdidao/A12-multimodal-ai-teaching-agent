@@ -38,12 +38,12 @@ func TestPrepareSystemDefaultTemplateBuildsTrustedFallbackPackage(t *testing.T) 
 	if profile["profileId"] != "teacher-profile-1" || intValue(profile["profileVersion"]) != 3 {
 		t.Fatalf("fallback did not preserve locked profile identity: %#v", profile)
 	}
-	if len(profile["components"].([]any)) != systemDefaultShapeCount {
-		t.Fatalf("component count = %d, want %d", len(profile["components"].([]any)), systemDefaultShapeCount)
+	if len(profile["components"].([]any)) != systemDefaultComponentCount {
+		t.Fatalf("component count = %d, want %d", len(profile["components"].([]any)), systemDefaultComponentCount)
 	}
 	component := profile["components"].([]any)[0].(map[string]any)
-	if component["transformConstraint"] != "FIXED" {
-		t.Fatalf("system default transform constraint = %#v, want FIXED", component["transformConstraint"])
+	if component["transformConstraint"] != "RESPONSIVE" {
+		t.Fatalf("system default transform constraint = %#v, want RESPONSIVE", component["transformConstraint"])
 	}
 
 	path := filepath.Join(root, filepath.FromSlash(systemDefaultTemplateKey))
@@ -113,7 +113,7 @@ func TestBuildEngineV2PackageUsesSystemDefaultTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile, ok := compose["templateProfile"].(map[string]any)
-	if !ok || len(profile["components"].([]any)) != systemDefaultShapeCount {
+	if !ok || len(profile["components"].([]any)) != systemDefaultComponentCount {
 		t.Fatalf("fallback profile = %#v", compose["templateProfile"])
 	}
 	execute, err := pkg.execute(json.RawMessage(`{"planVersion":"2.0.0","slides":[]}`))

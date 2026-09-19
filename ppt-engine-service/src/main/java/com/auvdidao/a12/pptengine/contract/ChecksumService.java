@@ -66,7 +66,8 @@ public class ChecksumService {
         }
         excludedRootFields.forEach(objectNode::remove);
         try {
-            byte[] canonical = objectMapper.writeValueAsBytes(canonicalize(objectNode));
+            byte[] canonical = objectMapper.writeValueAsBytes(
+                    canonicalize(normalizeLegacySemanticDefaults(objectNode)));
             return sha256(canonical);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Canonical JSON serialization failed", exception);
@@ -94,6 +95,45 @@ public class ChecksumService {
             result.set(fieldName, canonicalize(node.get(fieldName)));
         }
         return result;
+    }
+
+    /**
+     * Semantic layout hints were added after the v1 checksum vector was frozen.
+     * Omit only their Java compatibility defaults so an old specification keeps
+     * its checksum; explicitly supplied non-default hints remain checksum-bound.
+     */
+    private JsonNode normalizeLegacySemanticDefaults(JsonNode node) {
+        if (node == null || node.isValueNode()) {
+            return node == null ? JsonNodeFactory.instance.nullNode() : node;
+        }
+        if (node.isArray()) {
+            ArrayNode result = JsonNodeFactory.instance.arrayNode();
+            node.forEach(child -> result.add(normalizeLegacySemanticDefaults(child)));
+            return result;
+        }
+        ObjectNode result = JsonNodeFactory.instance.objectNode();
+        node.fields().forEachRemaining(entry -> {
+            JsonNode value = normalizeLegacySemanticDefaults(entry.getValue());
+            if ("semanticLayout".equals(entry.getKey()) && value instanceof ObjectNode layout) {
+                removeLegacySemanticDefault(layout, "pageType", item -> item.isNull());
+                removeLegacySemanticDefault(layout, "informationHierarchy", item -> item.isArray() && item.isEmpty());
+                removeLegacySemanticDefault(layout, "visualFocus", item -> item.isNull());
+                removeLegacySemanticDefault(layout, "contentDensity", item -> item.isNull());
+                removeLegacySemanticDefault(layout, "componentRequirements", item -> item.isArray() && item.isEmpty());
+                removeLegacySemanticDefault(layout, "sourceConstraint", item -> item.isNull());
+                removeLegacySemanticDefault(layout, "preserveEditability", item -> item.isNull() || item.asBoolean(false));
+            }
+            result.set(entry.getKey(), value);
+        });
+        return result;
+    }
+
+    private void removeLegacySemanticDefault(
+            ObjectNode object, String fieldName, java.util.function.Predicate<JsonNode> predicate) {
+        JsonNode value = object.get(fieldName);
+        if (value != null && predicate.test(value)) {
+            object.remove(fieldName);
+        }
     }
 
     private String sha256(byte[] value) {
