@@ -22,30 +22,38 @@
       <p>{{ intro }}</p>
     </div>
     <div v-if="slides.length" class="go-plan-slides">
-      <div class="go-plan-slides__heading"><span>逐页布局规划</span><small>{{ slides.length }} 页 · 每页均可继续修改</small></div>
-      <article v-for="slide in slides" :key="slide.key" class="go-plan-slide" :data-test="`go-plan-slide-${slide.index}`">
-        <div class="go-plan-slide__topline"><span class="go-plan-slide__index">SLIDE {{ slide.index }}</span><span class="go-plan-slide__tag">{{ slide.layout }}</span></div>
-        <h3>{{ slide.title }}</h3>
-        <div class="go-plan-slide__grid">
-          <div><span class="go-plan-slide__label">教学目的</span><p>{{ slide.purpose }}</p></div>
-          <div><span class="go-plan-slide__label">页面内容</span><ul><li v-for="point in slide.points" :key="point">{{ point }}</li></ul></div>
-          <div><span class="go-plan-slide__label">视觉与布局</span><p>{{ slide.visual }}</p></div>
-          <div><span class="go-plan-slide__label">课堂动作</span><p>{{ slide.classroomAction }}</p></div>
-        </div>
-        <div v-if="slide.sources.length" class="go-plan-slide__sources"><span>来源</span><em v-for="source in slide.sources" :key="source">{{ source }}</em></div>
-      </article>
+      <button class="go-plan-slides__heading" type="button" data-test="go-plan-slides-toggle" :aria-expanded="slidesExpanded" aria-controls="go-plan-slides-items" @click="slidesExpanded = !slidesExpanded">
+        <span>逐页布局规划</span>
+        <small>{{ slides.length }} 页 · 每页均可继续修改</small>
+        <span class="go-plan-slides__action">{{ slidesExpanded ? '收起' : '展开' }}</span>
+        <span class="go-plan-slides__chevron" :class="{ 'is-open': slidesExpanded }" aria-hidden="true">⌄</span>
+      </button>
+      <div v-if="slidesExpanded" id="go-plan-slides-items" class="go-plan-slides__items">
+        <article v-for="slide in slides" :key="slide.key" class="go-plan-slide" :data-test="`go-plan-slide-${slide.index}`">
+          <div class="go-plan-slide__topline"><span class="go-plan-slide__index">SLIDE {{ slide.index }}</span><span class="go-plan-slide__tag">{{ slide.layout }}</span></div>
+          <h3>{{ slide.title }}</h3>
+          <div class="go-plan-slide__grid">
+            <div><span class="go-plan-slide__label">教学目的</span><p>{{ slide.purpose }}</p></div>
+            <div><span class="go-plan-slide__label">页面内容</span><ul><li v-for="point in slide.points" :key="point">{{ point }}</li></ul></div>
+            <div><span class="go-plan-slide__label">视觉与布局</span><p>{{ slide.visual }}</p></div>
+            <div><span class="go-plan-slide__label">课堂动作</span><p>{{ slide.classroomAction }}</p></div>
+          </div>
+          <div v-if="slide.sources.length" class="go-plan-slide__sources"><span>来源</span><em v-for="source in slide.sources" :key="source">{{ source }}</em></div>
+        </article>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { presentPlanSlides } from '@/utils/conversationPresentation';
 import type { GoPlanningDraft } from '@/api/go';
 
 const props = defineProps<{ draft: GoPlanningDraft; locked: boolean; facts: string[]; approving: boolean; approvalBlocker: string; generationPolicy: string }>();
 defineEmits<{ approve: [] }>();
 const slides = computed(() => presentPlanSlides(props.draft));
+const slidesExpanded = ref(false);
 const intro = computed(() => {
   const raw = props.draft.structuredPlan;
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {

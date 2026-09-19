@@ -28,13 +28,6 @@
           <div class="lf-rail-section__heading">Submission</div>
           <span class="lf-rail-empty">等待提交</span>
         </section>
-        <div class="lf-nav-account">
-          <button class="lf-nav-user" type="button" :aria-expanded="accountMenuOpen" aria-haspopup="menu" @click="accountMenuOpen = !accountMenuOpen"><span class="lf-avatar lf-avatar--small">{{ accountInitial }}</span><span>{{ accountName }}</span><span class="lf-nav-user__more">···</span></button>
-          <div v-if="accountMenuOpen" class="lf-account-menu lf-account-menu--nav" role="menu">
-            <div class="lf-account-menu__identity"><strong>{{ accountName }}</strong><span>{{ roleLabel }}</span></div>
-            <button type="button" role="menuitem" @click="handleLogout">退出登录</button>
-          </div>
-        </div>
       </aside>
 
       <button class="lf-resize-handle" type="button" aria-label="调整左侧栏宽度" data-test="resize-left-rail" @pointerdown="startResize('rail', $event)" />
@@ -103,8 +96,30 @@
             <button v-if="generationButtonVisible" class="lf-primary-button" type="button" data-test="request-generation" :disabled="!generationCanRequest" @click="requestGeneration">{{ generationRequesting ? '提交生成请求…' : generationIsActive ? '生成中…' : currentGenerationJob ? '再次生成 PPT' : '生成 PPT' }}</button>
             <div v-else class="go-generation-card__track" aria-hidden="true"><span /></div>
           </section>
-          <section v-for="job in detail.generationJobs" :key="job.id" class="lf-run-card" :data-test="`generation-job-${job.id}`"><span class="lf-status-dot" :class="`lf-status-dot--${statusClass(job.status)}`" />课件生成 · {{ statusLabel(job.status) }} · 规格 v{{ job.specificationVersion }}<span v-if="job.totalSlides">{{ job.currentSlide }}/{{ job.totalSlides }}</span><small v-if="job.status === 'FAILED'">{{ generationFeedbackLabel(job) }}</small></section>
-          <section v-for="artifact in detail.artifacts" :key="artifact.id" class="go-artifact-card"><div class="go-artifact-card__main"><span class="go-artifact-card__icon" aria-hidden="true">▣</span><div><div class="lf-card-kicker">PPT OUTPUT · v{{ artifact.version }}</div><h2>{{ artifact.file.originalName }}</h2><p>{{ artifact.file.size }} bytes · {{ artifact.status || 'ready' }}</p></div></div><div class="go-artifact-card__actions"><a class="lf-secondary-button" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">预览</a><a class="lf-primary-button" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">下载</a></div></section>
+          <section v-if="detail.generationJobs.length" class="go-generation-history" data-test="generation-history">
+            <button class="go-generation-history__toggle" type="button" data-test="generation-history-toggle" :aria-expanded="generationHistoryExpanded" aria-controls="generation-history-items" @click="generationHistoryExpanded = !generationHistoryExpanded">
+              <span class="go-generation-history__title">生成记录</span>
+              <span class="go-generation-history__count">{{ detail.generationJobs.length }} 次</span>
+              <span class="go-generation-history__summary">{{ generationHistorySummary }}</span>
+              <span class="go-generation-history__action">{{ generationHistoryExpanded ? '收起' : '展开' }}</span>
+              <span class="go-generation-history__chevron" :class="{ 'is-open': generationHistoryExpanded }" aria-hidden="true">⌄</span>
+            </button>
+            <div v-if="generationHistoryExpanded" id="generation-history-items" class="go-generation-history__items">
+              <section v-for="job in detail.generationJobs" :key="job.id" class="lf-run-card" :data-test="`generation-job-${job.id}`"><span class="lf-status-dot" :class="`lf-status-dot--${statusClass(job.status)}`" />课件生成 · {{ statusLabel(job.status) }} · 规格 v{{ job.specificationVersion }}<span v-if="job.totalSlides">{{ job.currentSlide }}/{{ job.totalSlides }}</span><small v-if="job.status === 'FAILED'">{{ generationFeedbackLabel(job) }}</small></section>
+            </div>
+          </section>
+          <section v-if="detail.artifacts.length" class="go-artifact-history" data-test="artifact-history">
+            <button class="go-artifact-history__toggle" type="button" data-test="artifact-history-toggle" :aria-expanded="artifactHistoryExpanded" aria-controls="artifact-history-items" @click="artifactHistoryExpanded = !artifactHistoryExpanded">
+              <span class="go-artifact-history__title">PPT 输出</span>
+              <span class="go-artifact-history__count">{{ detail.artifacts.length }} 个版本</span>
+              <span class="go-artifact-history__summary">最新 v{{ detail.artifacts[0]?.version }}</span>
+              <span class="go-artifact-history__action">{{ artifactHistoryExpanded ? '收起' : '展开' }}</span>
+              <span class="go-artifact-history__chevron" :class="{ 'is-open': artifactHistoryExpanded }" aria-hidden="true">⌄</span>
+            </button>
+            <div v-if="artifactHistoryExpanded" id="artifact-history-items" class="go-artifact-history__items">
+              <section v-for="artifact in detail.artifacts" :key="artifact.id" class="go-artifact-card"><div class="go-artifact-card__main"><span class="go-artifact-card__icon" aria-hidden="true"><span>PPT</span></span><div><div class="lf-card-kicker">PPT OUTPUT · v{{ artifact.version }}</div><h2>{{ artifact.file.originalName }}</h2><p>{{ artifact.file.size }} bytes · {{ artifact.status || 'ready' }}</p></div></div><div class="go-artifact-card__actions"><a class="go-artifact-card__action go-artifact-card__action--preview" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">预览</a><a class="go-artifact-card__action go-artifact-card__action--download" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">下载<span aria-hidden="true">↓</span></a></div></section>
+            </div>
+          </section>
           <div ref="conversationEnd" class="go-conversation-end" aria-hidden="true" />
         </div>
 
@@ -158,6 +173,8 @@ const sending = ref(false);
 const uploading = ref(false);
 const approving = ref(false);
 const generationRequesting = ref(false);
+const generationHistoryExpanded = ref(false);
+const artifactHistoryExpanded = ref(false);
 const error = ref('');
 const viewActive = ref(false);
 const conversationScroll = ref<HTMLElement | null>(null);
@@ -175,15 +192,6 @@ let requestVersion = 0;
 
 const currentUserId = computed(() => auth.user?.id ?? null);
 const { railWidth: missionRailWidth, boardWidth: missionBoardWidth, startResize, stopResize, restoreWorkspaceLayout } = useResizableWorkspace(currentUserId);
-const accountMenuOpen = ref(false);
-const accountName = computed(() => {
-  const displayName = auth.user?.displayName?.trim();
-  if (displayName && !/(?:demo|演示)/i.test(displayName)) return displayName;
-  const username = auth.user?.username?.trim();
-  return username?.split('@')[0] || 'Teacher';
-});
-const accountInitial = computed(() => accountName.value.slice(0, 1).toUpperCase());
-const roleLabel = computed(() => auth.activeRole === 'RESEARCHER' ? '教研员' : auth.activeRole === 'LEADER' ? '负责人' : '教师');
 const missionId = computed(() => Number(route.params.missionId));
 const currentRun = computed(() => agentRuns.value[0] || null);
 const renderedDraft = computed<GoPlanningDraft | null>(() => detail.value?.currentDraft || null);
@@ -207,6 +215,15 @@ const conversationTimeline = computed<ConversationTimelineItem[]>(() => {
 const currentGenerationJob = computed(() => {
   const jobs = detail.value?.generationJobs || [];
   return jobs[0] || null;
+});
+const generationHistorySummary = computed(() => {
+  const jobs = detail.value?.generationJobs || [];
+  const failed = jobs.filter((job) => job.status === 'FAILED').length;
+  const succeeded = jobs.filter((job) => job.status === 'SUCCEEDED').length;
+  const parts = [`${jobs.length} 次记录`];
+  if (failed) parts.push(`${failed} 次失败`);
+  if (succeeded) parts.push(`${succeeded} 次完成`);
+  return parts.join(' · ');
 });
 const generationIsActive = computed(() => ['QUEUED', 'RUNNING', 'VERIFYING'].includes(currentGenerationJob.value?.status || ''));
 const generationBlockers = computed(() => {
@@ -395,7 +412,6 @@ function startGenerationPolling(jobId: string, id: number, userId: number | null
   }, 1500);
 }
 function stopGenerationPolling() { if (generationPollTimer !== undefined) { window.clearTimeout(generationPollTimer); generationPollTimer = undefined; } generationPollJobId = ''; }
-async function handleLogout() { accountMenuOpen.value = false; try { await auth.logout(); } finally { await router.replace({ name: 'lessonforge-login' }); } }
 function connectEvents(id: number, userId: number | null) {
   if (eventReconnectTimer !== undefined) {
     window.clearTimeout(eventReconnectTimer);
@@ -442,8 +458,8 @@ watch(conversationTailKey, async (next, previous) => {
   if (shouldFollow) scrollToLatest(behavior);
   else hasNewActivityBelow.value = true;
 });
-watch(() => route.params.missionId, () => { stopGenerationPolling(); source?.close(); source = null; if (eventReconnectTimer !== undefined) { window.clearTimeout(eventReconnectTimer); eventReconnectTimer = undefined; } lastEventId = 0; initialConversationScroll = true; followingLatest.value = true; hasNewActivityBelow.value = false; void load(); });
-watch(() => auth.user?.id, (next, previous) => { if (next === previous) return; stopGenerationPolling(); restoreWorkspaceLayout(); source?.close(); source = null; if (eventReconnectTimer !== undefined) { window.clearTimeout(eventReconnectTimer); eventReconnectTimer = undefined; } lastEventId = 0; initialConversationScroll = true; followingLatest.value = true; hasNewActivityBelow.value = false; requestVersion++; detail.value = null; questions.value = []; agentRuns.value = []; events.value = []; error.value = ''; if (next != null) void load(); });
+watch(() => route.params.missionId, () => { generationHistoryExpanded.value = false; artifactHistoryExpanded.value = false; stopGenerationPolling(); source?.close(); source = null; if (eventReconnectTimer !== undefined) { window.clearTimeout(eventReconnectTimer); eventReconnectTimer = undefined; } lastEventId = 0; initialConversationScroll = true; followingLatest.value = true; hasNewActivityBelow.value = false; void load(); });
+watch(() => auth.user?.id, (next, previous) => { if (next === previous) return; generationHistoryExpanded.value = false; artifactHistoryExpanded.value = false; stopGenerationPolling(); restoreWorkspaceLayout(); source?.close(); source = null; if (eventReconnectTimer !== undefined) { window.clearTimeout(eventReconnectTimer); eventReconnectTimer = undefined; } lastEventId = 0; initialConversationScroll = true; followingLatest.value = true; hasNewActivityBelow.value = false; requestVersion++; detail.value = null; questions.value = []; agentRuns.value = []; events.value = []; error.value = ''; if (next != null) void load(); });
 watch([() => auth.user?.id, missionId], restoreComposerDraft, { immediate: true });
 watch(draft, persistComposerDraft);
 onMounted(() => { viewActive.value = true; restoreWorkspaceLayout(); void load(); });

@@ -29,6 +29,7 @@ let createMemoryHistory: typeof import('vue-router')['createMemoryHistory'];
 let h: typeof import('vue')['h'];
 let GoMissionWorkspaceView: any;
 let GoQuestionCard: any;
+let GoPlanDraftCard: any;
 let useAuthStore: typeof import('../src/stores/auth')['useAuthStore'];
 let goHttp: any;
 let httpMock: AxiosMockAdapter;
@@ -137,6 +138,7 @@ before(async () => {
   h = vue.h;
   GoMissionWorkspaceView = viewModule.default;
   GoQuestionCard = (await viteServer.ssrLoadModule('/@a12-go-question-card.ts')).default;
+  GoPlanDraftCard = (await viteServer.ssrLoadModule('/@a12-go-plan-draft.ts')).default;
   useAuthStore = authModule.useAuthStore;
   goHttp = goModule.goHttp;
   httpMock = new AxiosMockAdapter(goHttp);
@@ -218,6 +220,18 @@ test('Mission workspace keeps messages, questions, and plan drafts in one chrono
   assert.ok(questionIndex < indexOfText('已收到课程要求'), 'the clarification is placed by its server timestamp');
   assert.ok(indexOfText('已收到课程要求') < planIndex, 'the plan follows the assistant turn that preceded it');
   assert.ok(planIndex < indexOfText('请增加课堂实验'), 'a later teacher turn is appended after the plan instead of jumping above it');
+  await wrapper.unmount();
+});
+
+test('Plan draft folds the page-by-page outline until the teacher expands it', async () => {
+  const wrapper = mount(GoPlanDraftCard, {
+    props: { draft: planningDraft, locked: false, facts: ['计算机网络'], approving: false, approvalBlocker: '', generationPolicy: '使用系统默认版式生成。' },
+  });
+  assert.equal(wrapper.get('[data-test="go-plan-slides-toggle"]').attributes('aria-expanded'), 'false');
+  assert.equal(wrapper.find('[data-test="go-plan-slide-01"]').exists(), false, 'page details stay collapsed by default');
+  await wrapper.get('[data-test="go-plan-slides-toggle"]').trigger('click');
+  assert.equal(wrapper.get('[data-test="go-plan-slides-toggle"]').attributes('aria-expanded'), 'true');
+  assert.equal(wrapper.find('[data-test="go-plan-slide-01"]').exists(), true);
   await wrapper.unmount();
 });
 
@@ -450,14 +464,23 @@ test('locked specification starts real generation and polls the persisted job to
   assert.equal(wrapper.find('[data-test="request-generation"]').exists(), true);
   await wrapper.get('[data-test="request-generation"]').trigger('click');
   await settle();
+  assert.equal(wrapper.get('[data-test="generation-history-toggle"]').attributes('aria-expanded'), 'false', 'generation history is collapsed by default');
+  assert.equal(wrapper.find('[data-test="generation-job-job-1"]').exists(), false, 'generation history rows stay hidden until expanded');
+  await wrapper.get('[data-test="generation-history-toggle"]').trigger('click');
+  assert.equal(wrapper.get('[data-test="generation-history-toggle"]').attributes('aria-expanded'), 'true');
   assert.equal(wrapper.find('[data-test="generation-job-job-1"]').exists(), true);
   assert.equal(wrapper.get('[data-test="request-generation"]').attributes('disabled'), '', 'an active generation job disables a duplicate request');
   await new Promise((resolve) => setTimeout(resolve, 1700));
   await settle();
   assert.equal(wrapper.find('[data-test="request-generation"]').exists(), true, 'a terminal job with an existing Artifact still exposes regeneration');
   assert.match(wrapper.get('[data-test="request-generation"]').text(), /再次生成 PPT/);
+  assert.equal(wrapper.get('[data-test="artifact-history-toggle"]').attributes('aria-expanded'), 'false', 'PPT outputs are collapsed by default');
+  assert.equal(wrapper.find('.go-artifact-card').exists(), false, 'PPT output cards stay hidden until expanded');
+  await wrapper.get('[data-test="artifact-history-toggle"]').trigger('click');
+  assert.equal(wrapper.get('[data-test="artifact-history-toggle"]').attributes('aria-expanded'), 'true');
   assert.equal(wrapper.find('.go-artifact-card').exists(), true);
   assert.equal(wrapper.find('a[href$="/api/artifacts/artifact-1/download"]').exists(), true);
+  assert.equal(wrapper.find('[data-test="generation-job-job-1"] .lf-status-dot--succeeded').exists(), true, 'successful generation jobs use the green status dot');
   await wrapper.unmount();
 });
 
@@ -480,6 +503,7 @@ test('Mission workspace exposes draggable left and right rails and keeps their w
 
   const workspace = wrapper.get('[data-test="go-mission-workspace"]');
   assert.equal(workspace.classes().includes('lf-workspace--resizable'), true);
+  assert.equal(workspace.find('.lf-nav-account').exists(), false, 'the development workspace does not render an account panel');
   assert.equal(workspace.get('[data-test="resize-left-rail"]').attributes('aria-label'), '调整左侧栏宽度');
   assert.equal(workspace.get('[data-test="resize-right-board"]').attributes('aria-label'), '调整右侧看板宽度');
 
