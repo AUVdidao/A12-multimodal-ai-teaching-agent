@@ -198,6 +198,40 @@ export interface GoArtifact {
   createdAt: string;
 }
 
+export interface GoGameJob {
+  id: string;
+  missionId: number;
+  sourceSpecificationId: string;
+  sourceSpecificationVersion: number;
+  sourceArtifactId: string;
+  gameType: 'SINGLE_CHOICE' | 'TRUE_FALSE' | 'MATCHING' | string;
+  status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | string;
+  gameSpec?: unknown;
+  errorCode?: string;
+  errorMessage?: string;
+  artifactId?: string | null;
+  createdAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface GoGameArtifact {
+  id: string;
+  missionId: number;
+  gameJobId: string;
+  version: number;
+  gameType: 'SINGLE_CHOICE' | 'TRUE_FALSE' | 'MATCHING' | string;
+  file: GoFileObject;
+  contentType: string;
+  sha256: string;
+  size: number;
+  status: string;
+  gameSpec?: unknown;
+  publishedAt?: string | null;
+  accessUrl?: string;
+  createdAt: string;
+}
+
 export interface GoActivityEvent {
   id: number;
   missionId: number;
@@ -240,11 +274,19 @@ export interface GoMissionDetail {
   lockedSpecification?: GoLockedSpecification | null;
   generationJobs: GoGenerationJob[];
   artifacts: GoArtifact[];
+  gameJobs: GoGameJob[];
+  gameArtifacts: GoGameArtifact[];
   feedback: GoMissionFeedback[];
 }
 
 export interface GoGenerationJobResponse {
   generationJob: GoGenerationJob;
+  created: boolean;
+}
+
+export interface GoGameJobResponse {
+  gameJob: GoGameJob;
+  gameArtifact: GoGameArtifact;
   created: boolean;
 }
 
@@ -289,11 +331,28 @@ export interface GoErrorBody {
   error?: { code?: string };
 }
 
+const GO_BEARER_STORAGE_KEY = 'lessonforge_go_bearer';
+let goBearerToken = typeof window !== 'undefined'
+  ? window.sessionStorage.getItem(GO_BEARER_STORAGE_KEY) || ''
+  : '';
+
+export function setGoBearerToken(token: string) {
+  goBearerToken = token;
+  if (typeof window === 'undefined') return;
+  if (token) window.sessionStorage.setItem(GO_BEARER_STORAGE_KEY, token);
+  else window.sessionStorage.removeItem(GO_BEARER_STORAGE_KEY);
+}
+
 export const goHttp: AxiosInstance = axios.create({
   baseURL: goApiBaseUrl,
   timeout: 30000,
   withCredentials: true,
   headers: { Accept: 'application/json' },
+});
+
+goHttp.interceptors.request.use((config) => {
+  if (goBearerToken) config.headers.Authorization = `Bearer ${goBearerToken}`;
+  return config;
 });
 
 export function goErrorCode(error: unknown) {
@@ -307,6 +366,9 @@ export function goErrorMessage(error: unknown, fallback = '暂时无法连接 Le
   if (code === 'TEMPLATE_BINDING_REQUIRED') return '当前模板绑定不可用；如未上传模板，批准后将使用系统默认版式。';
   if (code === 'SPECIFICATION_PLAN_INVALID') return '课件方案结构无效，请重新生成方案草稿。';
   if (code === 'SPECIFICATION_FORBIDDEN_FIELD') return '课件方案包含不允许的执行字段，请重新生成方案草稿。';
+  if (code === 'GAME_SOURCE_NOT_READY') return '请先完成课件方案锁定和 PPT 生成，再生成互动小游戏。';
+  if (code === 'GAME_MATERIAL_SOURCE_REQUIRED') return '当前课件缺少可追溯的材料来源，暂时不能生成互动小游戏。';
+  if (code === 'GAME_ARTIFACT_NOT_FOUND' || code === 'GAME_NOT_FOUND') return '互动小游戏产物不存在或已失效，请重新生成。';
   if (code) return `请求未完成（${code}）。`;
   return fallback;
 }
@@ -435,6 +497,30 @@ export async function approveGoPlanningDraft(draftId: string) {
 export async function createGoGenerationJob(id: number, specificationId: string, specificationVersion: number, fallbackPolicy = 'AUTO') {
   const { data } = await goHttp.post<GoGenerationJobResponse>(`/api/missions/${id}/generation-jobs`, { specificationId, specificationVersion, fallbackPolicy });
   return data;
+}
+
+export async function listGoMissionGameJobs(id: number) {
+  const { data } = await goHttp.get<GoGameJob[] | null>(`/api/missions/${id}/game-jobs`);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createGoGameJob(id: number, gameType = 'TRUE_FALSE') {
+  const { data } = await goHttp.post<GoGameJobResponse>(`/api/missions/${id}/game-jobs`, { gameType });
+  return data;
+}
+
+export async function publishGoGameArtifact(id: string) {
+  const { data } = await goHttp.post<GoGameArtifact>(`/api/game-artifacts/${id}/publish`, {});
+  return data;
+}
+
+export function goGamePreviewUrl(id: string) {
+  return `${goApiBaseUrl}/api/game-artifacts/${id}/preview`;
+}
+
+export function goGameAccessUrl(accessUrl: string) {
+  if (/^https?:\/\//i.test(accessUrl)) return accessUrl;
+  return `${goApiBaseUrl}/${accessUrl.replace(/^\/+/, '')}`;
 }
 
 export async function selectGoMissionConnection(id: number, connectionId: number | null) {

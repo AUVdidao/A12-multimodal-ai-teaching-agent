@@ -14,6 +14,7 @@ import { useConversationWorkspaceStore } from '@/stores/conversationWorkspace';
 import { useLessonForgeStore } from '@/stores/lessonForge';
 import { defineStore } from 'pinia';
 import { isGoBackend } from '@/config/runtime';
+import { setGoBearerToken } from '@/api/go';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -93,7 +94,8 @@ export const useAuthStore = defineStore('auth', {
       this.user = user;
       this.sessionActive = true;
       this.initialized = true;
-      if (!isGoBackend) window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+      if (isGoBackend) setGoBearerToken(token);
+      else window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
     },
     clearSession() {
       useConversationWorkspaceStore().reset(this.user?.id ?? null);
@@ -102,6 +104,7 @@ export const useAuthStore = defineStore('auth', {
       this.user = null;
       this.sessionActive = false;
       this.initialized = true;
+      if (isGoBackend) setGoBearerToken('');
       window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
     },
   },

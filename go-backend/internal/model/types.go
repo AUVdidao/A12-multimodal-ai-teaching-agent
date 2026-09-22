@@ -216,6 +216,39 @@ type Artifact struct {
 	Status          string     `json:"status,omitempty"`
 	CreatedAt       time.Time  `json:"createdAt"`
 }
+type GameJob struct {
+	ID                          string     `json:"id"`
+	MissionID                   int64      `json:"missionId"`
+	SourceSpecificationID       string     `json:"sourceSpecificationId"`
+	SourceSpecificationVersion  int        `json:"sourceSpecificationVersion"`
+	SourceArtifactID            string     `json:"sourceArtifactId"`
+	GameType                    string     `json:"gameType"`
+	Status                      string     `json:"status"`
+	GameSpec                    any        `json:"gameSpec,omitempty"`
+	ErrorCode                   string     `json:"errorCode,omitempty"`
+	ErrorMessage                string     `json:"errorMessage,omitempty"`
+	ArtifactID                  *string    `json:"artifactId,omitempty"`
+	CreatedAt                   time.Time  `json:"createdAt"`
+	StartedAt                   *time.Time `json:"startedAt,omitempty"`
+	FinishedAt                  *time.Time `json:"finishedAt,omitempty"`
+}
+type GameArtifact struct {
+	ID          string     `json:"id"`
+	MissionID   int64      `json:"missionId"`
+	GameJobID   string     `json:"gameJobId"`
+	Version     int        `json:"version"`
+	GameType    string     `json:"gameType"`
+	File        FileObject `json:"file"`
+	ContentType string     `json:"contentType"`
+	SHA256      string     `json:"sha256"`
+	Size        int64      `json:"size"`
+	Status      string     `json:"status"`
+	GameSpec    any        `json:"gameSpec,omitempty"`
+	PublishedAt *time.Time `json:"publishedAt,omitempty"`
+	AccessURL   string     `json:"accessUrl,omitempty"`
+	PublicToken string     `json:"-"`
+	CreatedAt   time.Time  `json:"createdAt"`
+}
 type ActivityEvent struct {
 	ID            int64     `json:"id"`
 	MissionID     int64     `json:"missionId"`

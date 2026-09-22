@@ -120,3 +120,55 @@ func TestSubagentPromptsKeepClarificationNarrow(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanningRoleSkillsAreEmbeddedInMatchingPrompts(t *testing.T) {
+	teaching := subagentSystemPrompt(SubagentInstructionalDesigner)
+	for _, required := range []string{"Installed role skill", "objective to an explanation", "INSTRUCTIONAL_PROPOSAL"} {
+		if !strings.Contains(teaching, required) {
+			t.Fatalf("instructional prompt missing %q", required)
+		}
+	}
+	if strings.Contains(teaching, "metadata:") {
+		t.Fatal("skill frontmatter leaked into instructional prompt")
+	}
+	presentation := subagentSystemPrompt(SubagentPresentationArchitect)
+	for _, required := range []string{"Installed role skill", "Do not choose card grids", "PRESENTATION_PROPOSAL"} {
+		if !strings.Contains(presentation, required) {
+			t.Fatalf("presentation prompt missing %q", required)
+		}
+	}
+	if strings.Contains(subagentSystemPrompt(SubagentPlanComposer), "Installed role skill") {
+		t.Fatal("planning skill was installed on the wrong role")
+	}
+	interactionPrompt := subagentSystemPrompt(SubagentInteractionDesigner)
+	for _, required := range []string{"Installed role skill", "INTERACTION_PROPOSAL", "Do not copy a slide point"} {
+		if !strings.Contains(interactionPrompt, required) {
+			t.Fatalf("interaction prompt missing %q", required)
+		}
+	}
+}
+
+func TestValidateInstructionalProposal(t *testing.T) {
+	valid := `{"type":"INSTRUCTIONAL_PROPOSAL","objectives":["理解智能体循环"],"units":[{"title":"循环结构","objective":"解释循环","learnerContent":["观察后再行动"],"teacherNotes":["用案例引入"],"evidenceRefs":[{"fileId":21,"locator":"chunk:3","claim":"材料给出循环定义"}]}],"evidenceGaps":[],"unresolvedDecisions":[]}`
+	if err := validateInstructionalProposal(valid); err != nil {
+		t.Fatalf("valid instructional proposal rejected: %v", err)
+	}
+	if err := validateInstructionalProposal(`{"type":"INSTRUCTIONAL_PROPOSAL","objectives":[],"units":[],"evidenceGaps":[],"unresolvedDecisions":[]}`); err == nil {
+		t.Fatal("empty instructional proposal was accepted")
+	}
+}
+
+func TestValidatePresentationProposal(t *testing.T) {
+	valid := `{"type":"PRESENTATION_PROPOSAL","slides":[{"title":"智能体循环","purpose":"解释顺序关系","points":["感知","决策","行动"],"pageType":"PROCESS","visualFocus":"循环关系","informationHierarchy":["TITLE","FOCUS"],"contentDensity":"BALANCED","componentRequirements":["TEXT"],"sources":["file:21#chunk:3"],"notes":"逐步讲解"}],"capabilityGaps":[],"unresolvedDecisions":[]}`
+	if err := validatePresentationProposal(valid); err != nil {
+		t.Fatalf("valid presentation proposal rejected: %v", err)
+	}
+	invalid := strings.Replace(valid, `"pageType":"PROCESS"`, `"pageType":"FREEFORM"`, 1)
+	if err := validatePresentationProposal(invalid); err == nil {
+		t.Fatal("unsupported page type was accepted")
+	}
+	withGeometry := strings.Replace(valid, `"notes":"逐步讲解"`, `"notes":"逐步讲解","x":10`, 1)
+	if err := validatePresentationProposal(withGeometry); err == nil {
+		t.Fatal("presentation proposal with geometry was accepted")
+	}
+}

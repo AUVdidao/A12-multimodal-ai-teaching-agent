@@ -29,6 +29,7 @@ import (
 
 	"lessonforge.local/backend/internal/agent"
 	"lessonforge.local/backend/internal/auth"
+	"lessonforge.local/backend/internal/interaction"
 	"lessonforge.local/backend/internal/model"
 	"lessonforge.local/backend/internal/platform/crypto"
 	"lessonforge.local/backend/internal/platform/database"
@@ -74,6 +75,7 @@ func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 	r.Use(s.cors)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
+	r.Get("/games/{token}", s.publicGame)
 	r.Post("/internal/model-execution-leases", s.createModelExecutionLease)
 	r.Post("/internal/model-executions/multimodal", s.executeModelExecution)
 	r.Route("/api/auth", func(r chi.Router) {
@@ -119,6 +121,11 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/generation-jobs/{id}/cancel", s.cancelGeneration)
 		r.Get("/api/missions/{id}/artifacts", s.artifacts)
 		r.Get("/api/artifacts/{id}/download", s.download)
+		r.Get("/api/missions/{id}/game-jobs", s.gameJobs)
+		r.Get("/api/missions/{id}/game-artifacts", s.gameArtifacts)
+		r.Post("/api/missions/{id}/game-jobs", s.createGameJob)
+		r.Get("/api/game-artifacts/{id}/preview", s.gamePreview)
+		r.Post("/api/game-artifacts/{id}/publish", s.publishGameArtifact)
 	})
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireAuth)
@@ -1047,6 +1054,16 @@ func (s *Server) getMission(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "MISSION_STATE_UNAVAILABLE")
 		return
 	}
+	gameJobs, err := s.store.GameJobs(r.Context(), owner, id)
+	if err != nil {
+		writeError(w, 500, "MISSION_STATE_UNAVAILABLE")
+		return
+	}
+	gameArtifacts, err := s.store.GameArtifacts(r.Context(), owner, id)
+	if err != nil {
+		writeError(w, 500, "MISSION_STATE_UNAVAILABLE")
+		return
+	}
 	feedback, err := s.store.MissionFeedback(r.Context(), owner, id)
 	if err != nil {
 		writeError(w, 500, "MISSION_STATE_UNAVAILABLE")
@@ -1056,7 +1073,7 @@ func (s *Server) getMission(w http.ResponseWriter, r *http.Request) {
 	if lockedErr == nil {
 		lockedPayload = locked
 	}
-	writeJSON(w, 200, map[string]any{"mission": m, "messages": messages, "files": files, "currentDraft": draftOrNil(draft), "lockedSpecification": lockedPayload, "generationJobs": jobs, "artifacts": artifacts, "feedback": feedback})
+	writeJSON(w, 200, map[string]any{"mission": m, "messages": messages, "files": files, "currentDraft": draftOrNil(draft), "lockedSpecification": lockedPayload, "generationJobs": jobs, "artifacts": artifacts, "gameJobs": gameJobs, "gameArtifacts": gameArtifacts, "feedback": feedback})
 }
 func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
@@ -1411,6 +1428,172 @@ func (s *Server) artifacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, items)
+}
+
+func (s *Server) gameJobs(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	items, err := s.store.GameJobs(r.Context(), currentUser(r.Context()).ID, id)
+	if err != nil {
+		writeNotFound(w, "MISSION_NOT_FOUND")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) gameArtifacts(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	items, err := s.store.GameArtifacts(r.Context(), currentUser(r.Context()).ID, id)
+	if err != nil {
+		writeNotFound(w, "MISSION_NOT_FOUND")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) createGameJob(w http.ResponseWriter, r *http.Request) {
+	missionID, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	owner := currentUser(r.Context()).ID
+	var req struct {
+		GameType string `json:"gameType"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	input, err := s.store.CreateGameJob(r.Context(), owner, missionID, req.GameType)
+	if err != nil {
+		switch {
+		case errors.Is(err, database.ErrGameMissionNotFound), errors.Is(err, database.ErrGameSourceNotReady):
+			writeError(w, http.StatusConflict, err.Error())
+		case errors.Is(err, database.ErrGameSourceMaterialMissing):
+			writeError(w, http.StatusConflict, err.Error())
+		case errors.Is(err, database.ErrGameTypeUnsupported):
+			writeError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeError(w, http.StatusInternalServerError, "GAME_JOB_CREATE_FAILED")
+		}
+		return
+	}
+	spec, err := interaction.BuildFromLockedSpecificationWithType(input.Spec.Specification, input.Spec.ID, input.Spec.Version, req.GameType, input.MaterialFileID)
+	if err != nil {
+		_ = s.store.FailGameJob(r.Context(), owner, input.Job.ID, safeGameError(err), err.Error())
+		writeError(w, http.StatusConflict, safeGameError(err))
+		return
+	}
+	if s.agent != nil {
+		_ = s.store.AddActivityIdempotent(r.Context(), missionID, "SUBAGENT_STARTED", "互动题目设计子智能体开始", "GAME_JOB", input.Job.ID, "game-job:"+input.Job.ID+":interaction-designer:started")
+		questions, designErr := s.agent.DesignInteractionQuestions(r.Context(), owner, missionID, input.Spec.Specification, req.GameType, input.MaterialFileID)
+		if designErr != nil {
+			_ = s.store.AddActivityIdempotent(r.Context(), missionID, "SUBAGENT_FAILED", "互动题目设计子智能体失败："+designErr.Error(), "GAME_JOB", input.Job.ID, "game-job:"+input.Job.ID+":interaction-designer:failed")
+			_ = s.store.FailGameJob(r.Context(), owner, input.Job.ID, "GAME_QUESTION_DESIGN_FAILED", designErr.Error())
+			writeError(w, http.StatusConflict, "GAME_QUESTION_DESIGN_FAILED")
+			return
+		}
+		spec.Questions = questions
+		_ = s.store.AddActivityIdempotent(r.Context(), missionID, "SUBAGENT_COMPLETED", "互动题目设计子智能体完成", "GAME_JOB", input.Job.ID, "game-job:"+input.Job.ID+":interaction-designer:completed")
+	}
+	data, err := interaction.Render(spec)
+	if err != nil {
+		_ = s.store.FailGameJob(r.Context(), owner, input.Job.ID, safeGameError(err), err.Error())
+		writeError(w, http.StatusInternalServerError, "GAME_RENDER_FAILED")
+		return
+	}
+	storageKey := "games/lessonforge-" + input.Job.ID + ".html"
+	file, err := s.files.SaveBytesAtKey(r.Context(), storageKey, "lessonforge-game-"+input.Job.ID+".html", "text/html", data)
+	if err != nil {
+		_ = s.store.FailGameJob(r.Context(), owner, input.Job.ID, "GAME_STORAGE_FAILED", "互动网页保存失败")
+		writeError(w, http.StatusInternalServerError, "GAME_STORAGE_FAILED")
+		return
+	}
+	if err := s.files.Verify(r.Context(), file); err != nil {
+		_ = s.files.Remove(file.StorageKey)
+		_ = s.store.FailGameJob(r.Context(), owner, input.Job.ID, "GAME_STORAGE_INTEGRITY_FAILED", "互动网页校验失败")
+		writeError(w, http.StatusInternalServerError, "GAME_STORAGE_INTEGRITY_FAILED")
+		return
+	}
+	artifact, err := s.store.FinishGameJob(r.Context(), owner, input.Job.ID, spec.GameType, spec, model.FileObject{OriginalName: file.OriginalName, MimeType: file.MimeType, Size: file.Size, SHA256: file.SHA256, StorageKey: file.StorageKey})
+	if err != nil {
+		_ = s.files.Remove(file.StorageKey)
+		_ = s.store.FailGameJob(r.Context(), owner, input.Job.ID, "GAME_ARTIFACT_COMMIT_FAILED", "互动网页记录失败")
+		writeError(w, http.StatusInternalServerError, "GAME_ARTIFACT_COMMIT_FAILED")
+		return
+	}
+	input.Job.Status = database.GameStatusSucceeded
+	input.Job.GameType = spec.GameType
+	input.Job.GameSpec = spec
+	input.Job.ArtifactID = &artifact.ID
+	finished := time.Now().UTC()
+	input.Job.FinishedAt = &finished
+	writeJSON(w, http.StatusCreated, map[string]any{"gameJob": input.Job, "gameArtifact": artifact, "created": true})
+}
+
+func (s *Server) gamePreview(w http.ResponseWriter, r *http.Request) {
+	artifact, err := s.store.GameArtifact(r.Context(), currentUser(r.Context()).ID, chi.URLParam(r, "id"))
+	if err != nil {
+		writeNotFound(w, "GAME_ARTIFACT_NOT_FOUND")
+		return
+	}
+	s.serveGameHTML(w, r, artifact)
+}
+
+func (s *Server) publishGameArtifact(w http.ResponseWriter, r *http.Request) {
+	artifact, err := s.store.PublishGameArtifact(r.Context(), currentUser(r.Context()).ID, chi.URLParam(r, "id"))
+	if err != nil {
+		writeNotFound(w, "GAME_ARTIFACT_NOT_FOUND")
+		return
+	}
+	artifact.AccessURL = "/games/" + artifact.PublicToken
+	writeJSON(w, http.StatusOK, artifact)
+}
+
+func (s *Server) publicGame(w http.ResponseWriter, r *http.Request) {
+	artifact, err := s.store.PublicGameArtifact(r.Context(), chi.URLParam(r, "token"))
+	if err != nil {
+		writeNotFound(w, "GAME_NOT_FOUND")
+		return
+	}
+	s.serveGameHTML(w, r, artifact)
+}
+
+func (s *Server) serveGameHTML(w http.ResponseWriter, r *http.Request, artifact model.GameArtifact) {
+	if artifact.ContentType != "text/html" || artifact.Size <= 0 || artifact.Size != artifact.File.Size || !strings.EqualFold(artifact.SHA256, artifact.File.SHA256) {
+		writeError(w, http.StatusConflict, "GAME_ARTIFACT_INVALID")
+		return
+	}
+	file, err := s.files.OpenVerified(r.Context(), storage.File{StorageKey: artifact.File.StorageKey, Size: artifact.File.Size, SHA256: artifact.File.SHA256})
+	if err != nil {
+		writeError(w, http.StatusConflict, "GAME_ARTIFACT_INTEGRITY_FAILED")
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, artifact.Size+1))
+	if err != nil || int64(len(data)) != artifact.Size {
+		writeError(w, http.StatusConflict, "GAME_ARTIFACT_INTEGRITY_FAILED")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Length", strconv.FormatInt(artifact.Size, 10))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+func safeGameError(err error) string {
+	code := strings.TrimSpace(err.Error())
+	if strings.HasPrefix(code, "GAME_") {
+		return code
+	}
+	return "GAME_GENERATION_FAILED"
 }
 func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	artifact, err := s.store.Artifact(r.Context(), currentUser(r.Context()).ID, chi.URLParam(r, "id"))

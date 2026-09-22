@@ -439,6 +439,31 @@ func (s *Store) ResolveEmbeddingConnection(ctx context.Context, owner int64) (mo
 	return connection, encrypted, nil
 }
 
+// ResolvePlanningConnection resolves the Mission's selected planning model,
+// falling back to the teacher's global PLANNING binding. Game question design
+// uses the same model-selection rule as the normal planning agent.
+func (s *Store) ResolvePlanningConnection(ctx context.Context, owner, missionID int64) (model.ModelConnection, string, error) {
+	var connectionID *int64
+	if err := s.DB.QueryRow(ctx, `SELECT selected_model_connection_id FROM missions WHERE id=$1 AND owner_teacher_id=$2`, missionID, owner).Scan(&connectionID); err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	if connectionID == nil {
+		var globalID int64
+		if err := s.DB.QueryRow(ctx, `SELECT model_connection_id FROM model_connection_bindings WHERE owner_user_id=$1 AND role=$2`, owner, model.ModelRolePlanning).Scan(&globalID); err != nil {
+			return model.ModelConnection{}, "", err
+		}
+		connectionID = &globalID
+	}
+	connection, encrypted, err := s.Connection(ctx, owner, *connectionID)
+	if err != nil {
+		return model.ModelConnection{}, "", err
+	}
+	if !connection.Enabled || connection.VerificationStatus != "VERIFIED" || !connectionSupportsRole(model.ModelRolePlanning, connection.Capabilities, connection.CapabilityVerification) {
+		return model.ModelConnection{}, "", errors.New("MODEL_PLANNING_NOT_VERIFIED")
+	}
+	return connection, encrypted, nil
+}
+
 // ResolveVisionConnection prefers the teacher's TEMPLATE_VISION binding and
 // falls back to the Mission's selected planning connection for compatibility.
 // The selected identity is frozen into a one-use lease; a later binding change

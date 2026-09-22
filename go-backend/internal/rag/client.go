@@ -25,6 +25,7 @@ var ErrLegacyWorkflowPath = errors.New("RAG_LEGACY_WORKFLOW_PATH_BLOCKED")
 var ErrReadMaterialDisabled = errors.New("RAG_READ_MATERIAL_DISABLED")
 var ErrTimeout = errors.New("RAG_TIMEOUT")
 var ErrRequirementSummaryRequired = errors.New("RAG_REQUIREMENT_SUMMARY_REQUIRED")
+var ErrEmbeddingIndexNotReady = errors.New("RAG_EMBEDDING_INDEX_NOT_READY")
 
 const legacyWorkflowPath = "/api/ai-workflow/knowledge-retrieval"
 
@@ -230,9 +231,33 @@ func (c *Client) searchJava(ctx context.Context, ragProjectID, missionID int64, 
 	}
 	if strings.TrimSpace(section) != "" {
 		body["section"] = strings.TrimSpace(section)
+	} else {
+		// An overview query may contain version numbers or other decimals.
+		// Explicitly send an empty scope so Java does not infer a chapter from
+		// arbitrary natural-language text.
+		body["section"] = ""
 	}
-	if err := c.javaJSON(ctx, http.MethodPost, "/api/v1/internal/lessonforge/projects/"+strconv.FormatInt(ragProjectID, 10)+"/knowledge/search", body, &result); err != nil {
-		return nil, err
+	searchPath := "/api/v1/internal/lessonforge/projects/" + strconv.FormatInt(ragProjectID, 10) + "/knowledge/search"
+	if err := c.javaJSON(ctx, http.MethodPost, searchPath, body, &result); err != nil {
+		// A vector query can race the asynchronous Java-side embedding index.
+		// The Java service has used more than one 409 message across versions,
+		// so treat a 409 during a vector query as the explicit keyword fallback
+		// boundary while preserving requirement-summary errors.
+		vectorFallback := len(queryVector) > 0 &&
+			(errors.Is(err, ErrEmbeddingIndexNotReady) || err.Error() == "RAG_HTTP_409")
+		if !vectorFallback {
+			return nil, err
+		}
+		fallbackBody := make(map[string]any, len(body))
+		for key, value := range body {
+			fallbackBody[key] = value
+		}
+		delete(fallbackBody, "queryEmbedding")
+		fallbackBody["embeddingFallbackReason"] = "EMBEDDING_INDEX_NOT_READY"
+		result = javaSearchResponse{}
+		if fallbackErr := c.javaJSON(ctx, http.MethodPost, searchPath, fallbackBody, &result); fallbackErr != nil {
+			return nil, fallbackErr
+		}
 	}
 	snippets := make([]Snippet, 0, len(result.Hits))
 	for _, hit := range result.Hits {
@@ -684,6 +709,9 @@ func classifyJavaHTTPError(status int, data []byte) error {
 	message := strings.ToLower(strings.TrimSpace(envelope.Message))
 	if strings.Contains(message, "confirmed requirement summary is required") {
 		return ErrRequirementSummaryRequired
+	}
+	if strings.Contains(message, "embedding_index_not_ready") || strings.Contains(message, "embedding index not ready") {
+		return ErrEmbeddingIndexNotReady
 	}
 	return fmt.Errorf("RAG_HTTP_%d", status)
 }

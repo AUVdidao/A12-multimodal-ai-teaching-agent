@@ -34,7 +34,7 @@ export interface RegisterPayload {
 export async function login(payload: LoginPayload) {
   if (isGoBackend) {
     const response = await goLogin({ email: payload.username, password: payload.password });
-    return { token: '', expiresAt: response.expiresAt || '', user: mapGoUser(response.user) };
+    return { token: response.token || '', expiresAt: response.expiresAt || '', user: mapGoUser(response.user) };
   }
   const response = await http.post<ApiResponse<AuthSession>>('/api/v1/auth/login', payload);
   return response.data.data;
@@ -44,7 +44,7 @@ export async function register(payload: RegisterPayload) {
   if (isGoBackend) {
     await goRegister({ name: payload.displayName, email: payload.username, password: payload.password, role: payload.role === 'LEADER' ? 'RESEARCHER' : 'TEACHER' });
     const response = await goLogin({ email: payload.username, password: payload.password });
-    return { token: '', expiresAt: response.expiresAt || '', user: mapGoUser(response.user) };
+    return { token: response.token || '', expiresAt: response.expiresAt || '', user: mapGoUser(response.user) };
   }
   const response = await http.post<ApiResponse<AuthSession>>('/api/v1/auth/register', payload);
   return response.data.data;

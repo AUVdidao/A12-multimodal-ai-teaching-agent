@@ -330,3 +330,58 @@ func TestJavaClientClassifiesConfirmedRequirementSummaryConflict(t *testing.T) {
 		t.Fatalf("UploadMaterial error = %v, want ErrRequirementSummaryRequired", err)
 	}
 }
+
+func TestJavaSearchFallsBackWhenEmbeddingIndexIsNotReady(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		payload, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(payload, &body); err != nil {
+			t.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if calls == 1 {
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code":    409,
+				"message": "EMBEDDING_INDEX_NOT_READY",
+			})
+			return
+		}
+		if _, present := body["queryEmbedding"]; present {
+			t.Errorf("fallback request still contains queryEmbedding: %s", payload)
+		}
+		if got := body["embeddingFallbackReason"]; got != "EMBEDDING_INDEX_NOT_READY" {
+			t.Errorf("fallback reason = %v, want EMBEDDING_INDEX_NOT_READY", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code":    0,
+			"message": "success",
+			"data": map[string]any{
+				"retrievalMode": "KEYWORD_FALLBACK",
+				"hits": []map[string]any{{
+					"chunkId": 11, "materialId": 28, "chunkNo": 1,
+					"sourceFilename": "lesson.pdf", "title": "Chunk 1",
+					"content": "Readable material content", "score": 1.0,
+				}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewJavaClient(server.URL, time.Second, 1<<20)
+	snippets, err := client.searchJava(context.Background(), 27, 105, "course topic", map[int64]struct{}{28: {}}, []float64{0.1, 0.2}, "", "")
+	if err != nil {
+		t.Fatalf("searchJava error = %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("search calls = %d, want 2", calls)
+	}
+	if len(snippets) != 1 || snippets[0].RetrievalMode != "KEYWORD_FALLBACK" {
+		t.Fatalf("fallback snippets = %#v", snippets)
+	}
+}

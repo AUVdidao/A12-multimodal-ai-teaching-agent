@@ -18,10 +18,13 @@ import (
 type SubagentRole string
 
 const (
-	SubagentRequirementClarifier SubagentRole = "REQUIREMENT_CLARIFIER"
-	SubagentMaterialResearcher   SubagentRole = "MATERIAL_RESEARCHER"
-	SubagentTemplateAnalyzer     SubagentRole = "TEMPLATE_ANALYZER"
-	SubagentPlanComposer         SubagentRole = "PLAN_COMPOSER"
+	SubagentRequirementClarifier  SubagentRole = "REQUIREMENT_CLARIFIER"
+	SubagentMaterialResearcher    SubagentRole = "MATERIAL_RESEARCHER"
+	SubagentTemplateAnalyzer      SubagentRole = "TEMPLATE_ANALYZER"
+	SubagentInstructionalDesigner SubagentRole = "INSTRUCTIONAL_DESIGNER"
+	SubagentPresentationArchitect SubagentRole = "PRESENTATION_ARCHITECT"
+	SubagentInteractionDesigner  SubagentRole = "INTERACTION_DESIGNER"
+	SubagentPlanComposer          SubagentRole = "PLAN_COMPOSER"
 )
 
 type subagentChainInput struct {
@@ -52,6 +55,42 @@ type subagentEvidenceSource struct {
 	FileID  int64  `json:"fileId"`
 	Locator string `json:"locator"`
 	Claim   string `json:"claim"`
+}
+
+type subagentInstructionalOutput struct {
+	Type                string                      `json:"type"`
+	Objectives          []string                    `json:"objectives"`
+	Units               []subagentInstructionalUnit `json:"units"`
+	EvidenceGaps        []string                    `json:"evidenceGaps"`
+	UnresolvedDecisions []string                    `json:"unresolvedDecisions"`
+}
+
+type subagentInstructionalUnit struct {
+	Title          string                   `json:"title"`
+	Objective      string                   `json:"objective"`
+	LearnerContent []string                 `json:"learnerContent"`
+	TeacherNotes   []string                 `json:"teacherNotes"`
+	EvidenceRefs   []subagentEvidenceSource `json:"evidenceRefs"`
+}
+
+type subagentPresentationOutput struct {
+	Type                string                      `json:"type"`
+	Slides              []subagentPresentationSlide `json:"slides"`
+	CapabilityGaps      []string                    `json:"capabilityGaps"`
+	UnresolvedDecisions []string                    `json:"unresolvedDecisions"`
+}
+
+type subagentPresentationSlide struct {
+	Title                 string   `json:"title"`
+	Purpose               string   `json:"purpose"`
+	Points                []string `json:"points"`
+	PageType              string   `json:"pageType"`
+	VisualFocus           string   `json:"visualFocus"`
+	InformationHierarchy  []string `json:"informationHierarchy"`
+	ContentDensity        string   `json:"contentDensity"`
+	ComponentRequirements []string `json:"componentRequirements"`
+	Sources               []string `json:"sources"`
+	Notes                 string   `json:"notes"`
 }
 
 // runSubagentChain is intentionally sequential. Each role receives a bounded
@@ -154,10 +193,70 @@ func (r *Runtime) runSubagentChain(
 	if clarification.Type != "READY" {
 		return errors.New("SUBAGENT_REQUIREMENT_CLARIFIER_INVALID")
 	}
+	if frozen.PromptVersion == model.LegacyPlanAgentPromptVersion {
+		return r.composeSubagentPlan(ctx, run, owner, connection, evidenceContext, clarifier, "", "")
+	}
 
-	composerPrompt := evidenceContext +
-		"\n\nRequirement clarifier handoff:\n" + truncateRunes(clarifier, 12000) +
-		"\n\nYou are now the final plan composer."
+	instructionContext := evidenceContext +
+		"\n\nRequirement clarifier handoff:\n" + truncateRunes(clarifier, 12000)
+	instruction, err := r.runSubagentStage(ctx, run, owner, connection, SubagentInstructionalDesigner, instructionContext, nil)
+	if err != nil {
+		return err
+	}
+	if err := validateInstructionalProposal(instruction); err != nil {
+		return err
+	}
+
+	presentationContext := instructionContext +
+		"\n\nInstructional designer handoff:\n" + truncateRunes(instruction, 20000)
+	presentation, err := r.runSubagentStage(ctx, run, owner, connection, SubagentPresentationArchitect, presentationContext, nil)
+	if err != nil {
+		return err
+	}
+	if err := validatePresentationProposal(presentation); err != nil {
+		if activityErr := r.Store.AddActivityIdempotent(
+			ctx,
+			run.MissionID,
+			"SUBAGENT_CONTRACT_RETRY",
+			"演示规划子智能体输出合同不合格，执行一次受控修复重试",
+			"AGENT_RUN",
+			run.ID,
+			"agent-run:"+run.ID+":subagent:PRESENTATION_ARCHITECT:contract-retry",
+		); activityErr != nil {
+			return activityErr
+		}
+		presentationRepair := presentationContext +
+			"\n\nContract repair instruction:\n" +
+			"Your previous presentation proposal failed the server contract. Return exactly one JSON object and no prose. Use exactly these top-level keys: type, slides, capabilityGaps, unresolvedDecisions. Set type to PRESENTATION_PROPOSAL. Every slide must contain exactly these ten keys: title, purpose, points, pageType, visualFocus, informationHierarchy, contentDensity, componentRequirements, sources, notes. Use only pageType TITLE_IMPORT, CONCEPT, PROCESS, COMPARISON, CARDS, or SUMMARY; use only contentDensity SPARSE, BALANCED, or DENSE; points must be non-empty. Do not include coordinates, geometry, native identifiers, or extra keys. Preserve material-grounded content from the previous handoffs.\nRejected response:\n" + truncateRunes(presentation, 12000)
+		presentation, err = r.runSubagentStage(ctx, run, owner, connection, SubagentPresentationArchitect, presentationRepair, nil)
+		if err != nil {
+			return err
+		}
+		if validationErr := validatePresentationProposal(presentation); validationErr != nil {
+			_ = r.Store.AddActivityIdempotent(
+				ctx,
+				run.MissionID,
+				"SUBAGENT_CONTRACT_REJECTED",
+				"演示规划子智能体最终输出被拒绝："+validationErr.Error(),
+				"AGENT_RUN",
+				run.ID,
+				"agent-run:"+run.ID+":subagent:PRESENTATION_ARCHITECT:contract-rejected",
+			)
+			return validationErr
+		}
+	}
+	return r.composeSubagentPlan(ctx, run, owner, connection, evidenceContext, clarifier, instruction, presentation)
+}
+
+func (r *Runtime) composeSubagentPlan(ctx context.Context, run model.AgentRun, owner int64, connection model.ResolvedConnection, evidenceContext, clarifier, instruction, presentation string) error {
+	composerPrompt := evidenceContext + "\n\nRequirement clarifier handoff:\n" + truncateRunes(clarifier, 12000)
+	if instruction != "" {
+		composerPrompt += "\n\nInstructional designer handoff:\n" + truncateRunes(instruction, 20000)
+	}
+	if presentation != "" {
+		composerPrompt += "\n\nPresentation architect handoff:\n" + truncateRunes(presentation, 24000)
+	}
+	composerPrompt += "\n\nYou are now the final plan composer. Preserve the validated handoffs without adding geometry."
 	composer, err := r.runSubagentStage(ctx, run, owner, connection, SubagentPlanComposer, composerPrompt, nil)
 	if err != nil {
 		return err
@@ -166,7 +265,7 @@ func (r *Runtime) runSubagentChain(
 		if !isRecoverableOutputError(err) {
 			return err
 		}
-		composer, err = r.runSubagentStage(ctx, run, owner, connection, SubagentPlanComposer, composerPrompt+"\n\nYour previous response was rejected as "+err.Error()+". Repair it once and return JSON only. Use exactly this minimal shape, then fill the markdown with the evidence-backed plan: {\"type\":\"PLAN_DRAFT\",\"markdown\":\"...\",\"structuredPlan\":{\"slides\":[{\"title\":\"...\"}]}}. Every slide must have a non-empty title. Do not include sourceRefs, regions, geometry, coordinates, OOXML, engine, credentials, or any other slide fields.", nil)
+		composer, err = r.runSubagentStage(ctx, run, owner, connection, SubagentPlanComposer, composerPrompt+"\n\nYour previous response was rejected as "+err.Error()+". Repair it once and return JSON only. Use this shape: {\"type\":\"PLAN_DRAFT\",\"markdown\":\"...\",\"structuredPlan\":{\"slides\":[{\"title\":\"...\",\"purpose\":\"...\",\"points\":[\"...\"]}]}}. Preserve validated semantic fields from the handoffs. Every slide must have a non-empty title. Do not include geometry, coordinates, native object identifiers, OOXML, engine requests, or credentials.", nil)
 		if err != nil {
 			return err
 		}
@@ -254,6 +353,13 @@ func (r *Runtime) runMaterialResearcher(ctx context.Context, run model.AgentRun,
 	if err != nil {
 		return "", err
 	}
+	// The server preflight above already executed both authorized tools against
+	// the mission-scoped material. Treat that verified evidence as satisfying
+	// the tool requirement for this stage; otherwise the model is forced to
+	// repeat the same search/read call and DeepSeek can fail the contract even
+	// though the source evidence is valid.
+	calledTools["search_materials"] = true
+	calledTools["read_material"] = true
 	if err := validateMaterialResearchOutput(research, calledTools); err == nil {
 		return research, nil
 	}
@@ -271,14 +377,16 @@ func (r *Runtime) runMaterialResearcher(ctx context.Context, run model.AgentRun,
 	}
 	repairContext := base + "\n\nContract repair instruction:\n" +
 		"Your previous material-research response did not satisfy the server contract. " +
-		"The server preflight is not your tool call evidence. You must call search_materials and read_material yourself in this retry, then return exactly one JSON object with no prose. " +
-		"Use the actual fileId and locator returned by those calls; never invent fileId, chunk number, or source claim. " +
+		"The server preflight has already verified an authorized source and provides the evidence context below. Return exactly one JSON object with no prose. " +
+		"Preserve the actual fileId and locator from the preflight; never invent fileId, chunk number, or source claim. " +
 		"For evidence use {\"type\":\"EVIDENCE\",\"summary\":\"non-empty\",\"sources\":[{\"fileId\":123,\"locator\":\"chunk:176\",\"claim\":\"non-empty\"}]}; " +
 		"if evidence is unavailable use {\"type\":\"SKIPPED\",\"reason\":\"non-empty\"}.\nRejected response:\n" + truncateRunes(research, 8000)
 	research, calledTools, err = r.runSubagentStageWithTrace(ctx, run, owner, connection, SubagentMaterialResearcher, preflightContext+"\n\n"+repairContext, tools)
 	if err != nil {
 		return "", err
 	}
+	calledTools["search_materials"] = true
+	calledTools["read_material"] = true
 	if err := validateMaterialResearchOutput(research, calledTools); err != nil {
 		_ = r.Store.AddActivityIdempotent(
 			ctx,
@@ -346,7 +454,7 @@ func (r *Runtime) materialResearchPreflight(ctx context.Context, missionID, owne
 	if err := json.Unmarshal([]byte(readResult), &read); err != nil || read.FileID != fileID || read.Locator != locator || !hasReadableMaterialContent(read.Content) {
 		return "", errors.New("SUBAGENT_MATERIAL_RESEARCHER_READ_EMPTY")
 	}
-	return base + fmt.Sprintf("\n\nServer preflight verified an authorized target source: materialId=%d fileId=%d locator=%s. This preflight is not subagent tool evidence; call search_materials and read_material yourself before returning EVIDENCE.", snippets[0].MaterialID, fileID, locator), nil
+	return base + fmt.Sprintf("\n\nServer preflight verified an authorized target source: materialId=%d fileId=%d locator=%s. Use this source for EVIDENCE and preserve its identifiers. Read content excerpt:\n%s", snippets[0].MaterialID, fileID, locator, truncateRunes(read.Content, 6000)), nil
 }
 
 func researchQueryFromContext(base string) string {
@@ -362,7 +470,7 @@ func researchQueryFromContext(base string) string {
 					titleStart += len("《")
 					if titleEnd := strings.Index(candidate[titleStart:], "》"); titleEnd > 0 {
 						title := strings.TrimSpace(candidate[titleStart : titleStart+titleEnd])
-						return truncateRunes(title+" 第3.2节 RAG 基础 Chunking 嵌入 混合检索", 1200)
+						return truncateRunes(title+" 目录 章节 核心概念 教学内容", 1200)
 					}
 				}
 				return truncateRunes(candidate, 1200)
@@ -394,18 +502,26 @@ func (r *Runtime) callModel(ctx context.Context, connection model.ResolvedConnec
 
 func subagentSystemPrompt(role SubagentRole) string {
 	common := "Return exactly one JSON object and nothing else. Do not output Markdown fences, hidden reasoning, or explanatory prose. Use only server-owned facts and clearly label unavailable evidence."
+	var prompt string
 	switch role {
 	case SubagentRequirementClarifier:
-		return common + " You are the requirement clarification subagent for LessonForge. Identify only decisions that genuinely block a reliable courseware plan. Do not ask a question merely to collect preferences when a safe default or existing teacher fact is sufficient. If one blocking decision remains, return {\"type\":\"QUESTION\",\"question\":\"...\",\"questionType\":\"SINGLE_CHOICE\",\"options\":[\"...\",\"...\"]} with 2 to 4 mutually exclusive options. Ask at most one question. If planning can proceed, return {\"type\":\"READY\",\"requirements\":{...}}."
+		prompt = common + " You are the requirement clarification subagent for LessonForge. Identify only decisions that genuinely block a reliable courseware plan. Do not ask a question merely to collect preferences when a safe default or existing teacher fact is sufficient. If one blocking decision remains, return {\"type\":\"QUESTION\",\"question\":\"...\",\"questionType\":\"SINGLE_CHOICE\",\"options\":[\"...\",\"...\"]} with 2 to 4 mutually exclusive options. Ask at most one question. If planning can proceed, return {\"type\":\"READY\",\"requirements\":{...}}."
 	case SubagentMaterialResearcher:
-		return common + " You are the material research subagent. Because an authorized teaching material is attached, you must call search_materials and then call read_material on at least one relevant search hit before returning EVIDENCE. Do not invent content and do not treat a search hit as verified until bounded material content is read. If the authorized tools cannot provide evidence, return SKIPPED with a concrete reason. Return {\"type\":\"EVIDENCE\",\"summary\":\"...\",\"sources\":[{\"fileId\":1,\"locator\":\"...\",\"claim\":\"...\"}]} or {\"type\":\"SKIPPED\",\"reason\":\"...\"}."
+		prompt = common + " You are the material research subagent. Because an authorized teaching material is attached, you must call search_materials and then call read_material on at least one relevant search hit before returning EVIDENCE. Do not invent content and do not treat a search hit as verified until bounded material content is read. If the authorized tools cannot provide evidence, return SKIPPED with a concrete reason. Return {\"type\":\"EVIDENCE\",\"summary\":\"...\",\"sources\":[{\"fileId\":1,\"locator\":\"...\",\"claim\":\"...\"}]} or {\"type\":\"SKIPPED\",\"reason\":\"...\"}."
 	case SubagentTemplateAnalyzer:
-		return common + " You are the template capability reader. Use get_template_capability only for the explicitly bound Mission TEMPLATE file. The current server tool returns a Go-owned upstream candidate binding, not an Engine-confirmed native profile: executionReady=false and engineNativeProfilePresent=false must never be described as confirmed generation capability. Do not design slides and do not invent component support. Return {\"type\":\"TEMPLATE_CANDIDATE\",\"summary\":\"...\",\"sources\":[...]} or {\"type\":\"SKIPPED\",\"reason\":\"...\"}."
+		prompt = common + " You are the template capability reader. Use get_template_capability only for the explicitly bound Mission TEMPLATE file. The current server tool returns a Go-owned upstream candidate binding, not an Engine-confirmed native profile: executionReady=false and engineNativeProfilePresent=false must never be described as confirmed generation capability. Do not design slides and do not invent component support. Return {\"type\":\"TEMPLATE_CANDIDATE\",\"summary\":\"...\",\"sources\":[...]} or {\"type\":\"SKIPPED\",\"reason\":\"...\"}."
+	case SubagentInstructionalDesigner:
+		prompt = common + " You are LessonForge's instructional designer. Return exactly {\"type\":\"INSTRUCTIONAL_PROPOSAL\",\"objectives\":[\"...\"],\"units\":[{\"title\":\"...\",\"objective\":\"...\",\"learnerContent\":[\"...\"],\"teacherNotes\":[\"...\"],\"evidenceRefs\":[{\"fileId\":1,\"locator\":\"chunk:1\",\"claim\":\"...\"}]}],\"evidenceGaps\":[],\"unresolvedDecisions\":[]}. Objectives and units must be non-empty. Do not choose layout or rendering coordinates."
+	case SubagentPresentationArchitect:
+		prompt = common + " You are LessonForge's presentation architect. Return exactly {\"type\":\"PRESENTATION_PROPOSAL\",\"slides\":[{\"title\":\"...\",\"purpose\":\"...\",\"points\":[\"...\"],\"pageType\":\"CONCEPT\",\"visualFocus\":\"...\",\"informationHierarchy\":[\"TITLE\",\"FOCUS\",\"SUPPORTING_POINTS\"],\"contentDensity\":\"BALANCED\",\"componentRequirements\":[\"TEXT\"],\"sources\":[],\"notes\":\"...\"}],\"capabilityGaps\":[],\"unresolvedDecisions\":[]}. pageType must be TITLE_IMPORT, CONCEPT, PROCESS, COMPARISON, CARDS, or SUMMARY. contentDensity must be SPARSE, BALANCED, or DENSE. Do not output coordinates or native object identifiers."
+	case SubagentInteractionDesigner:
+		prompt = common + " You are LessonForge's interaction designer. Design material-grounded learner questions for the requested game. Return exactly {\"type\":\"INTERACTION_PROPOSAL\",\"questions\":[{\"id\":\"q-1\",\"type\":\"SINGLE_CHOICE\",\"prompt\":\"...\",\"options\":[{\"id\":\"A\",\"text\":\"...\"},{\"id\":\"B\",\"text\":\"...\"}],\"answer\":[\"A\"],\"explanation\":\"...\",\"source\":{\"fileId\":1,\"locator\":\"chunk:1\",\"claim\":\"...\"}}]}. Use only facts supported by the supplied material evidence. Do not copy a slide point as the whole prompt. For RUNNER return at most three short TRUE_FALSE or SINGLE_CHOICE checkpoints. Preserve source identifiers exactly."
 	case SubagentPlanComposer:
-		return common + " You are the final plan composition subagent. Combine the clarification, material, and template handoffs into one semantic courseware plan. Return exactly {\"type\":\"PLAN_DRAFT\",\"markdown\":\"...\",\"structuredPlan\":{\"slides\":[...]}}. The slides array must be non-empty and every slide must have a non-empty title. Do not output coordinates, shape IDs, OOXML, credentials, engine calls, or unsupported template claims."
+		prompt = common + " You are the final plan composition subagent. Combine the validated clarification, instructional-design, presentation-architecture, material, and template handoffs into one semantic courseware plan without dropping their decisions. Return exactly {\"type\":\"PLAN_DRAFT\",\"markdown\":\"...\",\"structuredPlan\":{\"slides\":[...]}}. Preserve title, purpose, points, pageType, visualFocus, informationHierarchy, contentDensity, componentRequirements, sources, and notes when supplied. The slides array must be non-empty and every slide must have a non-empty title. Do not output coordinates, shape IDs, OOXML, credentials, engine calls, or unsupported template claims."
 	default:
-		return common
+		prompt = common
 	}
+	return promptWithInstalledSkill(prompt, role)
 }
 
 func subagentToolSet(names ...string) []model.ToolDefinition {
@@ -578,6 +694,92 @@ func validateSubagentClarifierOutput(output subagentClarifierOutput) error {
 	}
 }
 
+func validateInstructionalProposal(content string) error {
+	var raw map[string]json.RawMessage
+	var output subagentInstructionalOutput
+	if err := decodeSubagentJSON(content, &raw); err != nil || len(raw) != 5 || !onlyKeys(raw, "type", "objectives", "units", "evidenceGaps", "unresolvedDecisions") {
+		return errors.New("SUBAGENT_INSTRUCTIONAL_DESIGNER_INVALID")
+	}
+	if err := decodeSubagentJSON(content, &output); err != nil || strings.ToUpper(strings.TrimSpace(output.Type)) != "INSTRUCTIONAL_PROPOSAL" || len(output.Objectives) == 0 || len(output.Units) == 0 {
+		return errors.New("SUBAGENT_INSTRUCTIONAL_DESIGNER_INVALID")
+	}
+	for _, objective := range output.Objectives {
+		if strings.TrimSpace(objective) == "" {
+			return errors.New("SUBAGENT_INSTRUCTIONAL_DESIGNER_INVALID")
+		}
+	}
+	for _, unit := range output.Units {
+		if strings.TrimSpace(unit.Title) == "" || strings.TrimSpace(unit.Objective) == "" || len(unit.LearnerContent) == 0 {
+			return errors.New("SUBAGENT_INSTRUCTIONAL_DESIGNER_INVALID")
+		}
+		for _, content := range unit.LearnerContent {
+			if strings.TrimSpace(content) == "" {
+				return errors.New("SUBAGENT_INSTRUCTIONAL_DESIGNER_INVALID")
+			}
+		}
+		for _, source := range unit.EvidenceRefs {
+			if source.FileID <= 0 || strings.TrimSpace(source.Locator) == "" || strings.TrimSpace(source.Claim) == "" {
+				return errors.New("SUBAGENT_INSTRUCTIONAL_DESIGNER_INVALID")
+			}
+		}
+	}
+	var nested struct {
+		Units []map[string]json.RawMessage `json:"units"`
+	}
+	if err := decodeSubagentJSON(content, &nested); err != nil || len(nested.Units) != len(output.Units) {
+		return errors.New("SUBAGENT_INSTRUCTIONAL_DESIGNER_INVALID")
+	}
+	for _, unit := range nested.Units {
+		if len(unit) != 5 || !onlyKeys(unit, "title", "objective", "learnerContent", "teacherNotes", "evidenceRefs") {
+			return errors.New("SUBAGENT_INSTRUCTIONAL_DESIGNER_INVALID")
+		}
+	}
+	return nil
+}
+
+func validatePresentationProposal(content string) error {
+	var raw map[string]json.RawMessage
+	if err := decodeSubagentJSON(content, &raw); err != nil {
+		return errors.New("SUBAGENT_PRESENTATION_ARCHITECT_INVALID")
+	}
+	var outputType string
+	if err := json.Unmarshal(raw["type"], &outputType); err != nil || strings.ToUpper(strings.TrimSpace(outputType)) != "PRESENTATION_PROPOSAL" {
+		return errors.New("SUBAGENT_PRESENTATION_ARCHITECT_INVALID")
+	}
+	var slides []map[string]json.RawMessage
+	if err := json.Unmarshal(raw["slides"], &slides); err != nil || len(slides) == 0 {
+		return errors.New("SUBAGENT_PRESENTATION_ARCHITECT_INVALID")
+	}
+	pageTypes := map[string]bool{"TITLE_IMPORT": true, "CONCEPT": true, "PROCESS": true, "COMPARISON": true, "CARDS": true, "SUMMARY": true}
+	densities := map[string]bool{"SPARSE": true, "BALANCED": true, "DENSE": true}
+	forbiddenPresentationKeys := map[string]bool{
+		"x": true, "y": true, "w": true, "h": true, "width": true, "height": true,
+		"left": true, "top": true, "geometry": true, "coordinates": true,
+		"shapeId": true, "objectId": true, "nativeObjectId": true, "ooxml": true, "engine": true,
+	}
+	for _, slide := range slides {
+		for key := range slide {
+			if forbiddenPresentationKeys[key] {
+				return errors.New("SUBAGENT_PRESENTATION_ARCHITECT_INVALID")
+			}
+		}
+		var title, purpose, pageType, contentDensity string
+		var points []string
+		if json.Unmarshal(slide["title"], &title) != nil || json.Unmarshal(slide["purpose"], &purpose) != nil || json.Unmarshal(slide["points"], &points) != nil || json.Unmarshal(slide["pageType"], &pageType) != nil || json.Unmarshal(slide["contentDensity"], &contentDensity) != nil {
+			return errors.New("SUBAGENT_PRESENTATION_ARCHITECT_INVALID")
+		}
+		if strings.TrimSpace(title) == "" || strings.TrimSpace(purpose) == "" || len(points) == 0 || !pageTypes[strings.ToUpper(strings.TrimSpace(pageType))] || !densities[strings.ToUpper(strings.TrimSpace(contentDensity))] {
+			return errors.New("SUBAGENT_PRESENTATION_ARCHITECT_INVALID")
+		}
+		for _, point := range points {
+			if strings.TrimSpace(point) == "" {
+				return errors.New("SUBAGENT_PRESENTATION_ARCHITECT_INVALID")
+			}
+		}
+	}
+	return nil
+}
+
 func validClarifierQuestion(questionType string, options []string) bool {
 	return strings.ToUpper(strings.TrimSpace(questionType)) == "SINGLE_CHOICE" && len(options) >= 2 && len(options) <= 4 && validQuestion(questionType, options)
 }
@@ -590,6 +792,12 @@ func subagentRoleLabel(role SubagentRole) string {
 		return "材料研究"
 	case SubagentTemplateAnalyzer:
 		return "模板分析"
+	case SubagentInstructionalDesigner:
+		return "教学设计"
+	case SubagentPresentationArchitect:
+		return "演示规划"
+	case SubagentInteractionDesigner:
+		return "互动题目设计"
 	case SubagentPlanComposer:
 		return "方案编排"
 	default:

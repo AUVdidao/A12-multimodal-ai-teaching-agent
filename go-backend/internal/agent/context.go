@@ -52,7 +52,7 @@ func BuildContext(input ContextInput) (BuiltContext, error) {
 	if promptVersion == "" {
 		promptVersion = model.PlanAgentPromptVersion
 	}
-	if promptVersion != model.PlanAgentPromptVersion {
+	if promptVersion != model.PlanAgentPromptVersion && promptVersion != model.LegacyPlanAgentPromptVersion {
 		return BuiltContext{}, fmt.Errorf("AGENT_PROMPT_VERSION_UNSUPPORTED: %s", promptVersion)
 	}
 	policyVersion := strings.TrimSpace(input.ContextPolicyVersion)

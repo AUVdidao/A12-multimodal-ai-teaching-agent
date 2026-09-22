@@ -120,6 +120,16 @@
               <section v-for="artifact in detail.artifacts" :key="artifact.id" class="go-artifact-card"><div class="go-artifact-card__main"><span class="go-artifact-card__icon" aria-hidden="true"><span>PPT</span></span><div><div class="lf-card-kicker">PPT OUTPUT · v{{ artifact.version }}</div><h2>{{ artifact.file.originalName }}</h2><p>{{ artifact.file.size }} bytes · {{ artifact.status || 'ready' }}</p></div></div><div class="go-artifact-card__actions"><a class="go-artifact-card__action go-artifact-card__action--preview" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">预览</a><a class="go-artifact-card__action go-artifact-card__action--download" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">下载<span aria-hidden="true">↓</span></a></div></section>
             </div>
           </section>
+          <section v-if="detail.artifacts.length" class="go-game-card" data-test="game-generation">
+            <header class="go-game-card__header"><div><div class="lf-card-kicker">INTERACTIVE GAME</div><h2>课堂互动小游戏</h2></div><span class="go-game-card__status">独立网页</span></header>
+            <p>课件已经生成。需要课堂互动时，系统会根据当前锁定方案中的材料证据生成独立网页小游戏，不修改原 PPT。</p>
+            <div class="go-game-card__actions"><label class="go-game-type"><span>游戏形式</span><select v-model="gameTypeSelection" :disabled="gameGenerating" data-test="game-type-select"><option value="RUNNER">小恐龙闯关</option><option value="TRUE_FALSE">判断挑战</option><option value="SINGLE_CHOICE">单选抢答</option><option value="MATCHING">知识配对</option></select></label><button class="lf-primary-button" type="button" data-test="create-game-job" :disabled="gameGenerating" @click="createGame">{{ gameGenerating ? '生成互动中…' : detail.gameArtifacts.length ? '重新生成小游戏' : '生成互动小游戏' }}</button></div>
+            <p v-if="gameError" class="go-inline-error" role="alert">{{ gameError }}</p>
+            <div v-if="latestGameArtifact" class="go-game-preview" data-test="game-preview">
+            <div class="go-game-preview__meta"><div><div class="lf-card-kicker">GAME OUTPUT · v{{ latestGameArtifact.version }}</div><strong>{{ gameTypeLabel(latestGameArtifact.gameType) }}</strong><small>{{ latestGameArtifact.size }} bytes · {{ latestGameArtifact.status }}</small></div><div class="go-game-preview__buttons"><button class="lf-secondary-button" type="button" :disabled="gamePublishing" @click="publishGame(latestGameArtifact)">{{ gamePublishing ? '发布中…' : latestGameArtifact.accessUrl ? '再次发布链接' : '发布访问链接' }}</button><a v-if="latestGameArtifact.accessUrl" class="lf-secondary-button" :href="goGameAccessUrl(latestGameArtifact.accessUrl)" target="_blank" rel="noreferrer">打开链接</a></div></div>
+              <iframe class="go-game-preview__frame" :src="goGamePreviewUrl(latestGameArtifact.id)" title="互动小游戏预览" sandbox="allow-scripts" />
+            </div>
+          </section>
           <div ref="conversationEnd" class="go-conversation-end" aria-hidden="true" />
         </div>
 
@@ -151,7 +161,7 @@ import GoQuestionCard from '@/components/GoQuestionCard.vue';
 import GoQuestionHistoryCard from '@/components/GoQuestionHistoryCard.vue';
 import GoPlanDraftCard from '@/components/GoPlanDraftCard.vue';
 import GoFeedbackCard from '@/components/GoFeedbackCard.vue';
-import { approveGoPlanningDraft, createGoGenerationJob, getGoMission, goApiBaseUrl, goErrorMessage, goMissionEventsUrl, listGoMissionAgentRuns, listGoMissionQuestions, listGoModelConnections, selectGoMissionConnection, sendGoMissionMessage, uploadGoMissionFile, type GoActivityEvent, type GoAgentRun, type GoGenerationJob, type GoLockedSpecification, type GoMessage, type GoMissionDetail, type GoPlanningDraft, type GoQuestion } from '@/api/go';
+import { approveGoPlanningDraft, createGoGameJob, createGoGenerationJob, getGoMission, goApiBaseUrl, goErrorMessage, goGameAccessUrl, goGamePreviewUrl, goMissionEventsUrl, listGoMissionAgentRuns, listGoMissionQuestions, listGoModelConnections, publishGoGameArtifact, selectGoMissionConnection, sendGoMissionMessage, uploadGoMissionFile, type GoActivityEvent, type GoAgentRun, type GoGameArtifact, type GoGenerationJob, type GoLockedSpecification, type GoMessage, type GoMissionDetail, type GoPlanningDraft, type GoQuestion } from '@/api/go';
 import { type ModelConnection } from '@/api/aiCredentials';
 import { composerFileIdentity, type ComposerFile } from '@/utils/lessonForgeComposer';
 import { useAuthStore } from '@/stores/auth';
@@ -173,6 +183,10 @@ const sending = ref(false);
 const uploading = ref(false);
 const approving = ref(false);
 const generationRequesting = ref(false);
+const gameGenerating = ref(false);
+const gamePublishing = ref(false);
+const gameError = ref('');
+const gameTypeSelection = ref('RUNNER');
 const generationHistoryExpanded = ref(false);
 const artifactHistoryExpanded = ref(false);
 const error = ref('');
@@ -216,6 +230,7 @@ const currentGenerationJob = computed(() => {
   const jobs = detail.value?.generationJobs || [];
   return jobs[0] || null;
 });
+const latestGameArtifact = computed<GoGameArtifact | null>(() => detail.value?.gameArtifacts?.[0] || null);
 const generationHistorySummary = computed(() => {
   const jobs = detail.value?.generationJobs || [];
   const failed = jobs.filter((job) => job.status === 'FAILED').length;
@@ -385,6 +400,38 @@ async function requestGeneration() {
     if (contextIsCurrent(mission, userId)) error.value = goErrorMessage(reason, 'PPT 生成请求未提交；当前状态保持不变。');
   } finally {
     if (contextIsCurrent(mission, userId)) generationRequesting.value = false;
+  }
+}
+function gameTypeLabel(type: string) { return ({ RUNNER: '小恐龙闯关', SINGLE_CHOICE: '单选抢答', TRUE_FALSE: '判断挑战', MATCHING: '知识配对' } as Record<string, string>)[type] || '课堂互动'; }
+async function createGame() {
+  const mission = missionId.value;
+  const userId = auth.user?.id ?? null;
+  if (!contextIsCurrent(mission, userId) || gameGenerating.value) return;
+  gameGenerating.value = true;
+  gameError.value = '';
+  try {
+    await createGoGameJob(mission, gameTypeSelection.value);
+    if (contextIsCurrent(mission, userId)) await load(false);
+  } catch (reason) {
+    if (contextIsCurrent(mission, userId)) gameError.value = goErrorMessage(reason, '互动小游戏生成失败；原 PPT 不受影响。');
+  } finally {
+    if (contextIsCurrent(mission, userId)) gameGenerating.value = false;
+  }
+}
+async function publishGame(artifact: GoGameArtifact) {
+  const mission = missionId.value;
+  const userId = auth.user?.id ?? null;
+  if (!contextIsCurrent(mission, userId) || gamePublishing.value) return;
+  gamePublishing.value = true;
+  gameError.value = '';
+  try {
+    const published = await publishGoGameArtifact(artifact.id);
+    if (!contextIsCurrent(mission, userId) || !detail.value) return;
+    detail.value = { ...detail.value, gameArtifacts: detail.value.gameArtifacts.map((item) => item.id === published.id ? published : item) };
+  } catch (reason) {
+    if (contextIsCurrent(mission, userId)) gameError.value = goErrorMessage(reason, '小游戏发布失败。');
+  } finally {
+    if (contextIsCurrent(mission, userId)) gamePublishing.value = false;
   }
 }
 function syncGenerationPolling(nextDetail: GoMissionDetail, id: number, userId: number | null) {

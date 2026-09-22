@@ -3,6 +3,8 @@ export interface GoMissionDetailCollections {
   files?: unknown[] | null;
   generationJobs?: unknown[] | null;
   artifacts?: unknown[] | null;
+  gameJobs?: unknown[] | null;
+  gameArtifacts?: unknown[] | null;
 }
 
 export function normalizeGoMissionCollections<T extends GoMissionDetailCollections>(data: T) {
@@ -12,5 +14,7 @@ export function normalizeGoMissionCollections<T extends GoMissionDetailCollectio
     files: data.files ?? [],
     generationJobs: data.generationJobs ?? [],
     artifacts: data.artifacts ?? [],
+    gameJobs: data.gameJobs ?? [],
+    gameArtifacts: data.gameArtifacts ?? [],
   };
 }
