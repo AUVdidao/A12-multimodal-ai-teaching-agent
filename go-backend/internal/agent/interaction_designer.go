@@ -14,7 +14,7 @@ import (
 )
 
 type interactionProposal struct {
-	Type      string                `json:"type"`
+	Type      string                 `json:"type"`
 	Questions []interaction.Question `json:"questions"`
 }
 
@@ -47,7 +47,7 @@ func (r *Runtime) DesignInteractionQuestions(ctx context.Context, owner, mission
 	base := fmt.Sprintf("Requested game type: %s\nLocked courseware specification:\n%s", strings.ToUpper(strings.TrimSpace(gameType)), string(raw))
 	evidence, err := r.materialResearchPreflight(ctx, missionID, owner, base)
 	if err != nil {
-		return nil, errors.New("INTERACTION_DESIGNER_MATERIAL_UNAVAILABLE")
+		return nil, fmt.Errorf("INTERACTION_DESIGNER_MATERIAL_UNAVAILABLE: %w", err)
 	}
 	contextText := evidence + fmt.Sprintf("\n\nRequested game type: %s\nThe server will render the game after this proposal. Generate one to three questions only. The source file must remain fileId=%d.", strings.ToUpper(strings.TrimSpace(gameType)), materialFileID)
 	content, err := r.runGameSubagentStage(ctx, owner, missionID, resolved, contextText, subagentToolSet("search_materials", "read_material"))
@@ -55,13 +55,33 @@ func (r *Runtime) DesignInteractionQuestions(ctx context.Context, owner, mission
 		return nil, err
 	}
 	proposal, err := decodeInteractionProposal(content)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		err = validateInteractionProposal(proposal, gameType, materialFileID)
 	}
-	if err := validateInteractionProposal(proposal, gameType, materialFileID); err != nil {
-		return nil, err
+	if err != nil {
+		// Providers occasionally return an otherwise useful proposal with one
+		// extra field, a wrong option shape, or prose around the JSON. Give the
+		// existing interaction designer one bounded contract-repair turn before
+		// failing the whole game job. The material evidence and source identity
+		// remain server-provided; the repair turn may not invent either.
+		repairContext := contextText + "\n\n" + interactionProposalRepairPrompt(gameType, materialFileID, content)
+		content, retryErr := r.runGameSubagentStage(ctx, owner, missionID, resolved, repairContext, subagentToolSet("search_materials", "read_material"))
+		if retryErr != nil {
+			return nil, retryErr
+		}
+		proposal, retryErr = decodeInteractionProposal(content)
+		if retryErr != nil {
+			return nil, retryErr
+		}
+		if retryErr = validateInteractionProposal(proposal, gameType, materialFileID); retryErr != nil {
+			return nil, retryErr
+		}
 	}
 	return proposal.Questions, nil
+}
+
+func interactionProposalRepairPrompt(gameType string, materialFileID int64, rejected string) string {
+	return fmt.Sprintf("Contract repair instruction: your previous interaction proposal was rejected. Return exactly one JSON object and no prose or Markdown fences. Use exactly the top-level keys type and questions; set type to INTERACTION_PROPOSAL. Return one to three questions. Every question must contain id, type, prompt, explanation, and source. The source must preserve fileId=%d and an exact locator from the supplied material evidence. For RUNNER use only TRUE_FALSE or SINGLE_CHOICE; for SINGLE_CHOICE use two to four options and exactly one answer; for TRUE_FALSE use options TRUE and FALSE and exactly one answer. Do not add difficulty, tags, hints, or any other fields. Do not copy a slide point verbatim as the whole prompt. Requested game type: %s. Rejected response:\n%s", materialFileID, strings.ToUpper(strings.TrimSpace(gameType)), truncateRunes(rejected, 8000))
 }
 
 func (r *Runtime) runGameSubagentStage(ctx context.Context, owner, missionID int64, connection model.ResolvedConnection, contextText string, tools []model.ToolDefinition) (string, error) {

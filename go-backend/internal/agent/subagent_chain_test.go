@@ -70,6 +70,21 @@ func TestValidateMaterialResearchOutputRequiresSearchAndRead(t *testing.T) {
 	}
 }
 
+func TestInteractionProposalRepairPromptPreservesMaterialScope(t *testing.T) {
+	prompt := interactionProposalRepairPrompt("RUNNER", 31, `{"type":"INTERACTION_PROPOSAL","questions":[]}`)
+	for _, required := range []string{
+		"INTERACTION_PROPOSAL",
+		"fileId=31",
+		"RUNNER",
+		"Do not add difficulty, tags, hints",
+		"Rejected response",
+	} {
+		if !strings.Contains(prompt, required) {
+			t.Fatalf("repair prompt missing %q: %s", required, prompt)
+		}
+	}
+}
+
 func TestSubagentMaterialAndTemplateRouting(t *testing.T) {
 	material := model.MissionFile{Role: "MATERIAL", FileObject: model.FileObject{OriginalName: "lesson.docx"}}
 	template := model.MissionFile{Role: "TEMPLATE", FileObject: model.FileObject{OriginalName: "theme.pptx"}}
