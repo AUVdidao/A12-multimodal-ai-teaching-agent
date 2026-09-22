@@ -126,8 +126,8 @@
             <div class="go-game-card__actions"><label class="go-game-type"><span>游戏形式</span><select v-model="gameTypeSelection" :disabled="gameGenerating" data-test="game-type-select"><option value="RUNNER">小恐龙闯关</option><option value="TRUE_FALSE">判断挑战</option><option value="SINGLE_CHOICE">单选抢答</option><option value="MATCHING">知识配对</option></select></label><button class="lf-primary-button" type="button" data-test="create-game-job" :disabled="gameGenerating" @click="createGame">{{ gameGenerating ? '生成互动中…' : detail.gameArtifacts.length ? '重新生成小游戏' : '生成互动小游戏' }}</button></div>
             <p v-if="gameError" class="go-inline-error" role="alert">{{ gameError }}</p>
             <div v-if="latestGameArtifact" class="go-game-preview" data-test="game-preview">
-            <div class="go-game-preview__meta"><div><div class="lf-card-kicker">GAME OUTPUT · v{{ latestGameArtifact.version }}</div><strong>{{ gameTypeLabel(latestGameArtifact.gameType) }}</strong><small>{{ latestGameArtifact.size }} bytes · {{ latestGameArtifact.status }}</small></div><div class="go-game-preview__buttons"><button class="lf-secondary-button" type="button" :disabled="gamePublishing" @click="publishGame(latestGameArtifact)">{{ gamePublishing ? '发布中…' : latestGameArtifact.accessUrl ? '再次发布链接' : '发布访问链接' }}</button><a v-if="latestGameArtifact.accessUrl" class="lf-secondary-button" :href="goGameAccessUrl(latestGameArtifact.accessUrl)" target="_blank" rel="noreferrer">打开链接</a></div></div>
-              <iframe class="go-game-preview__frame" :src="goGamePreviewUrl(latestGameArtifact.id)" title="互动小游戏预览" sandbox="allow-scripts" />
+              <div class="go-game-preview__meta"><div><div class="lf-card-kicker">GAME OUTPUT · v{{ latestGameArtifact.version }}</div><strong>{{ gameTypeLabel(latestGameArtifact.gameType) }}</strong><small>{{ latestGameArtifact.size }} bytes · {{ latestGameArtifact.status }}</small></div><div class="go-game-preview__buttons"><button class="lf-secondary-button" type="button" :disabled="gamePublishing" @click="publishGame(latestGameArtifact)">{{ gamePublishing ? '发布中…' : latestGameArtifact.accessUrl ? '再次发布链接' : '发布访问链接' }}</button><a v-if="latestGameArtifact.accessUrl" class="lf-secondary-button" :href="goGameAccessUrl(latestGameArtifact.accessUrl)" target="_blank" rel="noreferrer">打开链接</a></div></div>
+              <div class="go-game-preview__launch"><div><strong>双人游戏已准备好</strong><p>建议进入全屏后开始。学生甲使用 W，学生乙使用 ↑；碰撞后会暂停并出现材料题。</p></div><button class="lf-primary-button" type="button" data-test="open-game-fullscreen" @click="openGameFullscreen">进入全屏试玩<span aria-hidden="true">↗</span></button></div>
             </div>
           </section>
           <div ref="conversationEnd" class="go-conversation-end" aria-hidden="true" />
@@ -148,6 +148,12 @@
     </div>
     <div v-else-if="error" class="lf-loading go-load-error" role="alert">{{ error }} <button class="lf-secondary-button" type="button" @click="() => load(true)">重试</button></div>
     <div v-else class="lf-loading" role="status">正在加载 Mission…</div>
+    <Teleport to="body">
+      <div v-if="gameFullscreen && latestGameArtifact" class="go-game-fullscreen" role="dialog" aria-modal="true" aria-label="互动小游戏全屏试玩" data-test="game-fullscreen" @keydown.esc="closeGameFullscreen">
+        <header class="go-game-fullscreen__header"><div><div class="lf-card-kicker">INTERACTIVE GAME · FULLSCREEN</div><h2>{{ gameTypeLabel(latestGameArtifact.gameType) }}</h2></div><button class="go-game-fullscreen__close" type="button" data-test="close-game-fullscreen" aria-label="退出全屏试玩" @click="closeGameFullscreen">×</button></header>
+        <iframe class="go-game-fullscreen__frame" :src="goGamePreviewUrl(latestGameArtifact.id)" title="互动小游戏全屏试玩" sandbox="allow-scripts" />
+      </div>
+    </Teleport>
   </LessonForgeFrame>
 </template>
 
@@ -187,6 +193,7 @@ const gameGenerating = ref(false);
 const gamePublishing = ref(false);
 const gameError = ref('');
 const gameTypeSelection = ref('RUNNER');
+const gameFullscreen = ref(false);
 const generationHistoryExpanded = ref(false);
 const artifactHistoryExpanded = ref(false);
 const error = ref('');
@@ -403,6 +410,8 @@ async function requestGeneration() {
   }
 }
 function gameTypeLabel(type: string) { return ({ RUNNER: '小恐龙闯关', SINGLE_CHOICE: '单选抢答', TRUE_FALSE: '判断挑战', MATCHING: '知识配对' } as Record<string, string>)[type] || '课堂互动'; }
+function openGameFullscreen() { if (latestGameArtifact.value) gameFullscreen.value = true; }
+function closeGameFullscreen() { gameFullscreen.value = false; }
 async function createGame() {
   const mission = missionId.value;
   const userId = auth.user?.id ?? null;
@@ -510,5 +519,5 @@ watch(() => auth.user?.id, (next, previous) => { if (next === previous) return; 
 watch([() => auth.user?.id, missionId], restoreComposerDraft, { immediate: true });
 watch(draft, persistComposerDraft);
 onMounted(() => { viewActive.value = true; restoreWorkspaceLayout(); void load(); });
-onBeforeUnmount(() => { viewActive.value = false; requestVersion++; stopGenerationPolling(); source?.close(); if (reloadTimer !== undefined) window.clearTimeout(reloadTimer); if (eventReconnectTimer !== undefined) window.clearTimeout(eventReconnectTimer); stopResize(); });
+onBeforeUnmount(() => { viewActive.value = false; requestVersion++; stopGenerationPolling(); source?.close(); if (reloadTimer !== undefined) window.clearTimeout(reloadTimer); if (eventReconnectTimer !== undefined) window.clearTimeout(eventReconnectTimer); stopResize(); closeGameFullscreen(); });
 </script>

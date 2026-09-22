@@ -38,7 +38,7 @@ services:
       LESSONFORGE_PPT_ENGINE_BASE_URL: "${LESSONFORGE_PPT_ENGINE_BASE_URL:-http://ppt-engine-service:8080}"
       LESSONFORGE_PPT_ENGINE_ARTIFACT_ROOT: "${LESSONFORGE_PPT_ENGINE_ARTIFACT_ROOT:-/app/data/files}"
       LESSONFORGE_PPT_ENGINE_SHARED_STORAGE_ROOT: "${LESSONFORGE_PPT_ENGINE_SHARED_STORAGE_ROOT:-/app/data/files}"
-      LESSONFORGE_CORS_ORIGINS: "${LESSONFORGE_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
+      LESSONFORGE_CORS_ORIGINS: "${LESSONFORGE_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8081,http://127.0.0.1:8081}"
     ports:
       - "8090:8090"
     volumes:
@@ -265,6 +265,8 @@ services:
       args:
         VITE_API_BASE_URL: /api
         VITE_DEMO_MODE: "${VITE_DEMO_MODE:-true}"
+        VITE_BACKEND_MODE: "${VITE_BACKEND_MODE:-go}"
+        VITE_GO_API_BASE_URL: "${VITE_GO_API_BASE_URL:-/go-api}"
     restart: unless-stopped
     networks:
       lessonforge-network:
@@ -284,6 +286,8 @@ services:
     restart: unless-stopped
     depends_on:
       backend-api:
+        condition: service_healthy
+      server:
         condition: service_healthy
       frontend-web:
         condition: service_healthy
